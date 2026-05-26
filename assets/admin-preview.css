@@ -1,0 +1,38 @@
+/**
+ * Inbox preview — mirrors taxspoc single post entry content (720px column).
+ */
+
+.forwp-drive-preview-body {
+	max-height: min(70vh, 720px);
+	overflow: auto;
+	border-top: 1px solid #dcdcde;
+	margin-top: 12px;
+	padding-top: 16px;
+	background: var(--wp--preset--color--base, #fff);
+}
+
+.forwp-drive-preview-single.single-post-main {
+	margin: 0;
+	padding: 0;
+	max-width: none;
+}
+
+.forwp-drive-preview-single .single-post-entry-content {
+	max-width: 720px;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 0;
+}
+
+.forwp-drive-preview-single .wp-block-post-content {
+	box-sizing: border-box;
+}
+
+/* Keep admin chrome readable if theme link colors leak */
+.forwp-drive-preview-meta {
+	margin-bottom: 12px;
+}
+
+.forwp-drive-preview-meta a {
+	color: #2271b1;
+}
