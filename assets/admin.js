@@ -106,12 +106,12 @@
 		}
 
 		list.innerHTML = `
-			<div class="forwp-drive-empty-panel">
-				<p><strong>No documents ready for import.</strong></p>
+			<div class="forwp-drive-empty-panel forwp-drive-admin-chrome">
+				<p class="forwp-drive-empty-panel__lead"><strong>No documents ready for import.</strong></p>
 				${ syncHint }
-				<p>Checklist:</p>
-				<ul>
-					<li>Document is a <strong>Google Doc</strong> inside the Drive <strong>incoming</strong> subfolder (not the root folder).</li>
+				<p class="forwp-drive-empty-panel__label">Checklist</p>
+				<ul class="forwp-drive-empty-panel__list">
+					<li>Each article: a subfolder inside <strong>incoming/</strong> with a <strong>Google Doc</strong> or <strong>.docx</strong> plus a featured <strong>image</strong>.</li>
 					<li>Click <strong>Run sync now</strong> above after adding or editing the file.</li>
 					<li>If you already imported it, look in the <strong>published</strong> folder on Drive.</li>
 				</ul>
@@ -136,7 +136,7 @@
 					? `<p class="forwp-drive-card__warning">${ escapeHtml( doc.scan_error ) }</p>`
 					: '';
 				return `
-				<article class="forwp-drive-card" data-id="${ doc.id }">
+				<article class="forwp-drive-card forwp-drive-admin-chrome" data-id="${ doc.id }">
 					<h3>${ escapeHtml( doc.title || doc.file_name ) }</h3>
 					<div class="forwp-drive-card__meta">
 						${ escapeHtml( doc.file_name ) }
@@ -205,6 +205,9 @@
 				return;
 			}
 			let message = `Synced ${ data.scanned || 0 } file(s); ${ data.new_ready || 0 } new ready.`;
+			if ( data.removed ) {
+				message += ` ${ data.removed } removed from inbox (no longer in incoming).`;
+			}
 			if ( data.export_errors ) {
 				message += ` ${ data.export_errors } could not be exported.`;
 			}
@@ -226,8 +229,8 @@
 				return;
 			}
 			panel.hidden = false;
-			meta.innerHTML = `<strong>${ escapeHtml( data.title ) }</strong><br>
-				Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }`;
+			meta.innerHTML = `<p class="forwp-drive-preview__title">${ escapeHtml( data.title ) }</p>
+				<p class="forwp-drive-preview__meta">Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }${ data.has_image ? ' · Featured image: ' + escapeHtml( data.image_name || 'yes' ) : '' }</p>`;
 			body.innerHTML = data.body_html || escapeHtml( data.body || '' );
 		} );
 	}
@@ -768,7 +771,8 @@
 		}
 
 		if ( target.id === 'forwp-drive-refresh-list' ) {
-			loadInbox();
+			runInboxSync();
+			return;
 		}
 		if ( target.id === 'forwp-drive-inbox-sync' ) {
 			runInboxSync();

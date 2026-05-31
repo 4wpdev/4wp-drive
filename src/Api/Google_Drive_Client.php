@@ -8,6 +8,7 @@
 namespace ForWP\Drive\Api;
 
 use ForWP\Drive\Auth\Google_OAuth;
+use ForWP\Drive\Import\Docx_Content;
 use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
@@ -26,6 +27,167 @@ final class Google_Drive_Client {
 
 	public function __construct( Google_OAuth $oauth ) {
 		$this->oauth = $oauth;
+	}
+
+	/**
+	 * Reserved workflow folder names under the Drive root.
+	 */
+	public const SYSTEM_FOLDER_NAMES = array( 'incoming', 'published', 'failed' );
+
+	/**
+	 * List child folders in a parent folder.
+	 *
+	 * @param string        $parent_id     Parent folder id.
+	 * @param array<string> $exclude_names Folder names to skip (case-insensitive).
+	 * @return array<int, array{id: string, name: string}>|WP_Error
+	 */
+	public function list_child_folders( string $parent_id, array $exclude_names = array() ) {
+		$q = sprintf(
+			"'%s' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder'",
+			$parent_id
+		);
+
+		$response = $this->request(
+			'GET',
+			'/files',
+			array(
+				'q'        => $q,
+				'fields'   => 'files(id,name)',
+				'pageSize' => 100,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$exclude = array_map( 'strtolower', $exclude_names );
+		$folders = array();
+
+		foreach ( (array) ( $response['files'] ?? array() ) as $file ) {
+			$name = (string) ( $file['name'] ?? '' );
+			if ( '' === $name || in_array( strtolower( $name ), $exclude, true ) ) {
+				continue;
+			}
+
+			$id = (string) ( $file['id'] ?? '' );
+			if ( '' === $id ) {
+				continue;
+			}
+
+			$folders[] = array(
+				'id'   => $id,
+				'name' => $name,
+			);
+		}
+
+		return $folders;
+	}
+
+	/**
+	 * List image files in a folder.
+	 *
+	 * @param string $folder_id Parent folder id.
+	 * @return array<int, array{id: string, name: string, mimeType?: string}>|WP_Error
+	 */
+	public function list_images_in_folder( string $folder_id ) {
+		$q = sprintf(
+			"'%s' in parents and trashed = false and mimeType contains 'image/'",
+			$folder_id
+		);
+
+		$response = $this->request(
+			'GET',
+			'/files',
+			array(
+				'q'        => $q,
+				'fields'   => 'files(id,name,mimeType,modifiedTime)',
+				'pageSize' => 20,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		return isset( $response['files'] ) && is_array( $response['files'] ) ? $response['files'] : array();
+	}
+
+	/**
+	 * Fetch file metadata.
+	 *
+	 * @param string $file_id File id.
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public function get_file( string $file_id ) {
+		$response = $this->request(
+			'GET',
+			'/files/' . rawurlencode( $file_id ),
+			array(
+				'fields' => 'id,name,parents,mimeType',
+			)
+		);
+
+		return is_wp_error( $response ) ? $response : $response;
+	}
+
+	/**
+	 * Download raw file bytes (images, Office files, etc.).
+	 *
+	 * @param string $file_id File id.
+	 * @return string|WP_Error
+	 */
+	public function download_file( string $file_id ) {
+		$token = $this->oauth->get_access_token();
+		if ( is_wp_error( $token ) ) {
+			return $token;
+		}
+
+		$url = sprintf(
+			'https://www.googleapis.com/drive/v3/files/%s?alt=media',
+			rawurlencode( $file_id )
+		);
+
+		$response = wp_remote_get(
+			$url,
+			array(
+				'timeout' => 60,
+				'headers' => array(
+					'Authorization' => 'Bearer ' . $token,
+				),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			return new WP_Error( 'forwp_drive_download_failed', __( 'Failed to download file from Google Drive.', '4wp-drive' ), array( 'status' => $code ) );
+		}
+
+		return (string) wp_remote_retrieve_body( $response );
+	}
+
+	/**
+	 * Rename a Drive file.
+	 *
+	 * @param string $file_id File id.
+	 * @param string $name    New filename.
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public function update_file_name( string $file_id, string $name ) {
+		return $this->request(
+			'PATCH',
+			'/files/' . rawurlencode( $file_id ),
+			array(
+				'fields' => 'id,name',
+			),
+			array(
+				'name' => $name,
+			)
+		);
 	}
 
 	/**
@@ -48,7 +210,7 @@ final class Google_Drive_Client {
 			'/files',
 			array(
 				'q'        => $q,
-				'fields'   => 'files(id,name,modifiedTime,md5Checksum)',
+				'fields'   => 'files(id,name,mimeType,modifiedTime,md5Checksum)',
 				'pageSize' => 50,
 			)
 		);
@@ -103,6 +265,91 @@ final class Google_Drive_Client {
 		}
 
 		return (string) wp_remote_retrieve_body( $response );
+	}
+
+	/**
+	 * Fetch document content as HTML (Google Docs) or plain text (.docx).
+	 *
+	 * @param string $file_id   Drive file id.
+	 * @param string $mime_type Optional mimeType from list_files.
+	 * @return string|WP_Error
+	 */
+	public function fetch_document_content( string $file_id, string $mime_type = '' ) {
+		if ( '' === $mime_type ) {
+			$file = $this->get_file( $file_id );
+			if ( is_wp_error( $file ) ) {
+				return $file;
+			}
+			$mime_type = (string) ( $file['mimeType'] ?? '' );
+		}
+
+		if ( 'application/vnd.google-apps.document' === $mime_type ) {
+			return $this->export_document_html( $file_id );
+		}
+
+		if ( Docx_Content::MIME === $mime_type ) {
+			$via_google = $this->export_docx_via_google_conversion( $file_id );
+			if ( ! is_wp_error( $via_google ) ) {
+				return $via_google;
+			}
+
+			// Fallback when Drive conversion is unavailable (quota, permissions, etc.).
+			$binary = $this->download_file( $file_id );
+			if ( is_wp_error( $binary ) ) {
+				return $binary;
+			}
+
+			return Docx_Content::extract_html_document( $binary );
+		}
+
+		return new WP_Error(
+			'forwp_drive_unsupported_mime',
+			__( 'Unsupported document type. Use a Google Doc or .docx file.', '4wp-drive' )
+		);
+	}
+
+	/**
+	 * Convert a .docx on Drive to a temporary Google Doc and export HTML (best formatting fidelity).
+	 *
+	 * @param string $file_id Original .docx file id (unchanged on Drive).
+	 * @return string|WP_Error
+	 */
+	public function export_docx_via_google_conversion( string $file_id ) {
+		$copy = $this->request(
+			'POST',
+			'/files/' . rawurlencode( $file_id ) . '/copy',
+			array(
+				'fields'          => 'id',
+				'supportsAllDrives' => 'true',
+			),
+			array(
+				'name'     => 'forwp-drive-temp-' . substr( md5( $file_id . (string) time() ), 0, 8 ),
+				'mimeType' => 'application/vnd.google-apps.document',
+			)
+		);
+
+		if ( is_wp_error( $copy ) ) {
+			return $copy;
+		}
+
+		$copy_id = (string) ( $copy['id'] ?? '' );
+		if ( '' === $copy_id ) {
+			return new WP_Error( 'forwp_drive_docx_convert', __( 'Google Drive could not convert .docx to Google Docs format.', '4wp-drive' ) );
+		}
+
+		$html = $this->export_document_html( $copy_id );
+		$this->trash_file( $copy_id );
+
+		return $html;
+	}
+
+	/**
+	 * Move a file to Drive trash (used for temporary conversion copies).
+	 *
+	 * @param string $file_id File id.
+	 */
+	public function trash_file( string $file_id ): void {
+		$this->request( 'PATCH', '/files/' . rawurlencode( $file_id ), array(), array( 'trashed' => true ) );
 	}
 
 	/**

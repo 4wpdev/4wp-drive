@@ -7,6 +7,8 @@
 
 namespace ForWP\Drive\Import;
 
+use ForWP\Drive\Api\Google_Drive_Client;
+use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Source_Registry;
@@ -55,14 +57,17 @@ final class Import_Runner {
 		$post_id  = $creator->create_draft( $metadata );
 
 		if ( is_wp_error( $post_id ) ) {
-			$this->fail( $document_id, (string) $row->file_id, $post_id->get_error_message() );
+			$this->fail( $document_id, (string) $row->file_id, $post_id->get_error_message(), $metadata );
 
 			return $post_id;
 		}
 
+		$image_warning = $this->maybe_attach_featured_image( $metadata, (int) $post_id );
+		$metadata['slug'] = (string) get_post_field( 'post_name', $post_id );
+
 		$source = Source_Registry::get( (string) $row->source );
 		if ( $source ) {
-			$moved = $source->move_after_import( (string) $row->file_id, 'published' );
+			$moved = $source->move_after_import( (string) $row->file_id, 'published', $metadata );
 			if ( is_wp_error( $moved ) ) {
 				$this->repository->update(
 					$document_id,
@@ -78,7 +83,7 @@ final class Import_Runner {
 				return array(
 					'post_id'  => $post_id,
 					'edit_url' => get_edit_post_link( $post_id, 'raw' ),
-					'warning'  => $moved->get_error_message(),
+					'warning'  => trim( $moved->get_error_message() . ( $image_warning ? ' ' . $image_warning : '' ) ),
 				);
 			}
 		}
@@ -102,18 +107,51 @@ final class Import_Runner {
 		 */
 		do_action( 'forwp_drive_document_imported', $post_id, $document_id );
 
-		return array(
+		$response = array(
 			'post_id'  => $post_id,
 			'edit_url' => get_edit_post_link( $post_id, 'raw' ),
 		);
+
+		if ( $image_warning ) {
+			$response['warning'] = $image_warning;
+		}
+
+		return $response;
 	}
 
 	/**
-	 * @param int    $document_id Row id.
-	 * @param string $file_id     Drive file id.
-	 * @param string $message     Error message.
+	 * @param array<string, mixed> $metadata Parsed document metadata.
+	 * @param int                  $post_id  Created post id.
 	 */
-	private function fail( int $document_id, string $file_id, string $message ): void {
+	private function maybe_attach_featured_image( array $metadata, int $post_id ): string {
+		$image_id = (string) ( $metadata['image_file_id'] ?? '' );
+		if ( '' === $image_id ) {
+			return '';
+		}
+
+		$slug = (string) get_post_field( 'post_name', $post_id );
+		$client = new Google_Drive_Client( Google_OAuth::instance() );
+		$result = ( new Featured_Image_Importer( $client ) )->attach_from_drive(
+			$image_id,
+			(string) ( $metadata['image_file_name'] ?? '' ),
+			$post_id,
+			$slug
+		);
+
+		if ( is_wp_error( $result ) ) {
+			return $result->get_error_message();
+		}
+
+		return '';
+	}
+
+	/**
+	 * @param int                  $document_id Row id.
+	 * @param string               $file_id     Drive file id.
+	 * @param string               $message     Error message.
+	 * @param array<string, mixed> $metadata    Scan metadata for package moves.
+	 */
+	private function fail( int $document_id, string $file_id, string $message, array $metadata = array() ): void {
 		$this->repository->update(
 			$document_id,
 			array(
@@ -125,7 +163,7 @@ final class Import_Runner {
 
 		$source = Source_Registry::get_default();
 		if ( $source ) {
-			$source->move_after_import( $file_id, 'failed' );
+			$source->move_after_import( $file_id, 'failed', $metadata );
 		}
 	}
 }

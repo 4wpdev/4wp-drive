@@ -20,6 +20,7 @@ final class Document_Status {
 	public const IMPORTED  = 'imported';
 	public const FAILED    = 'failed';
 	public const REJECTED  = 'rejected';
+	public const REMOVED   = 'removed';
 
 	/**
 	 * Statuses shown in the admin inbox.

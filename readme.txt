@@ -14,7 +14,7 @@ Import Google Docs from Drive (and roadmap: GitHub MD/MDX) into WordPress drafts
 
 4WP Drive connects a Google Drive folder structure to WordPress:
 
-* Drop Google Docs into Drive `incoming/` (GitHub `.md` / `.mdx` planned)
+* Drop article subfolders into Drive `incoming/` (Google Doc + image) or a single doc in `incoming/` (GitHub `.md` / `.mdx` planned)
 * Sync discovers new documents
 * Admin Inbox: Preview, Import as Draft, Reject
 * On import, files move to `published/`

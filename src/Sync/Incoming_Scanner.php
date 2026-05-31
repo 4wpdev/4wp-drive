@@ -10,7 +10,6 @@ namespace ForWP\Drive\Sync;
 use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
-use ForWP\Drive\Import\Google_Doc_Content;
 use ForWP\Drive\Notifications\Admin_Notifier;
 use ForWP\Drive\Source_Registry;
 use WP_Error;
@@ -50,12 +49,18 @@ final class Incoming_Scanner {
 		$new_ready     = 0;
 		$scanned       = 0;
 		$export_errors = 0;
+		$seen_file_ids = array();
 
 		foreach ( $items as $item ) {
 			++$scanned;
-			$file_id  = (string) $item['file_id'];
-			$hash     = (string) $item['content_hash'];
-			$existing = $this->repository->find_by_file_id( $file_id );
+			$file_id = (string) $item['file_id'];
+			if ( '' === $file_id ) {
+				continue;
+			}
+
+			$seen_file_ids[] = $file_id;
+			$hash            = (string) $item['content_hash'];
+			$existing        = $this->repository->find_by_file_id( $file_id );
 
 			if ( $existing && $existing->content_hash === $hash && Document_Status::READY === $existing->status ) {
 				$stored = $this->repository->decode_metadata( $existing );
@@ -63,8 +68,7 @@ final class Incoming_Scanner {
 					$stored_html = isset( $stored['body_html'] ) ? (string) $stored['body_html'] : '';
 					$stored_body = isset( $stored['body'] ) ? trim( (string) $stored['body'] ) : '';
 					$has_text    = '' !== trim( wp_strip_all_tags( $stored_html ) ) || '' !== $stored_body;
-					$has_markup  = Google_Doc_Content::has_structural_markup( $stored_html );
-					if ( $has_text && $has_markup ) {
+					if ( $has_text ) {
 						continue;
 					}
 				}
@@ -98,6 +102,8 @@ final class Incoming_Scanner {
 			}
 		}
 
+		$removed = $this->repository->mark_missing_as_removed( $seen_file_ids, $source->get_slug() );
+
 		$ready_count = $this->repository->count_by_statuses( Document_Status::inbox_statuses() );
 		Settings::instance()->set_ready_count( $ready_count );
 
@@ -108,6 +114,7 @@ final class Incoming_Scanner {
 		$summary = array(
 			'scanned'       => $scanned,
 			'new_ready'     => $new_ready,
+			'removed'       => $removed,
 			'ready_total'   => $ready_count,
 			'export_errors' => $export_errors,
 			'timestamp'     => current_time( 'mysql', true ),

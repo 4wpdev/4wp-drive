@@ -251,6 +251,32 @@ class Template_ParserTest extends TestCase {
 	}
 
 	/**
+	 * @return void
+	 */
+	public function test_slug_falls_back_to_sanitized_title_when_omitted(): void {
+		$mark = Template_Separator::mark();
+		$raw  = "Title: KPMG AI Tax Strategy\n\n{$mark}\n\nBody.";
+
+		$parser = new Template_Parser();
+		$result = $parser->parse( $raw );
+
+		$this->assertSame( 'kpmg-ai-tax-strategy', $result['slug'] );
+	}
+
+	/**
+	 * @return void
+	 */
+	public function test_alias_label_maps_to_slug(): void {
+		$mark = Template_Separator::mark();
+		$raw  = "Title: Aliased Article\nAlias: custom-alias\n\n{$mark}\n\nBody.";
+
+		$parser = new Template_Parser();
+		$result = $parser->parse( $raw );
+
+		$this->assertSame( 'custom-alias', $result['slug'] );
+	}
+
+	/**
 	 * Header before ====== is read as plain text for mapping (inline bold in label line must not break values).
 	 *
 	 * @return void

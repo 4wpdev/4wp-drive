@@ -205,6 +205,8 @@ final class Rest_Documents {
 			'author'      => (string) ( $meta['author'] ?? '' ),
 			'category'    => (string) ( $meta['category'] ?? '' ),
 			'tags'        => $meta['tags'] ?? array(),
+			'has_image'   => ! empty( $meta['image_file_id'] ),
+			'image_name'  => (string) ( $meta['image_file_name'] ?? '' ),
 			'scan_error'  => (string) ( $meta['scan_error'] ?? $row->error_message ?? '' ),
 			'detected_at' => (string) $row->detected_at,
 			'wp_post_id'  => $row->wp_post_id ? (int) $row->wp_post_id : null,

@@ -47,11 +47,12 @@ interface Storage_Source_Interface {
 	public function scan_incoming();
 
 	/**
-	 * Move file from incoming to published (or failed).
+	 * Move file or article package after import (published|failed).
 	 *
-	 * @param string $file_id   Drive file id.
-	 * @param string $target_role published|failed.
+	 * @param string               $file_id     Primary document file id.
+	 * @param string               $target_role published|failed.
+	 * @param array<string, mixed> $metadata    Parsed scan metadata (package_folder_id, image_file_id, slug, …).
 	 * @return true|WP_Error
 	 */
-	public function move_after_import( string $file_id, string $target_role );
+	public function move_after_import( string $file_id, string $target_role, array $metadata = array() );
 }

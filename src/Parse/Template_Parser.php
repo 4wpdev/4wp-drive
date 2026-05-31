@@ -117,9 +117,11 @@ final class Template_Parser {
 			$tags = $meta['taxonomies']['post_tag'];
 		}
 
+		$slug = $this->resolve_slug( (string) $meta['slug'], (string) $meta['title'] );
+
 		return array(
 			'title'      => $meta['title'],
-			'slug'       => $meta['slug'],
+			'slug'       => $slug,
 			'date'       => $meta['date'],
 			'author'     => $meta['author'],
 			'category'   => $category,
@@ -129,6 +131,18 @@ final class Template_Parser {
 			'body'       => $body,
 			'body_html'  => $body_html,
 		);
+	}
+
+	/**
+	 * Use post slug from title when Slug/Alias is omitted in the document.
+	 */
+	private function resolve_slug( string $slug, string $title ): string {
+		$slug = sanitize_title( $slug );
+		if ( '' !== $slug ) {
+			return $slug;
+		}
+
+		return '' !== trim( $title ) ? sanitize_title( $title ) : '';
 	}
 
 	/**
@@ -320,6 +334,10 @@ final class Template_Parser {
 			if ( '' !== $label ) {
 				$index[ $label ] = $field;
 			}
+		}
+
+		if ( isset( $index['slug'] ) ) {
+			$index['alias'] = $index['slug'];
 		}
 
 		return $index;

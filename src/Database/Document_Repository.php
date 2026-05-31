@@ -109,6 +109,45 @@ final class Document_Repository {
 	}
 
 	/**
+	 * Mark inbox-ready rows as removed when they no longer appear in a Drive scan.
+	 *
+	 * @param string[] $seen_file_ids File ids returned by the latest scan.
+	 * @param string   $source        Source slug.
+	 */
+	public function mark_missing_as_removed( array $seen_file_ids, string $source ): int {
+		$rows = $this->list_by_statuses( Document_Status::inbox_statuses(), 500 );
+
+		if ( empty( $rows ) ) {
+			return 0;
+		}
+
+		$seen = array_fill_keys( $seen_file_ids, true );
+		$now  = current_time( 'mysql', true );
+		$count = 0;
+
+		foreach ( $rows as $row ) {
+			if ( (string) $row->source !== $source ) {
+				continue;
+			}
+
+			if ( isset( $seen[ (string) $row->file_id ] ) ) {
+				continue;
+			}
+
+			$this->update(
+				(int) $row->id,
+				array(
+					'status'     => Document_Status::REMOVED,
+					'updated_at' => $now,
+				)
+			);
+			++$count;
+		}
+
+		return $count;
+	}
+
+	/**
 	 * Upsert after sync scan.
 	 *
 	 * @param array<string, mixed> $data Row fields.
