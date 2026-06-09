@@ -79,6 +79,49 @@
 		}
 	}
 
+	/**
+	 * Copy text to clipboard (Clipboard API with execCommand fallback for HTTP local dev).
+	 *
+	 * @param {string} text Text to copy.
+	 * @return {Promise<boolean>} Whether copy succeeded.
+	 */
+	function copyTextToClipboard( text ) {
+		if ( ! text ) {
+			return Promise.resolve( false );
+		}
+
+		if ( navigator.clipboard && window.isSecureContext ) {
+			return navigator.clipboard.writeText( text ).then(
+				() => true,
+				() => copyTextToClipboardFallback( text )
+			);
+		}
+
+		return Promise.resolve( copyTextToClipboardFallback( text ) );
+	}
+
+	/**
+	 * @param {string} text Text to copy.
+	 * @return {boolean}
+	 */
+	function copyTextToClipboardFallback( text ) {
+		const textarea = document.createElement( 'textarea' );
+		textarea.value = text;
+		textarea.setAttribute( 'readonly', '' );
+		textarea.style.position = 'fixed';
+		textarea.style.left = '-9999px';
+		document.body.appendChild( textarea );
+		textarea.select();
+		let copied = false;
+		try {
+			copied = document.execCommand( 'copy' );
+		} catch ( err ) {
+			copied = false;
+		}
+		document.body.removeChild( textarea );
+		return copied;
+	}
+
 	function driveActionsStatus() {
 		return document.getElementById( 'forwp-drive-drive-actions-status' );
 	}
@@ -327,9 +370,79 @@
 		} else if ( data.connected ) {
 			hint.textContent = 'Connected — set the root folder ID and save subfolders.';
 		} else if ( data.has_client_config ) {
-			hint.textContent = 'Credentials saved — click Connect Google Drive.';
+			hint.textContent = 'Credentials saved — click Connect your Drive.';
 		} else {
 			hint.textContent = 'Add API credentials, then connect your Google account.';
+		}
+	}
+
+	function updateGoogleSetupHint( data ) {
+		const hint = document.getElementById( 'forwp-drive-google-setup-hint' );
+		if ( ! hint ) {
+			return;
+		}
+		const show =
+			!! data &&
+			! data.source_ready &&
+			selectedSourceSlug === GOOGLE_DRIVE_SLUG;
+		hint.hidden = ! show;
+	}
+
+	function updateDevRedirectPanel( data ) {
+		const panel = document.getElementById( 'forwp-drive-oauth-redirect-panel' );
+		const lockedNote = document.getElementById( 'forwp-drive-dev-redirect-locked-note' );
+		const oauthRedirect = document.getElementById( 'forwp-drive-oauth-redirect' );
+		const useSuggestedBtn = document.getElementById( 'forwp-drive-use-suggested-redirect' );
+		const saveOauthBtn = document.getElementById( 'forwp-drive-save-oauth-redirect' );
+		const wpconfigNote = document.getElementById( 'forwp-drive-wpconfig-redirect-note' );
+
+		if ( ! panel || ! data ) {
+			return;
+		}
+
+		const show = !! data.local_dev_redirect_help;
+		panel.hidden = ! show;
+
+		const canEdit =
+			show &&
+			data.has_client_config &&
+			! data.connected &&
+			! data.oauth_redirect_locked;
+
+		panel.classList.toggle( 'is-inactive', show && ! canEdit );
+
+		if ( lockedNote ) {
+			if ( ! show || canEdit ) {
+				lockedNote.hidden = true;
+			} else if ( ! data.has_client_config ) {
+				lockedNote.hidden = false;
+				lockedNote.textContent =
+					'Save API credentials below first, then set the loopback redirect and register it in Google Cloud before Connect.';
+			} else if ( data.connected ) {
+				lockedNote.hidden = false;
+				lockedNote.textContent =
+					'OAuth redirect is locked while your Drive account is connected. Disconnect to change it.';
+			} else {
+				lockedNote.hidden = true;
+			}
+		}
+
+		if ( wpconfigNote ) {
+			wpconfigNote.hidden = ! data.oauth_redirect_locked;
+		}
+
+		const fieldsLocked = !! data.oauth_redirect_locked || ! canEdit;
+		if ( oauthRedirect ) {
+			oauthRedirect.disabled = fieldsLocked;
+		}
+		if ( useSuggestedBtn ) {
+			useSuggestedBtn.disabled = fieldsLocked;
+			useSuggestedBtn.hidden =
+				! data.oauth_redirect_uri_suggested || !! data.oauth_redirect_locked;
+			useSuggestedBtn.dataset.uri = data.oauth_redirect_uri_suggested || '';
+		}
+		if ( saveOauthBtn ) {
+			saveOauthBtn.disabled = fieldsLocked;
 		}
 	}
 
@@ -401,6 +514,9 @@
 		}
 
 		renderSourceRegistry( sources );
+		if ( settingsCache ) {
+			updateGoogleSetupHint( settingsCache );
+		}
 		document.getElementById( 'forwp-drive-source-detail-wrap' )?.scrollIntoView( {
 			behavior: 'smooth',
 			block: 'nearest',
@@ -618,18 +734,19 @@
 		const secretHint = document.getElementById( 'forwp-drive-secret-hint' );
 		const locked = document.getElementById( 'forwp-drive-credentials-locked' );
 		const saveCreds = document.getElementById( 'forwp-drive-save-credentials' );
+		const clearCreds = document.getElementById( 'forwp-drive-clear-credentials' );
 		const saveFolders = document.getElementById( 'forwp-drive-save-folders' );
 		const runSync = document.getElementById( 'forwp-drive-run-sync' );
-		const redirectCode = document.getElementById( 'forwp-drive-redirect-uri' );
+		const redirectCodes = document.querySelectorAll( '.forwp-drive-redirect-uri' );
+		const localDevNotes = document.querySelectorAll( '.forwp-drive-local-dev-note' );
 		const oauthRedirect = document.getElementById( 'forwp-drive-oauth-redirect' );
-		const localDevNote = document.getElementById( 'forwp-drive-local-dev-note' );
-		const suggestedHint = document.getElementById(
-			'forwp-drive-oauth-redirect-suggested'
-		);
 		const useSuggestedBtn = document.getElementById(
 			'forwp-drive-use-suggested-redirect'
 		);
 		const wpconfigNote = document.getElementById( 'forwp-drive-wpconfig-redirect-note' );
+		const suggestedHint = document.getElementById(
+			'forwp-drive-oauth-redirect-suggested'
+		);
 		const postTypeSelect = document.getElementById( 'forwp-drive-import-post-type' );
 		const sampleTemplate = document.getElementById( 'forwp-drive-sample-template' );
 
@@ -641,16 +758,18 @@
 			settingsCache = data;
 			templateRows = ( data.template_fields || [] ).map( ( f ) => ( { ...f } ) );
 
-			if ( redirectCode && data.redirect_uri ) {
-				redirectCode.textContent = data.redirect_uri;
+			if ( data.redirect_uri ) {
+				redirectCodes.forEach( ( el ) => {
+					el.textContent = data.redirect_uri;
+				} );
 			}
 			if ( oauthRedirect ) {
 				oauthRedirect.value =
 					data.oauth_redirect_uri || data.oauth_redirect_uri_suggested || '';
 			}
-			if ( localDevNote ) {
-				localDevNote.hidden = ! data.local_dev_redirect_help;
-			}
+			localDevNotes.forEach( ( el ) => {
+				el.hidden = ! data.local_dev_redirect_help;
+			} );
 			if ( suggestedHint && data.oauth_redirect_uri_suggested ) {
 				suggestedHint.hidden = ! data.local_dev_redirect_help;
 				suggestedHint.textContent =
@@ -659,23 +778,7 @@
 					': ' +
 					data.oauth_redirect_uri_suggested;
 			}
-			if ( useSuggestedBtn ) {
-				useSuggestedBtn.hidden =
-					! data.oauth_redirect_uri_suggested || !! data.oauth_redirect_locked;
-				useSuggestedBtn.dataset.uri = data.oauth_redirect_uri_suggested || '';
-			}
-			if ( wpconfigNote ) {
-				wpconfigNote.hidden = ! data.oauth_redirect_locked;
-			}
-			if ( oauthRedirect ) {
-				oauthRedirect.disabled = !! data.oauth_redirect_locked;
-			}
-			const saveOauthBtn = document.getElementById(
-				'forwp-drive-save-oauth-redirect'
-			);
-			if ( saveOauthBtn ) {
-				saveOauthBtn.disabled = !! data.oauth_redirect_locked;
-			}
+			updateDevRedirectPanel( data );
 			if ( postTypeSelect && data.post_types ) {
 				postTypeSelect.innerHTML = data.post_types
 					.map(
@@ -713,23 +816,38 @@
 			if ( saveCreds ) {
 				saveCreds.disabled = !! data.credentials_locked;
 			}
+			if ( clearCreds ) {
+				clearCreds.hidden =
+					!! data.credentials_locked || ! data.has_client_config;
+				clearCreds.disabled = !! data.credentials_locked;
+			}
 
 			if ( line ) {
 				if ( data.connected ) {
 					line.textContent = 'Google account connected. You can import documents from Drive.';
 				} else if ( ! data.has_client_config ) {
 					line.textContent =
-						'Save API credentials below, then connect your Google account.';
+						'Save API credentials on the left and click Save credentials before connecting.';
+				} else if ( data.auth_url_error ) {
+					line.textContent = data.auth_url_error;
 				} else {
 					line.textContent = 'Credentials saved. Click Connect to authorize access.';
 				}
 			}
 			if ( connect ) {
-				const canConnect = data.has_client_config && ! data.connected && data.auth_url;
-				connect.hidden = ! canConnect;
-				connect.href = data.auth_url || '#';
-				if ( ! canConnect && data.auth_url_error && line ) {
-					line.textContent = data.auth_url_error;
+				const canConnect =
+					data.has_client_config && ! data.connected && !! data.auth_url;
+
+				if ( data.connected ) {
+					connect.hidden = true;
+				} else {
+					connect.hidden = false;
+					connect.href = canConnect ? data.auth_url : '#';
+					connect.classList.toggle( 'disabled', ! canConnect );
+					connect.setAttribute(
+						'aria-disabled',
+						canConnect ? 'false' : 'true'
+					);
 				}
 			}
 			if ( disconnect ) {
@@ -748,6 +866,7 @@
 			}
 			renderFolderIds( data.folder_ids );
 			updateConnectionPreviewHint( data );
+			updateGoogleSetupHint( data );
 			renderSourceRegistry( data.sources || [] );
 		} );
 	}
@@ -755,6 +874,12 @@
 	document.addEventListener( 'click', ( event ) => {
 		const target = event.target;
 		if ( ! ( target instanceof HTMLElement ) ) {
+			return;
+		}
+
+		const connectBtn = target.closest( '#forwp-drive-connect' );
+		if ( connectBtn && connectBtn.getAttribute( 'aria-disabled' ) === 'true' ) {
+			event.preventDefault();
 			return;
 		}
 
@@ -836,14 +961,54 @@
 				loadSettings();
 			} );
 		}
-		if ( target.id === 'forwp-drive-copy-redirect' ) {
-			const code = document.getElementById( 'forwp-drive-redirect-uri' );
-			const status = document.getElementById( 'forwp-drive-settings-status' );
-			if ( code && navigator.clipboard ) {
-				navigator.clipboard.writeText( code.textContent || '' ).then( () => {
-					setStatus( status, 'Redirect URI copied.' );
-				} );
+		if ( target.id === 'forwp-drive-clear-credentials' ) {
+			if (
+				! window.confirm(
+					forwpDriveAdmin.strings.clearCredentialsConfirm ||
+						'Clear saved Client ID and Client Secret? This also disconnects your Drive account.'
+				)
+			) {
+				return;
 			}
+			const status = document.getElementById( 'forwp-drive-settings-status' );
+			const clearBtn = document.getElementById( 'forwp-drive-clear-credentials' );
+			setStatus(
+				status,
+				forwpDriveAdmin.strings.clearCredentialsRunning || 'Clearing…'
+			);
+			if ( clearBtn ) {
+				clearBtn.disabled = true;
+			}
+			api( 'settings', {
+				method: 'POST',
+				body: JSON.stringify( { clear_credentials: true } ),
+			} ).then( ( { ok, data } ) => {
+				setStatus(
+					status,
+					ok ? data.message || 'Cleared.' : data.message || 'Error.',
+					! ok
+				);
+				if ( ok ) {
+					loadSettings();
+				} else if ( clearBtn ) {
+					clearBtn.disabled = false;
+				}
+			} );
+		}
+		const copyRedirectBtn = target.closest( '.forwp-drive-copy-redirect' );
+		if ( copyRedirectBtn ) {
+			event.preventDefault();
+			const row = copyRedirectBtn.closest( 'li' );
+			const code = row ? row.querySelector( '.forwp-drive-redirect-uri' ) : null;
+			const status = document.getElementById( 'forwp-drive-settings-status' );
+			const text = code ? ( code.textContent || '' ).trim() : '';
+			copyTextToClipboard( text ).then( ( ok ) => {
+				setStatus(
+					status,
+					ok ? 'Redirect URI copied.' : 'Could not copy. Select the URI and copy manually.',
+					! ok
+				);
+			} );
 		}
 		if ( target.id === 'forwp-drive-save-folders' ) {
 			const root = document.getElementById( 'forwp-drive-root-folder' );

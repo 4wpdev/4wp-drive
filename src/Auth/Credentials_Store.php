@@ -113,13 +113,20 @@ final class Credentials_Store {
 
 	/**
 	 * Remove stored credentials (not wp-config).
+	 *
+	 * @return true|\WP_Error
 	 */
-	public function delete(): void {
+	public function delete() {
 		if ( $this->is_locked_by_wp_config() ) {
-			return;
+			return new \WP_Error(
+				'forwp_drive_credentials_locked',
+				__( 'Credentials are defined in wp-config.php and cannot be cleared here.', '4wp-drive' )
+			);
 		}
 
 		delete_option( self::CLIENT_ID_OPTION );
 		delete_option( self::CLIENT_SECRET_OPTION );
+
+		return true;
 	}
 }

@@ -12,6 +12,7 @@ defined( 'ABSPATH' ) || exit;
 $oauth         = Google_OAuth::instance();
 $redirect_uri  = $oauth->get_redirect_uri();
 $setup_links   = Google_OAuth::get_setup_links();
+$oauth_redirect_placeholder = admin_url( 'admin.php?page=forwp-drive-oauth' );
 // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 $connected     = isset( $_GET['connected'] ) && '1' === $_GET['connected'];
 // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -30,17 +31,7 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 
 	<?php if ( '' !== $oauth_error ) : ?>
 		<div class="notice notice-error is-dismissible">
-			<p>
-				<?php
-				if ( 'access_denied' === $oauth_error ) {
-					esc_html_e( 'Google authorization was cancelled.', '4wp-drive' );
-				} elseif ( '' !== $oauth_message ) {
-					echo esc_html( rawurldecode( $oauth_message ) );
-				} else {
-					esc_html_e( 'Google authorization failed. Check credentials and redirect URI.', '4wp-drive' );
-				}
-				?>
-			</p>
+			<p><?php echo esc_html( Google_OAuth::format_admin_error_message( $oauth_error, $oauth_message ) ); ?></p>
 		</div>
 	<?php endif; ?>
 
@@ -96,6 +87,34 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 
 					<div id="forwp-drive-google-split" class="forwp-drive-google-layout">
 						<div class="forwp-drive-admin-panel forwp-drive-admin-panel--embedded" id="forwp-drive-google-detail">
+							<div id="forwp-drive-google-setup-hint" class="forwp-drive-setup-hint notice notice-info inline" hidden>
+								<?php
+								$setup_steps_show_title = true;
+								require FORWP_DRIVE_PATH . 'views/partials/google-drive-setup-steps.php';
+								?>
+							</div>
+
+							<div class="forwp-drive-panel forwp-drive-panel--nested forwp-drive-panel--compact forwp-drive-oauth-row forwp-drive-dev-redirect-panel" id="forwp-drive-oauth-redirect-panel" hidden>
+								<h2><?php esc_html_e( 'Development mode — OAuth redirect', '4wp-drive' ); ?></h2>
+								<p class="description forwp-drive-oauth-desc" id="forwp-drive-oauth-redirect-desc">
+									<?php esc_html_e( 'Local sites only. If you work on this machine (e.g. a .local hostname), Google usually rejects your domain for OAuth. Enable the loopback redirect below: we substitute 127.0.0.1 and your Local port instead of the site domain. Copy the same URI into Google Cloud Console, then connect from Storage sources.', '4wp-drive' ); ?>
+								</p>
+								<p class="description forwp-drive-dev-redirect-locked" id="forwp-drive-dev-redirect-locked-note" hidden></p>
+								<p class="forwp-drive-notice-inline" id="forwp-drive-wpconfig-redirect-note" hidden>
+									<?php esc_html_e( 'Redirect URI is locked in wp-config.php (FORWP_DRIVE_OAUTH_REDIRECT_URI). Register that exact value in Google Cloud; the field below is ignored.', '4wp-drive' ); ?>
+								</p>
+								<div class="forwp-drive-dev-redirect-fields" id="forwp-drive-dev-redirect-fields">
+									<div class="forwp-drive-oauth-inline">
+										<input type="url" class="large-text code" id="forwp-drive-oauth-redirect" placeholder="<?php echo esc_attr( $oauth_redirect_placeholder ); ?>" disabled />
+										<span class="forwp-drive-oauth-inline__btns">
+											<button type="button" class="button button-small" id="forwp-drive-use-suggested-redirect" hidden disabled><?php esc_html_e( 'Use suggested', '4wp-drive' ); ?></button>
+											<button type="button" class="button button-primary" id="forwp-drive-save-oauth-redirect" disabled><?php esc_html_e( 'Save redirect', '4wp-drive' ); ?></button>
+										</span>
+									</div>
+									<p class="description" id="forwp-drive-oauth-redirect-suggested" hidden></p>
+								</div>
+							</div>
+
 							<div class="forwp-drive-google-row forwp-drive-google-row--two">
 								<div class="forwp-drive-panel forwp-drive-panel--nested forwp-drive-panel--compact">
 									<h2><?php esc_html_e( 'API credentials', '4wp-drive' ); ?></h2>
@@ -117,34 +136,17 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 									</table>
 									<p class="forwp-drive-inline-actions">
 										<button type="button" class="button button-primary" id="forwp-drive-save-credentials"><?php esc_html_e( 'Save credentials', '4wp-drive' ); ?></button>
+										<button type="button" class="button" id="forwp-drive-clear-credentials" hidden><?php esc_html_e( 'Clear', '4wp-drive' ); ?></button>
 									</p>
 								</div>
 								<div class="forwp-drive-panel forwp-drive-panel--nested forwp-drive-panel--compact">
 									<h2><?php esc_html_e( 'Connect', '4wp-drive' ); ?></h2>
 									<p id="forwp-drive-connection-line" class="description forwp-drive-connection-line"></p>
 									<p class="forwp-drive-inline-actions">
-										<a href="#" class="button button-primary" id="forwp-drive-connect" hidden><?php esc_html_e( 'Connect Google Drive', '4wp-drive' ); ?></a>
+										<a href="#" class="button button-primary disabled" id="forwp-drive-connect" aria-disabled="true"><?php esc_html_e( 'Connect your Drive', '4wp-drive' ); ?></a>
 										<button type="button" class="button" id="forwp-drive-disconnect" hidden><?php esc_html_e( 'Disconnect', '4wp-drive' ); ?></button>
 									</p>
 								</div>
-							</div>
-
-							<div class="forwp-drive-panel forwp-drive-panel--nested forwp-drive-panel--compact forwp-drive-oauth-row" id="forwp-drive-oauth-redirect-panel">
-								<h2><?php esc_html_e( 'OAuth redirect (local)', '4wp-drive' ); ?></h2>
-								<p class="description forwp-drive-oauth-desc" id="forwp-drive-oauth-redirect-desc">
-									<?php esc_html_e( 'For .localhost hosts use 127.0.0.1:PORT with the same path as in Local.', '4wp-drive' ); ?>
-								</p>
-								<p class="forwp-drive-notice-inline" id="forwp-drive-wpconfig-redirect-note" hidden>
-									<?php esc_html_e( 'Redirect URI is locked in wp-config.php (FORWP_DRIVE_OAUTH_REDIRECT_URI). Register that exact value in Google Cloud; the field below is ignored.', '4wp-drive' ); ?>
-								</p>
-								<div class="forwp-drive-oauth-inline">
-									<input type="url" class="large-text code" id="forwp-drive-oauth-redirect" placeholder="http://127.0.0.1:10033/wp-admin/admin.php?page=forwp-drive-oauth" />
-									<span class="forwp-drive-oauth-inline__btns">
-										<button type="button" class="button button-small" id="forwp-drive-use-suggested-redirect" hidden><?php esc_html_e( 'Use suggested', '4wp-drive' ); ?></button>
-										<button type="button" class="button button-primary" id="forwp-drive-save-oauth-redirect"><?php esc_html_e( 'Save', '4wp-drive' ); ?></button>
-									</span>
-								</div>
-								<p class="description" id="forwp-drive-oauth-redirect-suggested" hidden></p>
 							</div>
 
 							<div class="forwp-drive-google-row forwp-drive-google-row--two forwp-drive-google-row--status-folders">
@@ -222,46 +224,10 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 											<span class="forwp-drive-accordion__title"><?php esc_html_e( 'Google Drive — create API credentials', '4wp-drive' ); ?></span>
 										</summary>
 										<div class="forwp-drive-accordion__panel">
-											<ol class="forwp-drive-steps">
-												<li>
-													<?php
-													printf(
-														wp_kses_post( __( 'Open the <a href="%s" target="_blank" rel="noopener noreferrer">Google Cloud Console</a> and select (or create) a project.', '4wp-drive' ) ),
-														esc_url( $setup_links['console'] )
-													);
-													?>
-												</li>
-												<li>
-													<?php
-													printf(
-														wp_kses_post( __( 'Enable the <a href="%s" target="_blank" rel="noopener noreferrer">Google Drive API</a> for this project.', '4wp-drive' ) ),
-														esc_url( $setup_links['drive_api'] )
-													);
-													?>
-												</li>
-												<li>
-													<?php
-													printf(
-														wp_kses_post( __( 'Go to <a href="%s" target="_blank" rel="noopener noreferrer">Credentials</a> → Create credentials → OAuth client ID.', '4wp-drive' ) ),
-														esc_url( $setup_links['credentials'] )
-													);
-													?>
-												</li>
-												<li><?php esc_html_e( 'Application type: Web application.', '4wp-drive' ); ?></li>
-												<li>
-													<?php esc_html_e( 'Authorized redirect URI — copy the value below (use 127.0.0.1:PORT if Google rejects .localhost):', '4wp-drive' ); ?>
-													<code class="forwp-drive-redirect-uri" id="forwp-drive-redirect-uri"><?php echo esc_html( $redirect_uri ); ?></code>
-													<button type="button" class="button button-small" id="forwp-drive-copy-redirect"><?php esc_html_e( 'Copy', '4wp-drive' ); ?></button>
-												</li>
-												<li class="forwp-drive-local-dev-note" id="forwp-drive-local-dev-note" hidden>
-													<strong><?php esc_html_e( 'Local (taxspoc):', '4wp-drive' ); ?></strong>
-													<?php esc_html_e( 'Use http://taxspoc.localhost/wp-admin/ for settings and Connect. Google redirects to 127.0.0.1:PORT briefly, then you return here automatically.', '4wp-drive' ); ?>
-												</li>
-												<li><?php esc_html_e( 'Paste the Client ID and Client Secret into Storage sources → Google Drive, then connect and set folder IDs.', '4wp-drive' ); ?></li>
-											</ol>
-											<p class="description">
-												<a href="<?php echo esc_url( $setup_links['oauth_doc'] ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Google OAuth documentation', '4wp-drive' ); ?></a>
-											</p>
+											<?php
+											$setup_steps_show_title = false;
+											require FORWP_DRIVE_PATH . 'views/partials/google-drive-setup-steps.php';
+											?>
 										</div>
 									</details>
 								</div>

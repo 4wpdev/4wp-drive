@@ -117,6 +117,25 @@
 	max-width: 72ch;
 }
 
+.forwp-drive-setup-hint {
+	display: block;
+	margin: 0 0 16px;
+	max-width: none;
+	padding: 12px 16px;
+}
+
+.forwp-drive-setup-hint .forwp-drive-setup-steps__title {
+	margin: 0 0 8px;
+}
+
+.forwp-drive-setup-hint .forwp-drive-steps {
+	margin-bottom: 8px;
+}
+
+.forwp-drive-setup-hint .forwp-drive-steps li:last-child {
+	margin-bottom: 0;
+}
+
 .forwp-drive-provider-detail-head {
 	align-items: center;
 	display: flex;
@@ -212,8 +231,26 @@
 	align-items: center;
 }
 
+.forwp-drive-inline-actions a.button.disabled,
+.forwp-drive-inline-actions a.button[aria-disabled='true'] {
+	pointer-events: none;
+	opacity: 0.55;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
 .forwp-drive-oauth-row .forwp-drive-oauth-desc {
 	margin: 0 0 8px;
+}
+
+.forwp-drive-dev-redirect-panel.is-inactive .forwp-drive-dev-redirect-fields {
+	opacity: 0.55;
+}
+
+.forwp-drive-dev-redirect-locked {
+	color: #646970;
+	font-style: italic;
+	margin: 0 0 10px;
 }
 
 .forwp-drive-oauth-inline {

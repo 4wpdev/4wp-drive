@@ -280,7 +280,9 @@ final class Template_Config {
 			}
 		}
 
-		$host = isset( $_SERVER['HTTP_HOST'] ) ? (string) $_SERVER['HTTP_HOST'] : '';
+		$host = isset( $_SERVER['HTTP_HOST'] )
+			? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) )
+			: '';
 		if ( false !== strpos( $host, ':' ) ) {
 			$port = (int) substr( $host, (int) strrpos( $host, ':' ) + 1 );
 			if ( $port > 0 ) {

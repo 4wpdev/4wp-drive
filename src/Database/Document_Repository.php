@@ -79,6 +79,7 @@ final class Document_Repository {
 			array_merge( $statuses, array( $limit ) )
 		);
 
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is built via $wpdb->prepare() above.
 		$rows = $wpdb->get_results( $sql );
 
 		return is_array( $rows ) ? $rows : array();
@@ -105,6 +106,7 @@ final class Document_Repository {
 			$statuses
 		);
 
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is built via $wpdb->prepare() above.
 		return (int) $wpdb->get_var( $sql );
 	}
 

@@ -1,0 +1,85 @@
+.forwp-drive-setup-widget {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 24px;
+	margin: -12px;
+	padding: 20px 24px;
+}
+
+.forwp-drive-setup-widget__content {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.forwp-drive-setup-widget__step {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 12px;
+	padding: 4px 10px 4px 6px;
+	border-radius: 999px;
+	background: #f6f7f7;
+	color: #50575e;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.4;
+}
+
+.forwp-drive-setup-widget__ring {
+	flex-shrink: 0;
+}
+
+.forwp-drive-setup-widget__ring-track {
+	stroke: #dcdcde;
+}
+
+.forwp-drive-setup-widget__ring-progress {
+	stroke: #2271b1;
+	transition: stroke-dashoffset 0.2s ease;
+}
+
+.forwp-drive-setup-widget__message {
+	margin: 0 0 16px;
+	max-width: 36em;
+	font-size: 14px;
+	line-height: 1.5;
+	color: #1d2327;
+}
+
+.forwp-drive-setup-widget__actions {
+	margin: 0;
+}
+
+.forwp-drive-setup-widget__dismiss {
+	margin: 12px 0 0;
+	font-size: 12px;
+}
+
+.forwp-drive-setup-widget__dismiss a {
+	color: #646970;
+	text-decoration: none;
+}
+
+.forwp-drive-setup-widget__dismiss a:hover,
+.forwp-drive-setup-widget__dismiss a:focus {
+	color: #2271b1;
+}
+
+.forwp-drive-setup-widget__illustration {
+	flex: 0 0 auto;
+	display: none;
+}
+
+@media screen and (min-width: 782px) {
+	.forwp-drive-setup-widget__illustration {
+		display: block;
+	}
+}
+
+@media screen and (max-width: 782px) {
+	.forwp-drive-setup-widget {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}

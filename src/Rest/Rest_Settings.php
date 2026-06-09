@@ -145,6 +145,15 @@ final class Rest_Settings {
 			}
 		}
 
+		if ( ! empty( $params['clear_credentials'] ) ) {
+			$cleared = $oauth->clear_credentials();
+			if ( is_wp_error( $cleared ) ) {
+				$errors[] = $cleared->get_error_message();
+			} else {
+				$messages[] = __( 'Google API credentials cleared.', '4wp-drive' );
+			}
+		}
+
 		$root_id = isset( $params['root_folder_id'] ) ? sanitize_text_field( (string) $params['root_folder_id'] ) : '';
 		if ( '' !== $root_id ) {
 			$source = Source_Registry::get_default();
@@ -208,6 +217,9 @@ final class Rest_Settings {
 				'message'           => implode( ' ', $messages ),
 				'messages'          => $messages,
 				'has_client_config' => $oauth->has_client_config(),
+				'connected'         => $oauth->is_connected(),
+				'google_client_id'  => $oauth->credentials()->get_client_id(),
+				'has_client_secret' => $oauth->credentials()->has_stored_secret(),
 				'auth_url'          => is_wp_error( $auth_url ) ? '' : $auth_url,
 				'redirect_uri'      => $oauth->get_redirect_uri(),
 				'folder_ids'        => Settings::instance()->get_folder_ids(),

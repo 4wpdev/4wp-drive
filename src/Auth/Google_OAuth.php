@@ -57,7 +57,7 @@ final class Google_OAuth {
 	 * @return void
 	 */
 	public function boot(): void {
-		// Before admin auth_redirect (127.0.0.1 callback vs taxspoc.localhost cookies).
+		// Before admin auth_redirect — loopback callback (127.0.0.1) has no .local auth cookies.
 		add_action( 'init', array( $this, 'maybe_handle_callback' ), 5 );
 	}
 
@@ -95,7 +95,7 @@ final class Google_OAuth {
 			);
 		}
 
-		$state = wp_create_nonce( 'forwp_drive_oauth_state' );
+		$state = wp_generate_password( 32, false );
 		set_transient(
 			$this->pending_state_key( $state ),
 			array(
@@ -131,10 +131,17 @@ final class Google_OAuth {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$error = isset( $_GET['error'] ) ? sanitize_key( wp_unslash( $_GET['error'] ) ) : '';
 		if ( '' !== $error ) {
+			$args = array(
+				'oauth_error' => $error,
+			);
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			if ( ! empty( $_GET['error_description'] ) ) {
+				$args['oauth_message'] = rawurlencode(
+					sanitize_text_field( wp_unslash( $_GET['error_description'] ) )
+				);
+			}
 			$this->redirect_settings(
-				array(
-					'oauth_error' => $error,
-				),
+				$args,
 				$this->consume_pending_return_url()
 			);
 		}
@@ -144,14 +151,14 @@ final class Google_OAuth {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$state = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
 
-		if ( '' === $code || '' === $state ) {
+		if ( '' === $code || '' === $state || ! $this->is_valid_oauth_state( $state ) ) {
 			return;
 		}
 
 		$pending = get_transient( $this->pending_state_key( $state ) );
 		delete_transient( $this->pending_state_key( $state ) );
 
-		if ( ! is_array( $pending ) || ! wp_verify_nonce( $state, 'forwp_drive_oauth_state' ) ) {
+		if ( ! is_array( $pending ) || empty( $pending['return_url'] ) ) {
 			$this->redirect_settings( array( 'oauth_error' => 'invalid_state' ), null );
 		}
 
@@ -181,16 +188,62 @@ final class Google_OAuth {
 			return false;
 		}
 
-		$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+		$uri = isset( $_SERVER['REQUEST_URI'] )
+			? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) )
+			: '';
 
 		return false !== strpos( $uri, 'wp-admin/admin.php' );
 	}
 
 	/**
-	 * @param string $state OAuth state nonce.
+	 * Human-readable OAuth error for the settings admin notice.
+	 *
+	 * @param string $code           OAuth error code from query args.
+	 * @param string $custom_message Optional detail (Google error_description or token API message).
+	 */
+	public static function format_admin_error_message( string $code, string $custom_message = '' ): string {
+		if ( '' !== $custom_message ) {
+			return rawurldecode( $custom_message );
+		}
+
+		$messages = array(
+			'access_denied'         => __( 'Google authorization was cancelled.', '4wp-drive' ),
+			'invalid_state'         => __( 'OAuth session expired or the authorization link was reused. Click Connect again from Storage sources.', '4wp-drive' ),
+			'redirect_uri_mismatch' => __( 'Redirect URI mismatch. Add the exact URI from Documentation to Google Cloud Console, then save OAuth redirect in Storage sources.', '4wp-drive' ),
+			'invalid_client'        => __( 'Invalid OAuth client. Verify Client ID and Client Secret, then Save credentials.', '4wp-drive' ),
+			'invalid_grant'         => __( 'Authorization code expired or already used. Click Connect Google Drive again.', '4wp-drive' ),
+			'token_exchange'        => __( 'Could not exchange the authorization code. Check Client Secret and redirect URI.', '4wp-drive' ),
+		);
+
+		if ( isset( $messages[ $code ] ) ) {
+			return $messages[ $code ];
+		}
+
+		if ( '' === $code ) {
+			return __( 'Google authorization failed. Check credentials and redirect URI.', '4wp-drive' );
+		}
+
+		return sprintf(
+			/* translators: %s: Google OAuth error code */
+			__( 'Google authorization failed (%1$s). Check credentials and redirect URI.', '4wp-drive' ),
+			$code
+		);
+	}
+
+	/**
+	 * @param string $state OAuth state token.
 	 */
 	private function pending_state_key( string $state ): string {
 		return 'forwp_drive_oauth_pending_' . $state;
+	}
+
+	/**
+	 * OAuth state must be an unguessable single-use token (not a session nonce).
+	 *
+	 * @param string $state State from Google callback.
+	 */
+	private function is_valid_oauth_state( string $state ): bool {
+		return (bool) preg_match( '/^[a-zA-Z0-9]{32}$/', $state );
 	}
 
 	/**
@@ -295,6 +348,22 @@ final class Google_OAuth {
 	 */
 	public function disconnect(): void {
 		$this->store->delete();
+	}
+
+	/**
+	 * Remove stored API credentials and disconnect OAuth tokens.
+	 *
+	 * @return true|\WP_Error
+	 */
+	public function clear_credentials() {
+		$deleted = $this->credentials->delete();
+		if ( is_wp_error( $deleted ) ) {
+			return $deleted;
+		}
+
+		$this->disconnect();
+
+		return true;
 	}
 
 	/**

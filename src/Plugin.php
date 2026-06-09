@@ -8,6 +8,7 @@
 namespace ForWP\Drive;
 
 use ForWP\Drive\Admin\Admin_Menu;
+use ForWP\Drive\Admin\Setup_Dashboard_Widget;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Rest\Rest_Documents;
 use ForWP\Drive\Rest\Rest_Oauth;
@@ -51,9 +52,8 @@ final class Plugin {
 	 * @return void
 	 */
 	public function boot(): void {
-		add_action( 'init', array( $this, 'load_textdomain' ) );
-
 		Admin_Menu::instance()->boot();
+		Setup_Dashboard_Widget::boot();
 		Admin_Notifier::boot();
 		Google_OAuth::instance()->boot();
 		Sync_Scheduler::boot();
@@ -64,14 +64,5 @@ final class Plugin {
 		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( '\WP_CLI' ) ) {
 			\WP_CLI::add_command( 'forwp-drive sync', array( 'ForWP\\Drive\\Cli\\Sync_Command', 'sync' ) );
 		}
-	}
-
-	/**
-	 * Load translations.
-	 *
-	 * @return void
-	 */
-	public function load_textdomain(): void {
-		load_plugin_textdomain( '4wp-drive', false, dirname( plugin_basename( FORWP_DRIVE_FILE ) ) . '/languages' );
 	}
 }

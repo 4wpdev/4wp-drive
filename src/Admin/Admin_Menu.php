@@ -140,6 +140,8 @@ final class Admin_Menu {
 					'importRunning'      => __( 'Importing…', '4wp-drive' ),
 					'disconnectConfirm'  => __( 'Disconnect Google Drive from this site?', '4wp-drive' ),
 					'disconnectRunning'  => __( 'Disconnecting…', '4wp-drive' ),
+					'clearCredentialsConfirm' => __( 'Clear saved Client ID and Client Secret? This also disconnects your Drive account.', '4wp-drive' ),
+					'clearCredentialsRunning' => __( 'Clearing…', '4wp-drive' ),
 				),
 			)
 		);

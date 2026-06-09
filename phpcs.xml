@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<ruleset name="4WP Drive">
+	<description>PHPCS for 4wp-drive (extends 4wp-dev-toolkit).</description>
+
+	<rule ref="../4wp-dev-toolkit/phpcs.xml.dist"/>
+
+	<file>4wp-drive.php</file>
+	<file>src</file>
+	<file>views</file>
+
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/tests/*</exclude-pattern>
+
+	<config name="text_domain" value="4wp-drive"/>
+</ruleset>
