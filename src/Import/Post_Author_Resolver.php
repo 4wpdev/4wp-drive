@@ -54,7 +54,7 @@ final class Post_Author_Resolver {
 				'fields'     => 'ID',
 			)
 		);
-		$nickname_ids = $nickname_query->get_results();
+		$nickname_ids   = $nickname_query->get_results();
 		if ( ! empty( $nickname_ids ) ) {
 			return (int) $nickname_ids[0];
 		}
@@ -79,7 +79,7 @@ final class Post_Author_Resolver {
 				'fields'         => 'ID',
 			)
 		);
-		$search_ids = $search_query->get_results();
+		$search_ids   = $search_query->get_results();
 		if ( ! empty( $search_ids ) ) {
 			return (int) $search_ids[0];
 		}

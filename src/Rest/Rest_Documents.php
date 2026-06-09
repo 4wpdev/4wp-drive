@@ -96,7 +96,7 @@ final class Rest_Documents {
 	 * @param WP_REST_Request $request Request.
 	 */
 	public static function list_documents( WP_REST_Request $request ): WP_REST_Response {
-		$status = $request->get_param( 'status' );
+		$status   = $request->get_param( 'status' );
 		$statuses = Document_Status::inbox_statuses();
 
 		if ( is_string( $status ) && '' !== $status ) {
@@ -116,9 +116,9 @@ final class Rest_Documents {
 
 		return new WP_REST_Response(
 			array(
-				'documents'    => $items,
-				'last_sync'    => $last_sync,
-				'incoming_id'  => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',
+				'documents'   => $items,
+				'last_sync'   => $last_sync,
+				'incoming_id' => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',
 			),
 			200
 		);

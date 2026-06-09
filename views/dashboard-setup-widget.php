@@ -8,10 +8,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
-$ring_radius  = 8;
-$ring_center  = 10;
-$ring_length  = 2 * M_PI * $ring_radius;
-$ring_offset  = $ring_length * ( 1 - $progress['progress'] );
+$ring_radius = 8;
+$ring_center = 10;
+$ring_length = 2 * M_PI * $ring_radius;
+$ring_offset = $ring_length * ( 1 - $progress['progress'] );
 ?>
 <div class="forwp-drive-setup-widget">
 	<div class="forwp-drive-setup-widget__content">

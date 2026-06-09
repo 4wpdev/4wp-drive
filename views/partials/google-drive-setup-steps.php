@@ -10,8 +10,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
-$redirect_uri         = isset( $redirect_uri ) ? $redirect_uri : '';
-$setup_links          = isset( $setup_links ) && is_array( $setup_links ) ? $setup_links : array();
+$redirect_uri           = isset( $redirect_uri ) ? $redirect_uri : '';
+$setup_links            = isset( $setup_links ) && is_array( $setup_links ) ? $setup_links : array();
 $setup_steps_show_title = ! empty( $setup_steps_show_title );
 ?>
 <div class="forwp-drive-setup-steps">

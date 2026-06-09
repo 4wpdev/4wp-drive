@@ -95,9 +95,9 @@ final class Docx_Content {
 		}
 
 		return array(
-			'document_xml'   => (string) $document_xml,
-			'numbering_xml'  => false !== $numbering ? (string) $numbering : '',
-			'tmp'            => $tmp,
+			'document_xml'  => (string) $document_xml,
+			'numbering_xml' => false !== $numbering ? (string) $numbering : '',
+			'tmp'           => $tmp,
 		);
 	}
 
@@ -117,11 +117,11 @@ final class Docx_Content {
 			return '';
 		}
 
-		$xpath         = self::xpath( $dom );
-		$num_formats   = self::parse_numbering_formats( $numbering_xml );
-		$paragraphs    = $xpath->query( '//w:body/w:p' );
-		$html_parts    = array();
-		$open_lists    = array();
+		$xpath       = self::xpath( $dom );
+		$num_formats = self::parse_numbering_formats( $numbering_xml );
+		$paragraphs  = $xpath->query( '//w:body/w:p' );
+		$html_parts  = array();
+		$open_lists  = array();
 
 		if ( false === $paragraphs ) {
 			return '';
@@ -136,15 +136,15 @@ final class Docx_Content {
 			$ilvl   = self::paragraph_ilvl( $paragraph, $xpath );
 
 			if ( null !== $num_id ) {
-				$list_type = $num_formats[ $num_id ] ?? 'bullet';
-				$html_parts = array_merge( $html_parts, self::sync_list_stack( $open_lists, $ilvl, $list_type ) );
+				$list_type    = $num_formats[ $num_id ] ?? 'bullet';
+				$html_parts   = array_merge( $html_parts, self::sync_list_stack( $open_lists, $ilvl, $list_type ) );
 				$html_parts[] = '<li>' . self::runs_to_html( $paragraph, $xpath ) . '</li>';
 				continue;
 			}
 
 			if ( ! empty( $open_lists ) ) {
-				$html_parts   = array_merge( $html_parts, self::close_all_lists( $open_lists ) );
-				$open_lists   = array();
+				$html_parts = array_merge( $html_parts, self::close_all_lists( $open_lists ) );
+				$open_lists = array();
 			}
 
 			$tag   = self::paragraph_tag( $paragraph, $xpath );
@@ -205,7 +205,7 @@ final class Docx_Content {
 			return array();
 		}
 
-		$xpath = self::xpath( $dom );
+		$xpath            = self::xpath( $dom );
 		$abstract_formats = array();
 
 		$abstract_nums = $xpath->query( '//w:abstractNum' );
@@ -276,9 +276,9 @@ final class Docx_Content {
 		if ( count( $open_lists ) === $ilvl + 1 ) {
 			$current = $open_lists[ $ilvl ] ?? null;
 			if ( $current !== $list_type ) {
-				$out[] = '</' . array_pop( $open_lists ) . '>';
+				$out[]               = '</' . array_pop( $open_lists ) . '>';
 				$open_lists[ $ilvl ] = $list_type;
-				$out[] = '<' . $list_type . '>';
+				$out[]               = '<' . $list_type . '>';
 			}
 
 			return $out;

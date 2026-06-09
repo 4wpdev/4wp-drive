@@ -62,7 +62,7 @@ final class Import_Runner {
 			return $post_id;
 		}
 
-		$image_warning = $this->maybe_attach_featured_image( $metadata, (int) $post_id );
+		$image_warning    = $this->maybe_attach_featured_image( $metadata, (int) $post_id );
 		$metadata['slug'] = (string) get_post_field( 'post_name', $post_id );
 
 		$source = Source_Registry::get( (string) $row->source );
@@ -129,7 +129,7 @@ final class Import_Runner {
 			return '';
 		}
 
-		$slug = (string) get_post_field( 'post_name', $post_id );
+		$slug   = (string) get_post_field( 'post_name', $post_id );
 		$client = new Google_Drive_Client( Google_OAuth::instance() );
 		$result = ( new Featured_Image_Importer( $client ) )->attach_from_drive(
 			$image_id,

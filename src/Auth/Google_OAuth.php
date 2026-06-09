@@ -424,10 +424,10 @@ final class Google_OAuth {
 	 */
 	public static function get_setup_links(): array {
 		return array(
-			'console'    => 'https://console.cloud.google.com/',
-			'drive_api'  => 'https://console.cloud.google.com/apis/library/drive.googleapis.com',
+			'console'     => 'https://console.cloud.google.com/',
+			'drive_api'   => 'https://console.cloud.google.com/apis/library/drive.googleapis.com',
 			'credentials' => 'https://console.cloud.google.com/apis/credentials',
-			'oauth_doc'  => 'https://developers.google.com/identity/protocols/oauth2/web-server',
+			'oauth_doc'   => 'https://developers.google.com/identity/protocols/oauth2/web-server',
 		);
 	}
 

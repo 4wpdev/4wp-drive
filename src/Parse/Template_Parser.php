@@ -46,12 +46,12 @@ final class Template_Parser {
 				$header_plain = $this->html_to_plain_text(
 					'<html><body>' . $html_split['header_html'] . '</body></html>'
 				);
-				$body_plain = $this->html_to_plain_text(
+				$body_plain   = $this->html_to_plain_text(
 					'<html><body>' . $html_split['body_html'] . '</body></html>'
 				);
 
-				$meta = $this->parse_header( $header_plain );
-				$body = $body_plain;
+				$meta                = $this->parse_header( $header_plain );
+				$body                = $body_plain;
 				list( $meta, $body ) = $this->apply_first_line_title_fallback( $meta, $body );
 
 				$body_html = trim(
@@ -73,7 +73,7 @@ final class Template_Parser {
 		$header = $split['header'];
 		$body   = $split['body'];
 
-		$meta = $this->parse_header( $header );
+		$meta                = $this->parse_header( $header );
 		list( $meta, $body ) = $this->apply_first_line_title_fallback( $meta, $body );
 
 		$body_html = $this->is_html( $raw ) ? $this->extract_body_html( $raw ) : wpautop( esc_html( $body ) );
@@ -202,7 +202,7 @@ final class Template_Parser {
 			}
 
 			list( $raw_key, $value ) = array_map( 'trim', explode( ':', $line, 2 ) );
-			$key = strtolower( $raw_key );
+			$key                     = strtolower( $raw_key );
 
 			if ( ! isset( $label_index[ $key ] ) ) {
 				continue;

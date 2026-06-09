@@ -213,7 +213,7 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 			return null;
 		}
 
-		$doc   = $docs[0];
+		$doc    = $docs[0];
 		$doc_id = (string) ( $doc['id'] ?? '' );
 		if ( '' === $doc_id ) {
 			return null;
@@ -236,12 +236,12 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 	/**
 	 * Export and parse a document; attach package/image metadata when present.
 	 *
-	 * @param Google_Drive_Client                    $client      Drive client.
-	 * @param Template_Parser                        $parser      Template parser.
-	 * @param string                                   $file_id     Document file id.
-	 * @param string                                   $file_name   Document filename.
-	 * @param string                                   $package_folder_id Article subfolder in incoming (empty for flat docs).
-	 * @param array<string, mixed>|null                $image           Drive image file row.
+	 * @param Google_Drive_Client       $client      Drive client.
+	 * @param Template_Parser           $parser      Template parser.
+	 * @param string                    $file_id     Document file id.
+	 * @param string                    $file_name   Document filename.
+	 * @param string                    $package_folder_id Article subfolder in incoming (empty for flat docs).
+	 * @param array<string, mixed>|null $image           Drive image file row.
 	 * @return array<string, mixed>|null
 	 */
 	private function scan_document_file(
@@ -303,9 +303,9 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 	/**
 	 * Parent folder to remove when moving a package folder into published/failed.
 	 *
-	 * @param Google_Drive_Client          $client Drive client.
-	 * @param string                       $folder_id Package folder id.
-	 * @param array<string, string>        $folders Configured folder ids.
+	 * @param Google_Drive_Client   $client Drive client.
+	 * @param string                $folder_id Package folder id.
+	 * @param array<string, string> $folders Configured folder ids.
 	 * @return string|WP_Error
 	 */
 	private function resolve_remove_parent( Google_Drive_Client $client, string $folder_id, array $folders ) {

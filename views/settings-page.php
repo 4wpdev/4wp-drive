@@ -9,14 +9,14 @@ use ForWP\Drive\Auth\Google_OAuth;
 
 defined( 'ABSPATH' ) || exit;
 
-$oauth         = Google_OAuth::instance();
-$redirect_uri  = $oauth->get_redirect_uri();
-$setup_links   = Google_OAuth::get_setup_links();
+$oauth                      = Google_OAuth::instance();
+$redirect_uri               = $oauth->get_redirect_uri();
+$setup_links                = Google_OAuth::get_setup_links();
 $oauth_redirect_placeholder = admin_url( 'admin.php?page=forwp-drive-oauth' );
 // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-$connected     = isset( $_GET['connected'] ) && '1' === $_GET['connected'];
+$connected = isset( $_GET['connected'] ) && '1' === $_GET['connected'];
 // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-$oauth_error   = isset( $_GET['oauth_error'] ) ? sanitize_key( wp_unslash( $_GET['oauth_error'] ) ) : '';
+$oauth_error = isset( $_GET['oauth_error'] ) ? sanitize_key( wp_unslash( $_GET['oauth_error'] ) ) : '';
 // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 $oauth_message = isset( $_GET['oauth_message'] ) ? sanitize_text_field( wp_unslash( $_GET['oauth_message'] ) ) : '';
 
@@ -37,7 +37,28 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 
 	<h1 class="forwp-drive-admin-heading">
 		<span class="forwp-drive-admin-heading__icon" aria-hidden="true">
-			<?php echo wp_kses( $heading_svg, array( 'svg' => array( 'xmlns' => true, 'viewbox' => true, 'width' => true, 'height' => true, 'fill' => true, 'focusable' => true, 'aria-hidden' => true ), 'path' => array( 'd' => true, 'stroke' => true, 'stroke-width' => true, 'stroke-linejoin' => true ) ) ); ?>
+			<?php
+			echo wp_kses(
+				$heading_svg,
+				array(
+					'svg'  => array(
+						'xmlns'       => true,
+						'viewbox'     => true,
+						'width'       => true,
+						'height'      => true,
+						'fill'        => true,
+						'focusable'   => true,
+						'aria-hidden' => true,
+					),
+					'path' => array(
+						'd'               => true,
+						'stroke'          => true,
+						'stroke-width'    => true,
+						'stroke-linejoin' => true,
+					),
+				)
+			);
+			?>
 		</span>
 		<span class="forwp-drive-admin-heading__text"><?php esc_html_e( '4WP Drive', '4wp-drive' ); ?></span>
 	</h1>

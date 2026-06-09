@@ -61,7 +61,7 @@ final class Featured_Image_Importer {
 			return new WP_Error( 'forwp_drive_upload_failed', (string) $upload['error'] );
 		}
 
-		$filetype = wp_check_filetype( $filename, null );
+		$filetype   = wp_check_filetype( $filename, null );
 		$attachment = array(
 			'post_mime_type' => $filetype['type'] ?: 'image/jpeg',
 			'post_title'     => preg_replace( '/\.[^.]+$/', '', $filename ),

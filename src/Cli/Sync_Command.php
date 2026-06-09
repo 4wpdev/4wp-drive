@@ -24,7 +24,7 @@ final class Sync_Command {
 	 *
 	 *     wp forwp-drive sync
 	 *
-	 * @param array<int, string>    $args       Positional args.
+	 * @param array<int, string>   $args       Positional args.
 	 * @param array<string, mixed> $assoc_args Associative args.
 	 */
 	public static function sync( array $args, array $assoc_args ): void {

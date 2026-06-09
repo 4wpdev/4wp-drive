@@ -319,7 +319,7 @@ final class Google_Drive_Client {
 			'POST',
 			'/files/' . rawurlencode( $file_id ) . '/copy',
 			array(
-				'fields'          => 'id',
+				'fields'            => 'id',
 				'supportsAllDrives' => 'true',
 			),
 			array(

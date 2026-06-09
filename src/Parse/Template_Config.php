@@ -382,9 +382,9 @@ final class Template_Config {
 				continue;
 			}
 			$list[] = array(
-				'slug'          => $taxonomy,
-				'label'         => $object->labels->singular_name,
-				'hierarchical'  => (bool) $object->hierarchical,
+				'slug'         => $taxonomy,
+				'label'        => $object->labels->singular_name,
+				'hierarchical' => (bool) $object->hierarchical,
 			);
 		}
 
@@ -459,7 +459,7 @@ final class Template_Config {
 		$has_title = false;
 		foreach ( $normalized as $row ) {
 			if ( 'core' === $row['type'] && 'title' === $row['field'] ) {
-				$has_title = true;
+				$has_title       = true;
 				$row['required'] = true;
 				break;
 			}

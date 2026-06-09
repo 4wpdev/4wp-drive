@@ -70,12 +70,12 @@ final class Source_Registry {
 		$rows = array();
 
 		foreach ( self::all() as $slug => $source ) {
-			$ready = $source->is_ready();
+			$ready  = $source->is_ready();
 			$rows[] = array(
-				'slug'          => (string) $slug,
-				'label'         => $source->get_label(),
-				'implemented'   => true,
-				'status'        => $ready
+				'slug'        => (string) $slug,
+				'label'       => $source->get_label(),
+				'implemented' => true,
+				'status'      => $ready
 					? __( 'Live — Google Docs via Drive folders (incoming → published).', '4wp-drive' )
 					: __( 'Add OAuth credentials, connect Google, set folder IDs.', '4wp-drive' ),
 			);

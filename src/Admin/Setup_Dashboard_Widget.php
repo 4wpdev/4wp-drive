@@ -168,12 +168,12 @@ final class Setup_Dashboard_Widget {
 		$copy         = $this->get_step_copy( $current, $settings_url );
 
 		return array(
-			'current'    => $current,
-			'total'      => $total,
-			'progress'   => min( 1.0, $completed / $total ),
-			'message'    => $copy['message'],
-			'cta_label'  => $copy['cta_label'],
-			'cta_url'    => $copy['cta_url'],
+			'current'     => $current,
+			'total'       => $total,
+			'progress'    => min( 1.0, $completed / $total ),
+			'message'     => $copy['message'],
+			'cta_label'   => $copy['cta_label'],
+			'cta_url'     => $copy['cta_url'],
 			'dismiss_url' => wp_nonce_url(
 				add_query_arg( 'forwp_drive_dismiss_setup', '1', admin_url( 'index.php' ) ),
 				'forwp_drive_dismiss_setup'

@@ -265,8 +265,8 @@ final class Google_Doc_Content {
 	 * @return \DOMDocument|null
 	 */
 	private static function load_html_dom( string $html ) {
-		$dom  = new \DOMDocument();
-		$prev = libxml_use_internal_errors( true );
+		$dom    = new \DOMDocument();
+		$prev   = libxml_use_internal_errors( true );
 		$loaded = $dom->loadHTML(
 			'<?xml encoding="utf-8" ?>' . $html,
 			LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
@@ -367,7 +367,7 @@ final class Google_Doc_Content {
 		$patterns[] = '/={' . $min_equals . ',}\s*<\/p>\s*(.*)$/is';
 
 		foreach ( Template_Separator::all_marks() as $mark ) {
-			$quoted = preg_quote( $mark, '/' );
+			$quoted     = preg_quote( $mark, '/' );
 			$patterns[] = '/<p[^>]*>.*?' . $quoted . '\s*(.+?)<\/p>/is';
 			$patterns[] = '/<p[^>]*>.*?' . $quoted . '.*?<\/p>\s*(.*)$/is';
 			$patterns[] = '/' . $quoted . '\s*<\/p>\s*(.*)$/is';
@@ -430,8 +430,8 @@ final class Google_Doc_Content {
 
 		if ( preg_match_all( '/\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/', $css, $matches, PREG_SET_ORDER ) ) {
 			foreach ( $matches as $match ) {
-				$class = (string) $match[1];
-				$rules = (string) $match[2];
+				$class         = (string) $match[1];
+				$rules         = (string) $match[2];
 				$map[ $class ] = self::parse_css_rules( $rules, $map[ $class ] ?? array() );
 			}
 		}
@@ -462,9 +462,9 @@ final class Google_Doc_Content {
 		}
 
 		return array(
-			'font_size'          => $font_size,
-			'font_weight'        => $font_weight,
-			'font_style_italic'  => $italic,
+			'font_size'         => $font_size,
+			'font_weight'       => $font_weight,
+			'font_style_italic' => $italic,
 		);
 	}
 
@@ -583,7 +583,7 @@ final class Google_Doc_Content {
 
 	/**
 	 * @param array{font_size: float, font_weight: int, font_style_italic?: bool} $styles Resolved styles.
-	 * @param \DOMElement                                                          $element Paragraph.
+	 * @param \DOMElement                                                         $element Paragraph.
 	 */
 	private static function heading_tag_for_styles( array $styles, \DOMElement $element ): ?string {
 		$size   = (float) $styles['font_size'];

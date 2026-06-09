@@ -70,7 +70,7 @@ final class Document_Repository {
 			return array();
 		}
 
-		$table    = Schema::table_name();
+		$table        = Schema::table_name();
 		$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPlaceholder
@@ -123,8 +123,8 @@ final class Document_Repository {
 			return 0;
 		}
 
-		$seen = array_fill_keys( $seen_file_ids, true );
-		$now  = current_time( 'mysql', true );
+		$seen  = array_fill_keys( $seen_file_ids, true );
+		$now   = current_time( 'mysql', true );
 		$count = 0;
 
 		foreach ( $rows as $row ) {

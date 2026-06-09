@@ -89,7 +89,7 @@ final class Seo_Meta_Applicator {
 	}
 
 	/**
-	 * @param int                  $post_id Post id.
+	 * @param int                   $post_id Post id.
 	 * @param array<string, string> $meta   Meta map.
 	 */
 	private function apply_yoast( int $post_id, array $meta ): void {
