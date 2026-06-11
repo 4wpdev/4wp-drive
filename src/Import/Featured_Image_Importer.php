@@ -18,10 +18,17 @@ defined( 'ABSPATH' ) || exit;
 final class Featured_Image_Importer {
 
 	/**
+	 * Google Drive API client.
+	 *
 	 * @var Google_Drive_Client
 	 */
 	private $client;
 
+	/**
+	 * Store the Drive client used for downloads.
+	 *
+	 * @param Google_Drive_Client $client Drive client.
+	 */
 	public function __construct( Google_Drive_Client $client ) {
 		$this->client = $client;
 	}
@@ -53,7 +60,6 @@ final class Featured_Image_Importer {
 		$filename = self::build_filename( $slug, $file_name );
 
 		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/media.php';
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 
 		$upload = wp_upload_bits( $filename, null, $binary );
@@ -62,8 +68,9 @@ final class Featured_Image_Importer {
 		}
 
 		$filetype   = wp_check_filetype( $filename, null );
+		$mime_type  = ! empty( $filetype['type'] ) ? $filetype['type'] : 'image/jpeg';
 		$attachment = array(
-			'post_mime_type' => $filetype['type'] ?: 'image/jpeg',
+			'post_mime_type' => $mime_type,
 			'post_title'     => preg_replace( '/\.[^.]+$/', '', $filename ),
 			'post_content'   => '',
 			'post_status'    => 'inherit',

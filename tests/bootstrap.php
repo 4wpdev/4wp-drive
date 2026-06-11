@@ -5,9 +5,7 @@
  * @package ForWP\Drive\Tests
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
-	define( 'ABSPATH', '/tmp/wordpress/' );
-}
+require_once __DIR__ . '/wp-stubs.php';
 
 $root = dirname( __DIR__ );
 

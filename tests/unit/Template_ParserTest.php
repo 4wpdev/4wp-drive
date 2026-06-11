@@ -20,6 +20,24 @@ class Template_ParserTest extends TestCase {
 	/**
 	 * @return void
 	 */
+	protected function setUp(): void {
+		parent::setUp();
+		forwp_drive_tests_reset_options();
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $fields Template field map.
+	 */
+	private function parser_with_fields( array $fields ): Template_Parser {
+		$config = new Template_Config();
+		$config->set_fields( $fields );
+
+		return new Template_Parser( $config );
+	}
+
+	/**
+	 * @return void
+	 */
 	public function test_parses_front_matter_and_body(): void {
 		$mark = Template_Separator::mark();
 		$raw  = "Title: Hello World\nSlug: hello-world\nCategory: News\nTags: one, two\n\n{$mark}\n\nFirst paragraph.";
@@ -52,8 +70,7 @@ class Template_ParserTest extends TestCase {
 	 * @return void
 	 */
 	public function test_custom_field_labels(): void {
-		$config = $this->createMock( Template_Config::class );
-		$config->method( 'get_fields' )->willReturn(
+		$parser = $this->parser_with_fields(
 			array(
 				array(
 					'label'    => 'Headline',
@@ -73,7 +90,6 @@ class Template_ParserTest extends TestCase {
 		);
 
 		$mark   = Template_Separator::mark();
-		$parser = new Template_Parser( $config );
 		$result = $parser->parse( "Headline: LATAM story\nMarket: LATAM\n\n{$mark}\n\nBody." );
 
 		$this->assertSame( 'LATAM story', $result['title'] );
@@ -126,8 +142,7 @@ class Template_ParserTest extends TestCase {
 	 * @return void
 	 */
 	public function test_parses_meta_fields_and_html_body(): void {
-		$config = $this->createMock( Template_Config::class );
-		$config->method( 'get_fields' )->willReturn(
+		$parser = $this->parser_with_fields(
 			array(
 				array(
 					'label'    => 'Title',
@@ -160,7 +175,6 @@ class Template_ParserTest extends TestCase {
 			. '<p>Body with <strong>bold</strong> text.</p>'
 			. '</body></html>';
 
-		$parser = new Template_Parser( $config );
 		$result = $parser->parse( $html );
 
 		$this->assertSame( 'My Article', $result['title'] );
@@ -312,34 +326,6 @@ class Template_ParserTest extends TestCase {
 			$this->markTestSkipped( 'DOMDocument not available.' );
 		}
 
-		$config = $this->createMock( Template_Config::class );
-		$config->method( 'get_fields' )->willReturn(
-			array(
-				array(
-					'label'    => 'Title',
-					'type'     => 'core',
-					'field'    => 'title',
-					'required' => true,
-				),
-				array(
-					'label'    => 'Slug',
-					'type'     => 'core',
-					'field'    => 'slug',
-				),
-				array(
-					'label'    => 'Date',
-					'type'     => 'core',
-					'field'    => 'date',
-				),
-				array(
-					'label'    => 'Category',
-					'type'     => 'taxonomy',
-					'taxonomy' => 'category',
-					'multi'    => false,
-				),
-			)
-		);
-
 		$html = '<html><body><div>'
 			. '<p>Title: DOJ Agreement</p>'
 			. '<p>Slug: trump-irs-audit</p>'
@@ -350,7 +336,7 @@ class Template_ParserTest extends TestCase {
 			. '<p>Body paragraph.</p>'
 			. '</div></body></html>';
 
-		$parser = new Template_Parser( $config );
+		$parser = new Template_Parser();
 		$result = $parser->parse( $html );
 
 		$this->assertSame( 'DOJ Agreement', $result['title'] );
@@ -365,25 +351,8 @@ class Template_ParserTest extends TestCase {
 	 * @return void
 	 */
 	public function test_parses_author_field(): void {
-		$config = $this->createMock( Template_Config::class );
-		$config->method( 'get_fields' )->willReturn(
-			array(
-				array(
-					'label'    => 'Title',
-					'type'     => 'core',
-					'field'    => 'title',
-					'required' => true,
-				),
-				array(
-					'label' => 'Author',
-					'type'  => 'core',
-					'field' => 'author',
-				),
-			)
-		);
-
 		$mark   = Template_Separator::mark();
-		$parser = new Template_Parser( $config );
+		$parser = new Template_Parser();
 		$result = $parser->parse( "Title: Story\nAuthor: Jane Editor\n\n{$mark}\n\nBody." );
 
 		$this->assertSame( 'Jane Editor', $result['author'] );

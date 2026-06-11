@@ -16,6 +16,8 @@ Import Google Docs from Drive into WordPress drafts—editorial inbox, field map
 
 A plugin by [4wp.dev](https://4wp.dev/).
 
+https://www.youtube.com/watch?v=JDGOF2B2zqQ
+
 = Perfect for =
 
 * **Editorial teams** that draft in Google Docs but publish in WordPress

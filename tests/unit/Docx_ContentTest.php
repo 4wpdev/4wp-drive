@@ -16,6 +16,14 @@ use PHPUnit\Framework\TestCase;
  */
 final class Docx_ContentTest extends TestCase {
 
+	/**
+	 * @return void
+	 */
+	protected function setUp(): void {
+		parent::setUp();
+		forwp_drive_tests_reset_options();
+	}
+
 	public function test_document_xml_to_plain_text_preserves_paragraphs(): void {
 		$xml = self::sample_document_xml();
 

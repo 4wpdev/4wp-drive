@@ -11,6 +11,8 @@ use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Import_Runner;
+use ForWP\Drive\Parse\Template_Config;
+use WP_Post_Type;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -24,6 +26,8 @@ final class Rest_Documents {
 	private const NAMESPACE = 'forwp-drive/v1';
 
 	/**
+	 * Register REST hooks.
+	 *
 	 * @return void
 	 */
 	public static function register(): void {
@@ -31,6 +35,8 @@ final class Rest_Documents {
 	}
 
 	/**
+	 * Register document inbox routes.
+	 *
 	 * @return void
 	 */
 	public static function register_routes(): void {
@@ -41,7 +47,7 @@ final class Rest_Documents {
 				array(
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( self::class, 'list_documents' ),
-					'permission_callback' => array( self::class, 'can_edit' ),
+					'permission_callback' => array( self::class, 'can_view_inbox' ),
 				),
 			)
 		);
@@ -53,7 +59,7 @@ final class Rest_Documents {
 				array(
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( self::class, 'get_document' ),
-					'permission_callback' => array( self::class, 'can_edit' ),
+					'permission_callback' => array( self::class, 'can_view_inbox' ),
 				),
 			)
 		);
@@ -65,7 +71,7 @@ final class Rest_Documents {
 				array(
 					'methods'             => \WP_REST_Server::CREATABLE,
 					'callback'            => array( self::class, 'import_document' ),
-					'permission_callback' => array( self::class, 'can_edit' ),
+					'permission_callback' => array( self::class, 'can_import' ),
 				),
 			)
 		);
@@ -77,17 +83,70 @@ final class Rest_Documents {
 				array(
 					'methods'             => \WP_REST_Server::CREATABLE,
 					'callback'            => array( self::class, 'reject_document' ),
-					'permission_callback' => array( self::class, 'can_edit' ),
+					'permission_callback' => array( self::class, 'can_manage_inbox' ),
 				),
 			)
 		);
 	}
 
 	/**
+	 * List or preview inbox documents for the configured import post type.
+	 *
 	 * @return bool
 	 */
-	public static function can_edit(): bool {
-		return current_user_can( 'edit_posts' );
+	public static function can_view_inbox(): bool {
+		$pto = self::import_post_type_object();
+		if ( ! $pto ) {
+			return false;
+		}
+
+		return current_user_can( $pto->cap->edit_posts );
+	}
+
+	/**
+	 * Import creates drafts and media for the configured post type.
+	 *
+	 * @return bool
+	 */
+	public static function can_import(): bool {
+		$pto = self::import_post_type_object();
+		if ( ! $pto ) {
+			return false;
+		}
+
+		return current_user_can( $pto->cap->create_posts ) && current_user_can( 'upload_files' );
+	}
+
+	/**
+	 * Reject changes shared inbox workflow state.
+	 *
+	 * @return bool
+	 */
+	public static function can_manage_inbox(): bool {
+		$pto = self::import_post_type_object();
+		if ( ! $pto ) {
+			return false;
+		}
+
+		return current_user_can( $pto->cap->edit_others_posts );
+	}
+
+	/**
+	 * Post type object for the configured import destination.
+	 *
+	 * @return WP_Post_Type|null
+	 */
+	private static function import_post_type_object(): ?WP_Post_Type {
+		$post_type = ( new Template_Config() )->get_import_post_type();
+		$object    = get_post_type_object( $post_type );
+
+		if ( $object instanceof WP_Post_Type ) {
+			return $object;
+		}
+
+		$fallback = get_post_type_object( 'post' );
+
+		return $fallback instanceof WP_Post_Type ? $fallback : null;
 	}
 
 	/**
@@ -186,6 +245,8 @@ final class Rest_Documents {
 	}
 
 	/**
+	 * Serialize inbox row for REST response.
+	 *
 	 * @param Document_Repository $repo Repository.
 	 * @param object              $row  Row.
 	 * @param bool                $full Include body preview.
