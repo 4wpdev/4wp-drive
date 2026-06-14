@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,7 +16,6 @@ Import Google Docs from Drive into WordPress drafts—editorial inbox, field map
 
 A plugin by [4wp.dev](https://4wp.dev/).
 
-https://www.youtube.com/watch?v=JDGOF2B2zqQ
 
 = Perfect for =
 
@@ -127,6 +126,9 @@ Yes. Use the **OAuth redirect (local)** field when Google rejects your site host
 
 == Changelog ==
 
+= 1.0.1 =
+* Plugin review: remove unnecessary core file include; load wp-admin image helpers only when generating attachment metadata.
+
 = 1.0.0 =
 * First WordPress.org release: Google Drive OAuth, folder sync, inbox, draft import, field mapping, WP-CLI sync.
 * Plugin Check fixes: i18n translators, redirect URI copy, OAuth error messages, readme External services.
@@ -135,6 +137,9 @@ Yes. Use the **OAuth redirect (local)** field when Google rejects your site host
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+Maintenance release addressing WordPress.org plugin review feedback on core file includes.
 
 = 1.0.0 =
 First public release. Connect Google Drive, sync incoming docs, and import drafts from the admin Inbox.

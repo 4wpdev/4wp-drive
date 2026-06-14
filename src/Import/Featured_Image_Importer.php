@@ -59,9 +59,6 @@ final class Featured_Image_Importer {
 
 		$filename = self::build_filename( $slug, $file_name );
 
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/image.php';
-
 		$upload = wp_upload_bits( $filename, null, $binary );
 		if ( ! empty( $upload['error'] ) ) {
 			return new WP_Error( 'forwp_drive_upload_failed', (string) $upload['error'] );
@@ -82,6 +79,8 @@ final class Featured_Image_Importer {
 				? $attachment_id
 				: new WP_Error( 'forwp_drive_attachment_failed', __( 'Could not create media attachment.', '4wp-drive' ) );
 		}
+
+		require_once ABSPATH . 'wp-admin/includes/image.php';
 
 		$metadata = wp_generate_attachment_metadata( (int) $attachment_id, $upload['file'] );
 		if ( is_array( $metadata ) ) {

@@ -3,7 +3,7 @@
  * Plugin Name:       4WP Drive
  * Plugin URI:        https://4wp.dev/
  * Description:       Import Google Docs from Drive folders into WordPress drafts — lightweight editorial pipeline (incoming → inbox → publish).
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.4
  * Tested up to:      7.0
  * Requires PHP:      7.4
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FORWP_DRIVE_VERSION', '1.0.0' );
+define( 'FORWP_DRIVE_VERSION', '1.0.1' );
 define( 'FORWP_DRIVE_FILE', __FILE__ );
 define( 'FORWP_DRIVE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'FORWP_DRIVE_URL', plugin_dir_url( __FILE__ ) );
