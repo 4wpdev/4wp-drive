@@ -223,6 +223,11 @@
 	min-height: 2.6em;
 }
 
+.forwp-drive-connection-line.forwp-drive-connection-line--error {
+	color: #8a2424;
+	font-weight: 500;
+}
+
 .forwp-drive-inline-actions {
 	margin: 0;
 	display: flex;

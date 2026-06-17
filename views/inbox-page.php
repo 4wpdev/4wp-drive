@@ -15,12 +15,11 @@ defined( 'ABSPATH' ) || exit;
 
 	<div class="forwp-drive-actions forwp-drive-admin-chrome">
 		<button type="button" class="button button-primary" id="forwp-drive-inbox-sync">
-			<?php esc_html_e( 'Run sync now', '4wp-drive' ); ?>
-		</button>
-		<button type="button" class="button" id="forwp-drive-refresh-list">
-			<?php esc_html_e( 'Refresh list', '4wp-drive' ); ?>
+			<?php esc_html_e( 'Sync from Drive', '4wp-drive' ); ?>
 		</button>
 	</div>
+
+	<div id="forwp-drive-inbox-connection-alert" class="forwp-drive-connection-alert forwp-drive-admin-chrome" hidden></div>
 
 	<div
 		id="forwp-drive-inbox-status"

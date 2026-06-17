@@ -89,6 +89,7 @@ final class Rest_Settings {
 			array(
 				'sources'                      => Source_Registry::get_admin_status_rows(),
 				'connected'                    => $oauth->is_connected(),
+				'drive_connection'             => $oauth->get_connection_payload(),
 				'has_client_config'            => $oauth->has_client_config(),
 				'google_client_id'             => $credentials->get_client_id(),
 				'has_client_secret'            => $credentials->has_stored_secret(),

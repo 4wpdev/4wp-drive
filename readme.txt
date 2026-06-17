@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -120,11 +120,22 @@ Yes. Use the **OAuth redirect (local)** field when Google rejects your site host
 
 == Screenshots ==
 
-1. Storage sources — Google OAuth credentials and Connect.
-2. Documentation — setup guide and redirect URI.
-3. Inbox — preview and Import as Draft.
+1. Storage sources — source registry (Google Drive live; GitHub, OneDrive, Dropbox planned).
+2. Google Drive — OAuth credentials, Connect, and folder mapping.
+3. Document template — map front-matter labels to post fields and taxonomies.
+4. Drive folders — WordPress settings alongside the matching `incoming` / `published` / `failed` folders in Drive.
+5. Inbox — synced articles from `incoming/` with Preview, Import as Draft, and Reject.
+6. Document template — example header format next to a Google Doc with front-matter.
+7. Inbox preview — parsed metadata and featured image before import.
+8. Imported draft — post editor with content, featured image, categories, and Yoast SEO fields.
+9. Published post — front-end article after import from Drive.
 
 == Changelog ==
+
+= 1.0.2 =
+* Inbox: single **Sync from Drive** button (replaces separate refresh control).
+* OAuth: detect expired or revoked tokens on Inbox/Settings load; show reconnect notice before sync.
+* WordPress.org listing assets: icons, banners, and screenshots.
 
 = 1.0.1 =
 * Plugin review: remove unnecessary core file include; load wp-admin image helpers only when generating attachment metadata.
@@ -137,6 +148,9 @@ Yes. Use the **OAuth redirect (local)** field when Google rejects your site host
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.0.2 =
+Inbox sync UX and Google Drive connection health notices. Reconnect in Settings if sync stops working.
 
 = 1.0.1 =
 Maintenance release addressing WordPress.org plugin review feedback on core file includes.

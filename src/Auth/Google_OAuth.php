@@ -119,6 +119,61 @@ final class Google_OAuth {
 	}
 
 	/**
+	 * Probe whether stored OAuth tokens still work (may refresh the access token).
+	 *
+	 * @return array{state: string, message: string, needs_reconnect: bool}
+	 */
+	public function get_connection_status(): array {
+		if ( ! $this->has_client_config() ) {
+			return array(
+				'state'           => 'not_configured',
+				'message'         => '',
+				'needs_reconnect' => false,
+			);
+		}
+
+		if ( ! $this->is_connected() ) {
+			return array(
+				'state'           => 'disconnected',
+				'message'         => __( 'Google Drive is not connected.', '4wp-drive' ),
+				'needs_reconnect' => true,
+			);
+		}
+
+		$token = $this->get_access_token();
+		if ( is_wp_error( $token ) ) {
+			$needs_reconnect = $this->token_error_needs_reconnect( $token );
+
+			return array(
+				'state'           => $needs_reconnect ? 'expired' : 'error',
+				'message'         => $this->format_token_error_message( $token ),
+				'needs_reconnect' => $needs_reconnect,
+			);
+		}
+
+		return array(
+			'state'           => 'ok',
+			'message'         => '',
+			'needs_reconnect' => false,
+		);
+	}
+
+	/**
+	 * Connection status for REST/admin UI (includes reconnect URL).
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function get_connection_payload(): array {
+		$status   = $this->get_connection_status();
+		$auth_url = $this->get_auth_url();
+
+		$status['auth_url']     = is_wp_error( $auth_url ) ? '' : $auth_url;
+		$status['settings_url'] = admin_url( 'admin.php?page=forwp-drive-settings' );
+
+		return $status;
+	}
+
+	/**
 	 * Handle Google OAuth redirect (runs on init, before admin login redirect).
 	 *
 	 * @return void
@@ -380,11 +435,19 @@ final class Google_OAuth {
 		$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
 		if ( $code < 200 || $code >= 300 || ! is_array( $body ) ) {
-			$message = is_array( $body ) && isset( $body['error_description'] )
+			$oauth_error = is_array( $body ) && isset( $body['error'] ) ? (string) $body['error'] : '';
+			$message     = is_array( $body ) && isset( $body['error_description'] )
 				? (string) $body['error_description']
 				: __( 'Google token request failed.', '4wp-drive' );
 
-			return new WP_Error( 'forwp_drive_token_error', $message );
+			return new WP_Error(
+				'forwp_drive_token_error',
+				$message,
+				array(
+					'oauth_error' => $oauth_error,
+					'http_status' => $code,
+				)
+			);
 		}
 
 		$refresh = $preserve_refresh ?? ( $body['refresh_token'] ?? '' );
@@ -437,5 +500,45 @@ final class Google_OAuth {
 
 	private function get_client_secret(): string {
 		return $this->credentials->get_client_secret();
+	}
+
+	/**
+	 * Whether a token error means the admin must reconnect Google Drive.
+	 *
+	 * @param WP_Error $error Token or refresh error.
+	 */
+	private function token_error_needs_reconnect( WP_Error $error ): bool {
+		$code = $error->get_error_code();
+		if ( in_array( $code, array( 'forwp_drive_not_connected', 'forwp_drive_no_refresh', 'forwp_drive_token_refresh' ), true ) ) {
+			return true;
+		}
+
+		if ( 'forwp_drive_token_error' !== $code ) {
+			return false;
+		}
+
+		$data = $error->get_error_data();
+		if ( is_array( $data ) && isset( $data['oauth_error'] ) && 'invalid_grant' === $data['oauth_error'] ) {
+			return true;
+		}
+
+		$message = strtolower( $error->get_error_message() );
+
+		return false !== strpos( $message, 'invalid_grant' )
+			|| false !== strpos( $message, 'expired' )
+			|| false !== strpos( $message, 'revoked' );
+	}
+
+	/**
+	 * User-facing message for token refresh failures.
+	 *
+	 * @param WP_Error $error Token or refresh error.
+	 */
+	private function format_token_error_message( WP_Error $error ): string {
+		if ( $this->token_error_needs_reconnect( $error ) ) {
+			return __( 'Your Google Drive authorization has expired or was revoked. Reconnect in Storage sources, then sync again.', '4wp-drive' );
+		}
+
+		return $error->get_error_message();
 	}
 }

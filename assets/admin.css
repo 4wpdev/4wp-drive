@@ -41,6 +41,18 @@
 	margin-top: 8px;
 }
 
+.forwp-drive-connection-alert {
+	margin: 12px 0 0;
+}
+
+.forwp-drive-connection-alert__inner p {
+	margin: 0 0 8px;
+}
+
+.forwp-drive-connection-alert__inner p:last-child {
+	margin-bottom: 0;
+}
+
 .forwp-drive-panel {
 	max-width: 820px;
 	background: #fff;

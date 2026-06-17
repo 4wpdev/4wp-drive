@@ -8,6 +8,7 @@
 namespace ForWP\Drive\Rest;
 
 use ForWP\Drive\Admin\Settings;
+use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Import_Runner;
@@ -175,9 +176,10 @@ final class Rest_Documents {
 
 		return new WP_REST_Response(
 			array(
-				'documents'   => $items,
-				'last_sync'   => $last_sync,
-				'incoming_id' => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',
+				'documents'        => $items,
+				'last_sync'        => $last_sync,
+				'incoming_id'      => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',
+				'drive_connection' => Google_OAuth::instance()->get_connection_payload(),
 			),
 			200
 		);

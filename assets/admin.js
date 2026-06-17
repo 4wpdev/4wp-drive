@@ -155,7 +155,7 @@
 				<p class="forwp-drive-empty-panel__label">Checklist</p>
 				<ul class="forwp-drive-empty-panel__list">
 					<li>Each article: a subfolder inside <strong>incoming/</strong> with a <strong>Google Doc</strong> or <strong>.docx</strong> plus a featured <strong>image</strong>.</li>
-					<li>Click <strong>Run sync now</strong> above after adding or editing the file.</li>
+					<li>Click <strong>Sync from Drive</strong> above after adding or editing the file.</li>
 					<li>If you already imported it, look in the <strong>published</strong> folder on Drive.</li>
 				</ul>
 			</div>`;
@@ -221,6 +221,65 @@
 		return div.innerHTML;
 	}
 
+	function renderDriveConnectionAlert( connection ) {
+		const alert = document.getElementById( 'forwp-drive-inbox-connection-alert' );
+		const syncBtn = document.getElementById( 'forwp-drive-inbox-sync' );
+		if ( ! alert ) {
+			return;
+		}
+
+		const show =
+			!! connection &&
+			connection.state &&
+			'ok' !== connection.state &&
+			'not_configured' !== connection.state;
+
+		if ( ! show ) {
+			alert.hidden = true;
+			alert.innerHTML = '';
+			if ( syncBtn ) {
+				syncBtn.disabled = false;
+			}
+			return;
+		}
+
+		const strings = forwpDriveAdmin.strings || {};
+		const settingsUrl = connection.settings_url || 'admin.php?page=forwp-drive-settings';
+		const reconnectLink =
+			connection.needs_reconnect && connection.auth_url
+				? `<p><a class="button button-primary" href="${ escapeHtml(
+						connection.auth_url
+				  ) }">${ escapeHtml(
+						strings.reconnectDrive || 'Reconnect Google Drive'
+				  ) }</a> <a class="button" href="${ escapeHtml(
+						settingsUrl
+				  ) }">${ escapeHtml( strings.openSettings || 'Open Settings' ) }</a></p>`
+				: `<p><a class="button button-primary" href="${ escapeHtml(
+						settingsUrl
+				  ) }">${ escapeHtml( strings.openSettings || 'Open Settings' ) }</a></p>`;
+		const staleNote =
+			connection.state === 'expired' || connection.state === 'error'
+				? `<p>${ escapeHtml(
+						strings.inboxStaleNote ||
+							'The inbox below may be outdated until Drive access is restored and you sync again.'
+				  ) }</p>`
+				: '';
+
+		alert.innerHTML = `<div class="forwp-drive-connection-alert__inner forwp-drive-status forwp-drive-status--error forwp-drive-status--visible">
+			<p><strong>${ escapeHtml(
+				strings.connectionProblemTitle || 'Google Drive connection problem'
+			) }</strong></p>
+			<p>${ escapeHtml( connection.message || '' ) }</p>
+			${ staleNote }
+			${ reconnectLink }
+		</div>`;
+		alert.hidden = false;
+
+		if ( syncBtn ) {
+			syncBtn.disabled = !! connection.needs_reconnect;
+		}
+	}
+
 	function loadInbox() {
 		const status = document.getElementById( 'forwp-drive-inbox-status' );
 		setStatus( status, 'Loading…', false, true );
@@ -233,6 +292,7 @@
 				);
 				return;
 			}
+			renderDriveConnectionAlert( data.drive_connection );
 			const docs = data.documents || [];
 			setStatus( status, inboxStatusMessage( data.last_sync, docs.length ) );
 			renderInbox( docs, data.last_sync );
@@ -365,7 +425,12 @@
 		if ( ! hint || ! data ) {
 			return;
 		}
-		if ( data.connected && data.source_ready ) {
+		const connection = data.drive_connection;
+		if ( connection && connection.needs_reconnect ) {
+			hint.textContent =
+				connection.message ||
+				'Reconnect Google Drive in Storage sources, then sync again.';
+		} else if ( data.connected && data.source_ready ) {
 			hint.textContent = 'Ready to sync incoming documents.';
 		} else if ( data.connected ) {
 			hint.textContent = 'Connected — set the root folder ID and save subfolders.';
@@ -823,7 +888,12 @@
 			}
 
 			if ( line ) {
-				if ( data.connected ) {
+				line.classList.remove( 'forwp-drive-connection-line--error' );
+				const connection = data.drive_connection;
+				if ( connection && connection.needs_reconnect ) {
+					line.textContent = connection.message || '';
+					line.classList.add( 'forwp-drive-connection-line--error' );
+				} else if ( data.connected ) {
 					line.textContent = 'Google account connected. You can import documents from Drive.';
 				} else if ( ! data.has_client_config ) {
 					line.textContent =
@@ -835,26 +905,36 @@
 				}
 			}
 			if ( connect ) {
+				const connection = data.drive_connection;
+				const needsReconnect = !! ( connection && connection.needs_reconnect );
+				const authUrl = ( connection && connection.auth_url ) || data.auth_url;
 				const canConnect =
-					data.has_client_config && ! data.connected && !! data.auth_url;
+					data.has_client_config && authUrl && ( ! data.connected || needsReconnect );
 
-				if ( data.connected ) {
+				if ( data.connected && ! needsReconnect ) {
 					connect.hidden = true;
 				} else {
 					connect.hidden = false;
-					connect.href = canConnect ? data.auth_url : '#';
+					connect.href = canConnect ? authUrl : '#';
 					connect.classList.toggle( 'disabled', ! canConnect );
 					connect.setAttribute(
 						'aria-disabled',
 						canConnect ? 'false' : 'true'
 					);
+					connect.textContent = needsReconnect
+						? forwpDriveAdmin.strings.reconnectDrive || 'Reconnect Google Drive'
+						: 'Connect your Drive';
 				}
 			}
 			if ( disconnect ) {
 				disconnect.hidden = ! data.connected;
 			}
 
-			const foldersReady = data.connected && data.folder_ids && data.folder_ids.incoming;
+			const foldersReady =
+				data.connected &&
+				data.folder_ids &&
+				data.folder_ids.incoming &&
+				! ( data.drive_connection && data.drive_connection.needs_reconnect );
 			if ( saveFolders ) {
 				saveFolders.disabled = ! data.connected;
 			}
@@ -895,10 +975,6 @@
 			}
 		}
 
-		if ( target.id === 'forwp-drive-refresh-list' ) {
-			runInboxSync();
-			return;
-		}
 		if ( target.id === 'forwp-drive-inbox-sync' ) {
 			runInboxSync();
 		}

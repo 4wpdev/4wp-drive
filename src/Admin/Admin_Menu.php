@@ -142,6 +142,10 @@ final class Admin_Menu {
 					'disconnectRunning'       => __( 'Disconnecting…', '4wp-drive' ),
 					'clearCredentialsConfirm' => __( 'Clear saved Client ID and Client Secret? This also disconnects your Drive account.', '4wp-drive' ),
 					'clearCredentialsRunning' => __( 'Clearing…', '4wp-drive' ),
+					'reconnectDrive'          => __( 'Reconnect Google Drive', '4wp-drive' ),
+					'openSettings'            => __( 'Open Settings', '4wp-drive' ),
+					'connectionProblemTitle'  => __( 'Google Drive connection problem', '4wp-drive' ),
+					'inboxStaleNote'          => __( 'The inbox below may be outdated until Drive access is restored and you sync again.', '4wp-drive' ),
 				),
 			)
 		);
