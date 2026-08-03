@@ -53,7 +53,7 @@ composer run lint
 - Admin UI: plain JS in `assets/` (no npm build)
 - Tests: `tests/unit/`
 
-WordPress.org assets: `bash docs/4wp-drive/export-wporg-assets.sh` (from repo `public/` root; sources in plugin `assets/images/`).
+WordPress.org assets: `bash 4wp-cursor-rules/docs/drive/release/export-wporg-assets.sh` (from repo `public/` root; sources in plugin `assets/images/`).
 
 ## External services
 

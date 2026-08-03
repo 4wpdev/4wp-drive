@@ -135,6 +135,8 @@ final class Admin_Menu {
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'strings'  => array(
 					'importConfirm'           => __( 'Import this document as a draft?', '4wp-drive' ),
+					'updateConfirm'           => __( 'Update the selected post with this document content?', '4wp-drive' ),
+					'updateTargetRequired'    => __( 'Select an existing post to update.', '4wp-drive' ),
 					'rejectConfirm'           => __( 'Reject this document?', '4wp-drive' ),
 					'syncRunning'             => __( 'Syncing…', '4wp-drive' ),
 					'importRunning'           => __( 'Importing…', '4wp-drive' ),

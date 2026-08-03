@@ -239,3 +239,55 @@ if ( ! function_exists( 'apply_filters' ) ) {
 		return $value;
 	}
 }
+
+if ( ! class_exists( 'WP_Error' ) ) {
+	/**
+	 * Minimal WP_Error stub.
+	 */
+	class WP_Error {
+
+		/**
+		 * @var string
+		 */
+		private $code;
+
+		/**
+		 * @var string
+		 */
+		private $message;
+
+		/**
+		 * @param string $code    Error code.
+		 * @param string $message Message.
+		 * @param mixed  $data    Optional data.
+		 */
+		public function __construct( $code = '', $message = '', $data = '' ) {
+			$this->code    = $code;
+			$this->message = $message;
+		}
+
+		/**
+		 * @return string
+		 */
+		public function get_error_code() {
+			return $this->code;
+		}
+
+		/**
+		 * @return string
+		 */
+		public function get_error_message() {
+			return $this->message;
+		}
+	}
+}
+
+if ( ! function_exists( 'is_wp_error' ) ) {
+	/**
+	 * @param mixed $thing Value.
+	 * @return bool
+	 */
+	function is_wp_error( $thing ) {
+		return $thing instanceof WP_Error;
+	}
+}

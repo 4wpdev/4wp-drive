@@ -44,6 +44,95 @@
 	};
 
 	let previewId = null;
+	let previewDoc = null;
+
+	function getImportMode() {
+		const selected = document.querySelector(
+			'input[name="forwp-drive-import-mode"]:checked'
+		);
+		return selected && selected.value === 'update' ? 'update' : 'create';
+	}
+
+	function setImportModeUi() {
+		const wrap = document.getElementById( 'forwp-drive-import-target-wrap' );
+		const isUpdate = getImportMode() === 'update';
+		if ( wrap ) {
+			wrap.hidden = ! isUpdate;
+		}
+		const button = document.getElementById( 'forwp-drive-preview-import' );
+		if ( button ) {
+			button.textContent =
+				isUpdate
+					? 'Update existing post'
+					: 'Import as draft';
+		}
+	}
+
+	function renderImportTargets( data ) {
+		const select = document.getElementById( 'forwp-drive-import-target' );
+		if ( ! select ) {
+			return;
+		}
+
+		const targets = data && data.targets ? data.targets : [];
+		if ( ! targets.length ) {
+			select.innerHTML =
+				'<option value="">' +
+				escapeHtml( 'No matching posts found' ) +
+				'</option>';
+			return;
+		}
+
+		select.innerHTML = targets
+			.map( ( target ) => {
+				const label = `${ target.title } (#${ target.id }) · ${ target.status } · ${ target.slug }`;
+				return `<option value="${ target.id }">${ escapeHtml( label ) }</option>`;
+			} )
+			.join( '' );
+
+		if ( data.suggested_id ) {
+			select.value = String( data.suggested_id );
+		}
+	}
+
+	function loadImportTargets( doc ) {
+		if ( ! doc ) {
+			return;
+		}
+		const params = new URLSearchParams();
+		if ( doc.slug ) {
+			params.set( 'slug', doc.slug );
+		}
+		if ( doc.title ) {
+			params.set( 'title', doc.title );
+		}
+		const query = params.toString();
+		api( 'import-targets' + ( query ? '?' + query : '' ) ).then(
+			( { ok, data } ) => {
+				if ( ok ) {
+					renderImportTargets( data );
+				}
+			}
+		);
+	}
+
+	function getImportPayload() {
+		const mode = getImportMode();
+		const payload = { mode };
+		if ( mode === 'update' ) {
+			const select = document.getElementById( 'forwp-drive-import-target' );
+			const targetId = select ? parseInt( select.value, 10 ) : 0;
+			if ( ! targetId ) {
+				window.alert(
+					forwpDriveAdmin.strings.updateTargetRequired ||
+						'Select an existing post to update.'
+				);
+				return null;
+			}
+			payload.target_post_id = targetId;
+		}
+		return payload;
+	}
 
 	function setStatus( el, message, isError, isPending ) {
 		if ( ! el ) {
@@ -321,6 +410,7 @@
 
 	function openPreview( id ) {
 		previewId = id;
+		previewDoc = null;
 		const panel = document.getElementById( 'forwp-drive-preview' );
 		const meta = document.getElementById( 'forwp-drive-preview-meta' );
 		const body = document.getElementById( 'forwp-drive-preview-post-content' );
@@ -331,20 +421,40 @@
 			if ( ! ok ) {
 				return;
 			}
+			previewDoc = data;
 			panel.hidden = false;
 			meta.innerHTML = `<p class="forwp-drive-preview__title">${ escapeHtml( data.title ) }</p>
 				<p class="forwp-drive-preview__meta">Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }${ data.has_image ? ' · Featured image: ' + escapeHtml( data.image_name || 'yes' ) : '' }</p>`;
 			body.innerHTML = data.body_html || escapeHtml( data.body || '' );
+			const createMode = document.querySelector(
+				'input[name="forwp-drive-import-mode"][value="create"]'
+			);
+			if ( createMode ) {
+				createMode.checked = true;
+			}
+			setImportModeUi();
+			loadImportTargets( data );
 		} );
 	}
 
-	function importDoc( id ) {
-		if ( ! window.confirm( forwpDriveAdmin.strings.importConfirm ) ) {
+	function importDoc( id, payloadOverride ) {
+		const payload = payloadOverride || getImportPayload();
+		if ( payload === null ) {
+			return;
+		}
+		const confirmText =
+			payload.mode === 'update'
+				? forwpDriveAdmin.strings.updateConfirm
+				: forwpDriveAdmin.strings.importConfirm;
+		if ( ! window.confirm( confirmText ) ) {
 			return;
 		}
 		const status = document.getElementById( 'forwp-drive-inbox-status' );
 		setStatus( status, forwpDriveAdmin.strings.importRunning );
-		api( 'documents/' + id + '/import', { method: 'POST' } ).then( ( { ok, data } ) => {
+		api( 'documents/' + id + '/import', {
+			method: 'POST',
+			body: JSON.stringify( payload ),
+		} ).then( ( { ok, data } ) => {
 			if ( ! ok ) {
 				setStatus( status, data.message || 'Import failed.', true );
 				return;
@@ -951,6 +1061,16 @@
 		} );
 	}
 
+	document.addEventListener( 'change', ( event ) => {
+		const target = event.target;
+		if (
+			target instanceof HTMLInputElement &&
+			target.name === 'forwp-drive-import-mode'
+		) {
+			setImportModeUi();
+		}
+	} );
+
 	document.addEventListener( 'click', ( event ) => {
 		const target = event.target;
 		if ( ! ( target instanceof HTMLElement ) ) {
@@ -969,7 +1089,7 @@
 			if ( action === 'preview' ) {
 				openPreview( id );
 			} else if ( action === 'import' ) {
-				importDoc( id );
+				importDoc( id, { mode: 'create' } );
 			} else if ( action === 'reject' ) {
 				rejectDoc( id );
 			}

@@ -30,6 +30,71 @@ final class Post_Creator {
 	}
 
 	/**
+	 * Update an existing post with parsed document content.
+	 *
+	 * @param int                  $post_id  Target post id.
+	 * @param array<string, mixed> $metadata Parsed template fields.
+	 * @return int|WP_Error Post id.
+	 */
+	public function update_existing( int $post_id, array $metadata ) {
+		$post = get_post( $post_id );
+		if ( ! $post instanceof \WP_Post ) {
+			return new WP_Error( 'forwp_drive_target_not_found', __( 'Target post was not found.', '4wp-drive' ) );
+		}
+
+		$post_type = $this->config->get_import_post_type();
+		if ( $post->post_type !== $post_type ) {
+			return new WP_Error(
+				'forwp_drive_target_wrong_type',
+				__( 'Target post type does not match the configured import post type.', '4wp-drive' )
+			);
+		}
+
+		$title = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
+		if ( '' === $title ) {
+			return new WP_Error( 'forwp_drive_no_title', __( 'Document is missing a Title.', '4wp-drive' ) );
+		}
+
+		$content = $this->build_post_content( $metadata );
+
+		$postarr = array(
+			'ID'           => $post_id,
+			'post_title'   => $title,
+			'post_content' => $content,
+		);
+
+		$post_date = Post_Date_Parser::to_post_date( isset( $metadata['date'] ) ? (string) $metadata['date'] : '' );
+		if ( '' !== $post_date ) {
+			$postarr['post_date']     = $post_date;
+			$postarr['post_date_gmt'] = get_gmt_from_date( $post_date );
+			$postarr['edit_date']     = true;
+		}
+
+		/**
+		 * Filter post data before update.
+		 *
+		 * @param array<string, mixed> $postarr  Post array.
+		 * @param array<string, mixed> $metadata Parsed metadata.
+		 * @param int                  $post_id  Existing post id.
+		 */
+		$postarr = apply_filters( 'forwp_drive_import_update_postarr', $postarr, $metadata, $post_id );
+
+		$updated = wp_update_post( $postarr, true );
+		if ( is_wp_error( $updated ) ) {
+			return $updated;
+		}
+
+		$this->assign_taxonomies( $post_id, $metadata, $post_type );
+
+		$meta_map = isset( $metadata['meta'] ) && is_array( $metadata['meta'] ) ? $metadata['meta'] : array();
+		( new Seo_Meta_Applicator() )->apply( $post_id, $meta_map );
+
+		return $post_id;
+	}
+
+	/**
+	 * Create a new draft post from parsed metadata.
+	 *
 	 * @param array<string, mixed> $metadata Parsed template fields.
 	 * @return int|WP_Error Post id.
 	 */
@@ -47,13 +112,7 @@ final class Post_Creator {
 		}
 		$slug = $this->unique_slug( $slug, $post_type );
 
-		$content = isset( $metadata['body_html'] ) ? (string) $metadata['body_html'] : '';
-		$plain   = isset( $metadata['body'] ) ? trim( (string) $metadata['body'] ) : '';
-		if ( '' === trim( wp_strip_all_tags( $content ) ) && '' !== $plain ) {
-			$content = wpautop( esc_html( $plain ) );
-		} else {
-			$content = wp_kses_post( $content );
-		}
+		$content = $this->build_post_content( $metadata );
 
 		$postarr = array(
 			'post_title'   => $title,
@@ -90,6 +149,22 @@ final class Post_Creator {
 		( new Seo_Meta_Applicator() )->apply( (int) $post_id, $meta_map );
 
 		return (int) $post_id;
+	}
+
+	/**
+	 * Build sanitized post content from parsed metadata.
+	 *
+	 * @param array<string, mixed> $metadata Parsed metadata.
+	 * @return string
+	 */
+	private function build_post_content( array $metadata ): string {
+		$content = isset( $metadata['body_html'] ) ? (string) $metadata['body_html'] : '';
+		$plain   = isset( $metadata['body'] ) ? trim( (string) $metadata['body'] ) : '';
+		if ( '' === trim( wp_strip_all_tags( $content ) ) && '' !== $plain ) {
+			return wpautop( esc_html( $plain ) );
+		}
+
+		return wp_kses_post( $content );
 	}
 
 	/**

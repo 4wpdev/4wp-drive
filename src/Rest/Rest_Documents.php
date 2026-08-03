@@ -12,6 +12,7 @@ use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Import_Runner;
+use ForWP\Drive\Import\Import_Target_Resolver;
 use ForWP\Drive\Parse\Template_Config;
 use WP_Post_Type;
 use WP_REST_Request;
@@ -79,7 +80,31 @@ final class Rest_Documents {
 
 		register_rest_route(
 			self::NAMESPACE,
-			'/documents/(?P<id>\d+)/reject',
+			'/import-targets',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( self::class, 'list_import_targets' ),
+					'permission_callback' => array( self::class, 'can_import' ),
+					'args'                => array(
+						'slug'   => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_title',
+						),
+						'title'  => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'search' => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
 			array(
 				array(
 					'methods'             => \WP_REST_Server::CREATABLE,
@@ -105,7 +130,7 @@ final class Rest_Documents {
 	}
 
 	/**
-	 * Import creates drafts and media for the configured post type.
+	 * Import or update posts for the configured post type.
 	 *
 	 * @return bool
 	 */
@@ -115,7 +140,7 @@ final class Rest_Documents {
 			return false;
 		}
 
-		return current_user_can( $pto->cap->create_posts ) && current_user_can( 'upload_files' );
+		return current_user_can( $pto->cap->edit_posts ) && current_user_can( 'upload_files' );
 	}
 
 	/**
@@ -209,16 +234,58 @@ final class Rest_Documents {
 	 */
 	public static function import_document( WP_REST_Request $request ): WP_REST_Response {
 		$id     = (int) $request['id'];
-		$result = ( new Import_Runner() )->import( $id );
+		$params = $request->get_json_params();
+		if ( ! is_array( $params ) ) {
+			$params = array();
+		}
+
+		$options = array(
+			'mode' => isset( $params['mode'] ) ? sanitize_key( (string) $params['mode'] ) : 'create',
+		);
+		if ( isset( $params['target_post_id'] ) ) {
+			$options['target_post_id'] = (int) $params['target_post_id'];
+		}
+
+		$result = ( new Import_Runner() )->import( $id, $options );
 
 		if ( is_wp_error( $result ) ) {
+			$status = 500;
+			$data   = $result->get_error_data();
+			if ( is_array( $data ) && isset( $data['status'] ) ) {
+				$status = (int) $data['status'];
+			}
+
 			return new WP_REST_Response(
 				array( 'message' => $result->get_error_message() ),
-				500
+				$status
 			);
 		}
 
 		return new WP_REST_Response( $result, 200 );
+	}
+
+	/**
+	 * GET import target posts for update mode.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 */
+	public static function list_import_targets( WP_REST_Request $request ): WP_REST_Response {
+		$config = new Template_Config();
+		$result = Import_Target_Resolver::suggest(
+			$config->get_import_post_type(),
+			(string) $request->get_param( 'slug' ),
+			(string) $request->get_param( 'title' ),
+			(string) $request->get_param( 'search' )
+		);
+
+		return new WP_REST_Response(
+			array(
+				'post_type'    => $config->get_import_post_type(),
+				'targets'      => $result['targets'],
+				'suggested_id' => $result['suggested_id'],
+			),
+			200
+		);
 	}
 
 	/**

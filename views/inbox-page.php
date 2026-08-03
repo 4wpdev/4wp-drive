@@ -42,9 +42,27 @@ defined( 'ABSPATH' ) || exit;
 				</div>
 			</main>
 		</div>
+		<fieldset id="forwp-drive-import-options" class="forwp-drive-import-options">
+			<legend><?php esc_html_e( 'Import destination', '4wp-drive' ); ?></legend>
+			<label class="forwp-drive-import-options__choice">
+				<input type="radio" name="forwp-drive-import-mode" value="create" checked />
+				<?php esc_html_e( 'Create new draft', '4wp-drive' ); ?>
+			</label>
+			<label class="forwp-drive-import-options__choice">
+				<input type="radio" name="forwp-drive-import-mode" value="update" />
+				<?php esc_html_e( 'Update existing post', '4wp-drive' ); ?>
+			</label>
+			<div id="forwp-drive-import-target-wrap" class="forwp-drive-import-target-wrap" hidden>
+				<label for="forwp-drive-import-target"><?php esc_html_e( 'Target post', '4wp-drive' ); ?></label>
+				<select id="forwp-drive-import-target" class="forwp-drive-import-target"></select>
+				<p class="description">
+					<?php esc_html_e( 'Matches by slug or title when possible. Status and permalink are preserved.', '4wp-drive' ); ?>
+				</p>
+			</div>
+		</fieldset>
 		<p>
 			<button type="button" class="button button-primary" id="forwp-drive-preview-import">
-				<?php esc_html_e( 'Import as Draft', '4wp-drive' ); ?>
+				<?php esc_html_e( 'Import', '4wp-drive' ); ?>
 			</button>
 			<button type="button" class="button" id="forwp-drive-preview-reject">
 				<?php esc_html_e( 'Reject', '4wp-drive' ); ?>
