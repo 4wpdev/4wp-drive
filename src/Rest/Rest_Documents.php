@@ -105,6 +105,8 @@ final class Rest_Documents {
 		);
 
 		register_rest_route(
+			self::NAMESPACE,
+			'/documents/(?P<id>\d+)/reject',
 			array(
 				array(
 					'methods'             => \WP_REST_Server::CREATABLE,
