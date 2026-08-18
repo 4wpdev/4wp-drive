@@ -191,27 +191,6 @@
 	/* Entry column + scroll — see admin-preview.css for single-post typography */
 }
 
-.forwp-drive-import-options {
-	margin: 16px 0;
-	padding: 12px 16px;
-	border: 1px solid #dcdcde;
-	border-radius: 4px;
-}
-
-.forwp-drive-import-options__choice {
-	display: block;
-	margin: 0 0 8px;
-}
-
-.forwp-drive-import-target-wrap {
-	margin-top: 12px;
-}
-
-.forwp-drive-import-target-wrap select {
-	min-width: min(100%, 420px);
-	max-width: 100%;
-}
-
 .forwp-drive-code {
 	background: #f6f7f7;
 	padding: 12px 16px;

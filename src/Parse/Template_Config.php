@@ -127,6 +127,7 @@ final class Template_Config {
 				'label'    => (string) $meta_field['label'],
 				'key'      => (string) $meta_field['slug'],
 				'type'     => 'meta',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Template field key, not a DB query.
 				'meta_key' => (string) $meta_field['meta_key'],
 				'required' => false,
 			);
@@ -447,6 +448,7 @@ final class Template_Config {
 			if ( 'core' === $type ) {
 				$row['field'] = $core;
 			} elseif ( 'meta' === $type ) {
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Template field key, not a DB query.
 				$row['meta_key'] = $meta_key;
 			} else {
 				$row['taxonomy'] = sanitize_key( (string) ( $field['taxonomy'] ?? $key ) );

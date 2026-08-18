@@ -8,6 +8,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- View template locals.
+
 $ring_radius = 8;
 $ring_center = 10;
 $ring_length = 2 * M_PI * $ring_radius;

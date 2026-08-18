@@ -48,7 +48,9 @@ final class Post_Author_Resolver {
 
 		$nickname_query = new \WP_User_Query(
 			array(
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Author lookup by nickname meta.
 				'meta_key'   => 'nickname',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- Author lookup by nickname meta.
 				'meta_value' => $value,
 				'number'     => 1,
 				'fields'     => 'ID',

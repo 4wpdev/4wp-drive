@@ -191,9 +191,11 @@ final class Google_OAuth {
 			);
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			if ( ! empty( $_GET['error_description'] ) ) {
+				// phpcs:disable WordPress.Security.NonceVerification.Recommended
 				$args['oauth_message'] = rawurlencode(
 					sanitize_text_field( wp_unslash( $_GET['error_description'] ) )
 				);
+				// phpcs:enable WordPress.Security.NonceVerification.Recommended
 			}
 			$this->redirect_settings(
 				$args,

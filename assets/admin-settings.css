@@ -381,6 +381,47 @@
 	border-bottom: 1px solid #f0f0f1;
 }
 
+.forwp-drive-folder-ids__list {
+	margin: 8px 0 0;
+}
+
+.forwp-drive-folder-ids__list dt {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	margin: 10px 0 2px;
+	text-transform: uppercase;
+}
+
+.forwp-drive-folder-ids__list dt:first-child {
+	margin-top: 0;
+}
+
+.forwp-drive-folder-ids__list dd {
+	margin: 0 0 0;
+}
+
+.forwp-drive-folder-ids__list code {
+	display: inline-block;
+	font-size: 11px;
+	margin-right: 6px;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	vertical-align: middle;
+	word-break: break-all;
+}
+
+.forwp-drive-drive-folder-link {
+	display: inline-block;
+	font-size: 12px;
+	line-height: 1.4;
+	vertical-align: middle;
+}
+
+.forwp-drive-root-folder-open-wrap {
+	margin: 6px 0 0;
+}
+
 .forwp-drive-registry-title {
 	margin-top: 28px;
 }

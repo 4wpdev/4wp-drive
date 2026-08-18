@@ -2,7 +2,7 @@
  * Inbox preview — mirrors single post entry content width (720px column).
  */
 
-/* Admin chrome — theme single-post CSS is enqueued on this screen for preview only */
+/* Admin chrome — theme CSS is scoped to #forwp-drive-preview-body on this screen */
 .forwp-drive-admin-page .forwp-drive-admin-chrome,
 .forwp-drive-admin-page .forwp-drive-admin-chrome :where(p, li, strong, em, code, span, dt, dd, button, .button) {
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
@@ -70,6 +70,113 @@
 
 .forwp-drive-admin-page .forwp-drive-preview > p:last-child {
 	margin-top: 12px;
+}
+
+.forwp-drive-admin-page .forwp-drive-preview__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid #e8e8e8;
+}
+
+#forwp-drive-preview .forwp-drive-import-options {
+	background: #fafafa;
+	border: 1px solid #e8e8e8;
+	border-radius: 8px;
+	margin: 16px 0 0;
+	padding: 16px 18px;
+}
+
+#forwp-drive-preview .forwp-drive-import-options__label {
+	color: #646970;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.4;
+	margin: 0 0 12px;
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choices {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choice {
+	align-items: flex-start;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 6px;
+	box-sizing: border-box;
+	cursor: pointer;
+	display: flex;
+	gap: 10px;
+	margin: 0;
+	padding: 12px 14px;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choice:hover {
+	border-color: #8c8f94;
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choice:has(input:checked) {
+	background: #f0f6fc;
+	border-color: var(--wp-admin-theme-color, #2271b1);
+	box-shadow: 0 0 0 1px var(--wp-admin-theme-color, #2271b1);
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choice input[type='radio'] {
+	flex-shrink: 0;
+	margin: 2px 0 0;
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choice-text {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choice-title {
+	color: #1d2327;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+#forwp-drive-preview .forwp-drive-import-options__choice-hint {
+	color: #646970;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.45;
+}
+
+#forwp-drive-preview .forwp-drive-import-target-wrap {
+	border-top: 1px solid #e8e8e8;
+	margin-top: 14px;
+	padding-top: 14px;
+}
+
+#forwp-drive-preview .forwp-drive-import-target-wrap__label {
+	color: #1d2327;
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+	margin-bottom: 6px;
+}
+
+#forwp-drive-preview .forwp-drive-import-target-wrap select {
+	max-width: 100%;
+	min-width: min(100%, 420px);
+}
+
+#forwp-drive-preview .forwp-drive-import-target-wrap__hint {
+	margin: 8px 0 0;
+	max-width: 72ch;
 }
 
 /* Admin header — keep normal case/size; theme global styles load on this screen too */

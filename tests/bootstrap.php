@@ -7,11 +7,11 @@
 
 require_once __DIR__ . '/wp-stubs.php';
 
-$root = dirname( __DIR__ );
+$forwp_drive_plugin_root = dirname( __DIR__ );
 
-if ( file_exists( $root . '/vendor/autoload.php' ) ) {
-	require_once $root . '/vendor/autoload.php';
+if ( file_exists( $forwp_drive_plugin_root . '/vendor/autoload.php' ) ) {
+	require_once $forwp_drive_plugin_root . '/vendor/autoload.php';
 } else {
-	require_once $root . '/src/Autoload.php';
+	require_once $forwp_drive_plugin_root . '/src/Autoload.php';
 	ForWP\Drive\Autoload::register();
 }

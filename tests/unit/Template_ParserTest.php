@@ -5,6 +5,8 @@
  * @package ForWP\Drive\Tests
  */
 
+// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Test fixture field config, not a DB query.
+
 namespace ForWP\Drive\Tests;
 
 use ForWP\Drive\Parse\Template_Config;

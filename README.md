@@ -1,14 +1,14 @@
 # 4WP Drive
 
-Import **Google Docs** from Drive into WordPress **drafts** — editorial inbox, field mapping, and server-side OAuth.
+Import **Google Docs** from Drive into WordPress **drafts** — or **update existing posts and pages** from the admin Inbox. Editorial workflow: field mapping, featured images, and server-side Google OAuth.
 
-[4wp.dev](https://4wp.dev/) · WordPress plugin · GPL-2.0-or-later
+**Plugin page:** [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/) · [WordPress.org](https://wordpress.org/plugins/4wp-drive/) · [4wp.dev](https://4wp.dev/) · GPL-2.0-or-later
 
 ## What it does
 
 1. Writers drop Google Docs (and optional images) into a Drive `incoming/` folder.
 2. **4WP Drive** syncs new files and lists them in the admin **Inbox**.
-3. Editors **Preview**, **Import as Draft**, or **Reject**.
+3. Editors **Preview**, **Import as Draft**, **Update existing post**, or **Reject**.
 4. Imported files move to `published/` in Drive.
 
 Front-matter lines before a separator (`---` or `=====`) map to post fields (title, slug, categories, SEO, etc.). The rest becomes post content with headings, lists, and bold preserved.
@@ -61,6 +61,8 @@ WordPress.org assets: `bash 4wp-cursor-rules/docs/drive/release/export-wporg-ass
 - **Google Drive API** — list, export, and move files during sync/import
 
 See [readme.txt](readme.txt) → **External services** for details required by WordPress.org.
+
+Overview, comparisons, and extended FAQ: [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/)
 
 ## License
 

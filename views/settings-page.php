@@ -9,6 +9,8 @@ use ForWP\Drive\Auth\Google_OAuth;
 
 defined( 'ABSPATH' ) || exit;
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- View template locals.
+
 $oauth                      = Google_OAuth::instance();
 $redirect_uri               = $oauth->get_redirect_uri();
 $setup_links                = Google_OAuth::get_setup_links();
@@ -202,6 +204,11 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 											<td>
 												<input type="text" class="regular-text" id="forwp-drive-root-folder" />
 												<p class="description"><?php esc_html_e( 'drive.google.com/.../folders/FOLDER_ID', '4wp-drive' ); ?></p>
+												<p class="forwp-drive-root-folder-open-wrap">
+													<a href="#" id="forwp-drive-root-folder-open" class="forwp-drive-drive-folder-link" target="_blank" rel="noopener noreferrer" hidden>
+														<?php esc_html_e( 'Open root folder in Drive', '4wp-drive' ); ?>
+													</a>
+												</p>
 											</td>
 										</tr>
 									</table>

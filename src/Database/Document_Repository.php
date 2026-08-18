@@ -27,9 +27,10 @@ final class Document_Repository {
 
 		$table = Schema::table_name();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name is controlled.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		return $wpdb->get_row(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Custom table name from Schema::table_name().
 				"SELECT * FROM {$table} WHERE file_id = %s LIMIT 1",
 				$file_id
 			)
@@ -47,9 +48,10 @@ final class Document_Repository {
 
 		$table = Schema::table_name();
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		return $wpdb->get_row(
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Custom table name from Schema::table_name().
 				"SELECT * FROM {$table} WHERE id = %d LIMIT 1",
 				$id
 			)
@@ -73,13 +75,14 @@ final class Document_Repository {
 		$table        = Schema::table_name();
 		$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPlaceholder
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Custom table and dynamic IN placeholders.
 		$sql = $wpdb->prepare(
 			"SELECT * FROM {$table} WHERE status IN ({$placeholders}) ORDER BY detected_at DESC LIMIT %d",
 			array_merge( $statuses, array( $limit ) )
 		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is built via $wpdb->prepare() above.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
 		$rows = $wpdb->get_results( $sql );
 
 		return is_array( $rows ) ? $rows : array();
@@ -100,13 +103,14 @@ final class Document_Repository {
 		$table        = Schema::table_name();
 		$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPlaceholder
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Custom table and dynamic IN placeholders.
 		$sql = $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$table} WHERE status IN ({$placeholders})",
 			$statuses
 		);
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is built via $wpdb->prepare() above.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
 		return (int) $wpdb->get_var( $sql );
 	}
 
@@ -191,6 +195,7 @@ final class Document_Repository {
 		$now   = current_time( 'mysql', true );
 		$table = Schema::table_name();
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$wpdb->insert(
 			$table,
 			array(
@@ -228,6 +233,7 @@ final class Document_Repository {
 
 		$table = Schema::table_name();
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		return false !== $wpdb->update( $table, $data, array( 'id' => $id ), null, array( '%d' ) );
 	}
 

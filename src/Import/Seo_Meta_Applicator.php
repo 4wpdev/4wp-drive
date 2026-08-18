@@ -53,11 +53,13 @@ final class Seo_Meta_Applicator {
 		if ( self::is_yoast_active() ) {
 			$fields[] = array(
 				'slug'     => 'yoast_seo_title',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Post meta key label for import mapping.
 				'meta_key' => '_yoast_wpseo_title',
 				'label'    => __( 'SEO Title (Yoast)', '4wp-drive' ),
 			);
 			$fields[] = array(
 				'slug'     => 'yoast_seo_description',
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Post meta key label for import mapping.
 				'meta_key' => '_yoast_wpseo_metadesc',
 				'label'    => __( 'SEO Description (Yoast)', '4wp-drive' ),
 			);

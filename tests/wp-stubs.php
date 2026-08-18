@@ -5,6 +5,8 @@
  * @package ForWP\Drive\Tests
  */
 
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals -- Intentional core function stubs for PHPUnit.
+
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', '/tmp/wordpress/' );
 }
@@ -108,7 +110,7 @@ if ( ! function_exists( 'wp_strip_all_tags' ) ) {
 	 * @param bool   $remove_breaks   Strip line breaks when true.
 	 */
 	function wp_strip_all_tags( $string, $remove_breaks = false ) {
-		$string = strip_tags( (string) $string );
+		$string = preg_replace( '/<[^>]*>/', '', (string) $string );
 		if ( $remove_breaks ) {
 			$string = preg_replace( '/[\r\n\t ]+/', '', $string );
 		}
@@ -122,10 +124,7 @@ if ( ! function_exists( 'wp_kses_post' ) ) {
 	 * @param string $data HTML.
 	 */
 	function wp_kses_post( $data ) {
-		return strip_tags(
-			(string) $data,
-			'<a><b><blockquote><br><cite><code><del><em><h1><h2><h3><h4><h5><h6><hr><i><li><ol><p><pre><s><span><strong><sub><sup><table><tbody><td><tfoot><th><thead><tr><u><ul>'
-		);
+		return preg_replace( '/<(?!\/?(?:a|b|blockquote|br|cite|code|del|em|h[1-6]|hr|i|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|tfoot|th|thead|tr|u|ul)\b)[^>]+>/i', '', (string) $data );
 	}
 }
 
@@ -168,7 +167,7 @@ if ( ! function_exists( 'sanitize_text_field' ) ) {
 	 * @param mixed $str Value.
 	 */
 	function sanitize_text_field( $str ) {
-		return trim( strip_tags( (string) $str ) );
+		return trim( preg_replace( '/<[^>]*>/', '', (string) $str ) );
 	}
 }
 
@@ -291,3 +290,5 @@ if ( ! function_exists( 'is_wp_error' ) ) {
 		return $thing instanceof WP_Error;
 	}
 }
+
+// phpcs:enable WordPress.NamingConventions.PrefixAllGlobals

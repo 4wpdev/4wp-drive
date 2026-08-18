@@ -56,15 +56,15 @@
 	function setImportModeUi() {
 		const wrap = document.getElementById( 'forwp-drive-import-target-wrap' );
 		const isUpdate = getImportMode() === 'update';
+		const strings = forwpDriveAdmin.strings || {};
 		if ( wrap ) {
 			wrap.hidden = ! isUpdate;
 		}
 		const button = document.getElementById( 'forwp-drive-preview-import' );
 		if ( button ) {
-			button.textContent =
-				isUpdate
-					? 'Update existing post'
-					: 'Import as draft';
+			button.textContent = isUpdate
+				? strings.updateExistingPost || 'Update existing post'
+				: strings.importAsDraft || 'Import as draft';
 		}
 	}
 
@@ -267,6 +267,9 @@
 				const warning = doc.scan_error
 					? `<p class="forwp-drive-card__warning">${ escapeHtml( doc.scan_error ) }</p>`
 					: '';
+				const previewLabel = escapeHtml(
+					forwpDriveAdmin.strings.previewAndImport || 'Preview & import'
+				);
 				return `
 				<article class="forwp-drive-card forwp-drive-admin-chrome" data-id="${ doc.id }">
 					<h3>${ escapeHtml( doc.title || doc.file_name ) }</h3>
@@ -277,8 +280,7 @@
 					</div>
 					${ warning }
 					<div class="forwp-drive-card__actions">
-						<button type="button" class="button" data-action="preview" data-id="${ doc.id }">Preview</button>
-						<button type="button" class="button button-primary" data-action="import" data-id="${ doc.id }">Import as Draft</button>
+						<button type="button" class="button button-primary" data-action="preview" data-id="${ doc.id }">${ previewLabel }</button>
 						<button type="button" class="button" data-action="reject" data-id="${ doc.id }">Reject</button>
 					</div>
 				</article>`;
@@ -308,6 +310,48 @@
 		const div = document.createElement( 'div' );
 		div.textContent = text;
 		return div.innerHTML;
+	}
+
+	function driveFolderUrl( folderId ) {
+		const id = String( folderId || '' ).trim();
+		if ( ! id ) {
+			return '';
+		}
+		return (
+			'https://drive.google.com/drive/folders/' +
+			encodeURIComponent( id )
+		);
+	}
+
+	function updateRootFolderOpenLink( folderId ) {
+		const link = document.getElementById( 'forwp-drive-root-folder-open' );
+		if ( ! link ) {
+			return;
+		}
+		const url = driveFolderUrl( folderId );
+		if ( url ) {
+			link.href = url;
+			link.hidden = false;
+		} else {
+			link.hidden = true;
+			link.removeAttribute( 'href' );
+		}
+	}
+
+	function renderFolderRow( label, folderId ) {
+		const id = escapeHtml( folderId || '' );
+		const url = driveFolderUrl( folderId );
+		const openLabel = escapeHtml(
+			forwpDriveAdmin.strings.openInDrive || 'Open in Drive'
+		);
+		const link = url
+			? ` <a href="${ escapeHtml(
+					url
+			  ) }" class="forwp-drive-drive-folder-link" target="_blank" rel="noopener noreferrer">${ openLabel } <span class="screen-reader-text">${ id }</span></a>`
+			: '';
+		return `<dt>${ escapeHtml(
+			label
+		) }</dt><dd><code>${ id }</code>${ link }</dd>`;
 	}
 
 	function renderDriveConnectionAlert( connection ) {
@@ -408,7 +452,7 @@
 		} );
 	}
 
-	function openPreview( id ) {
+	function openPreview( id, options = {} ) {
 		previewId = id;
 		previewDoc = null;
 		const panel = document.getElementById( 'forwp-drive-preview' );
@@ -426,14 +470,21 @@
 			meta.innerHTML = `<p class="forwp-drive-preview__title">${ escapeHtml( data.title ) }</p>
 				<p class="forwp-drive-preview__meta">Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }${ data.has_image ? ' · Featured image: ' + escapeHtml( data.image_name || 'yes' ) : '' }</p>`;
 			body.innerHTML = data.body_html || escapeHtml( data.body || '' );
-			const createMode = document.querySelector(
-				'input[name="forwp-drive-import-mode"][value="create"]'
+			const mode = options.mode === 'update' ? 'update' : 'create';
+			const modeInput = document.querySelector(
+				`input[name="forwp-drive-import-mode"][value="${ mode }"]`
 			);
-			if ( createMode ) {
-				createMode.checked = true;
+			if ( modeInput instanceof HTMLInputElement ) {
+				modeInput.checked = true;
 			}
 			setImportModeUi();
 			loadImportTargets( data );
+			panel.scrollIntoView( { behavior: 'smooth', block: 'start' } );
+			if ( options.focusImport !== false ) {
+				document
+					.getElementById( 'forwp-drive-import-options' )
+					?.scrollIntoView( { behavior: 'smooth', block: 'nearest' } );
+			}
 		} );
 	}
 
@@ -488,10 +539,10 @@
 		box.hidden = false;
 		box.innerHTML = `
 			<p><strong>Configured folders</strong></p>
-			<dl>
-				<dt>incoming</dt><dd><code>${ escapeHtml( folderIds.incoming ) }</code></dd>
-				<dt>published</dt><dd><code>${ escapeHtml( folderIds.published ) }</code></dd>
-				<dt>failed</dt><dd><code>${ escapeHtml( folderIds.failed ) }</code></dd>
+			<dl class="forwp-drive-folder-ids__list">
+				${ renderFolderRow( 'incoming', folderIds.incoming ) }
+				${ renderFolderRow( 'published', folderIds.published ) }
+				${ renderFolderRow( 'failed', folderIds.failed ) }
 			</dl>`;
 	}
 
@@ -709,6 +760,15 @@
 		} );
 
 		document.getElementById( 'forwp-drive-source-back' )?.addEventListener( 'click', showSourceOverview );
+
+		document
+			.getElementById( 'forwp-drive-root-folder' )
+			?.addEventListener( 'input', ( event ) => {
+				const input = event.target;
+				if ( input instanceof HTMLInputElement ) {
+					updateRootFolderOpenLink( input.value.trim() );
+				}
+			} );
 
 		const grid = document.getElementById( 'forwp-drive-source-registry-grid' );
 		if ( grid ) {
@@ -1054,6 +1114,9 @@
 			if ( rootInput && data.folder_ids && data.folder_ids.root ) {
 				rootInput.value = data.folder_ids.root;
 			}
+			updateRootFolderOpenLink(
+				rootInput ? rootInput.value.trim() : data.folder_ids?.root || ''
+			);
 			renderFolderIds( data.folder_ids );
 			updateConnectionPreviewHint( data );
 			updateGoogleSetupHint( data );
@@ -1088,8 +1151,6 @@
 		if ( action && id ) {
 			if ( action === 'preview' ) {
 				openPreview( id );
-			} else if ( action === 'import' ) {
-				importDoc( id, { mode: 'create' } );
 			} else if ( action === 'reject' ) {
 				rejectDoc( id );
 			}
