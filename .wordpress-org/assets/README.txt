@@ -18,7 +18,7 @@ sips -z 250 772 "$INFO/banner.png" --out "$OUT/banner-772x250.png"
 sips -z 500 1544 "$INFO/banner.png" --out "$OUT/banner-1544x500.png"
 ```
 
-Or: `FOURWP_PUBLIC="$(pwd)" bash 4wp-cursor-rules/docs/drive/release/export-wporg-assets.sh` (from site `public/` root).
+Or: `FOURWP_PUBLIC="$(pwd)" bash 4wp-cursor-rules/docs/4wp-drive/release/export-wporg-assets.sh` (from site `public/` root).
 
 ## Required for SVN assets/
 

@@ -16,5 +16,6 @@ composer.lock
 .phpunit.result.cache
 .DS_Store
 scripts/
+docs/
 *.md
 !readme.txt

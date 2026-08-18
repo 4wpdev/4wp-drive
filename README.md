@@ -53,7 +53,9 @@ composer run lint
 - Admin UI: plain JS in `assets/` (no npm build)
 - Tests: `tests/unit/`
 
-WordPress.org assets: `bash 4wp-cursor-rules/docs/drive/release/export-wporg-assets.sh` (from repo `public/` root; sources in plugin `assets/images/`).
+WordPress.org assets: `bash 4wp-cursor-rules/docs/4wp-drive/release/export-wporg-assets.sh` (from repo `public/` root; sources in plugin `assets/images/`).
+
+Release announcements (Google, social, newsletter): [docs/releases/](docs/releases/) — not shipped in the wp.org ZIP.
 
 ## External services
 
