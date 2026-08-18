@@ -15,7 +15,8 @@ WordPress.org users see [readme.txt](../../readme.txt) (`== Changelog ==`). Keep
 
 | File | When |
 |------|------|
-| `1.1.0.md` | One file per **Stable tag** / Git tag |
+| `1.1.0.md` | Release **1.1.0** — update existing post from Inbox |
+| `1.2.0.md` | Release **1.2.0** — Polylang multilingual import; WPML planned |
 | `README.md` | This guide |
 
 ## Template (`X.Y.Z.md`)
@@ -46,7 +47,8 @@ One sentence for listings and posts.
 ## Links
 
 - Plugin: https://4wp.dev/plugin/4wp-drive/
-- Docs: 4wp-cursor-rules/docs/4wp-drive/
+- WordPress.org: https://wordpress.org/plugins/4wp-drive/
+- GitHub: https://github.com/4wpdev/4wp-drive
 ```
 
 ## Not shipped in wp.org ZIP

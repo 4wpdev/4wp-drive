@@ -13,6 +13,7 @@ use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Import_Runner;
 use ForWP\Drive\Import\Import_Target_Resolver;
+use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Parse\Template_Config;
 use WP_Post_Type;
 use WP_REST_Request;
@@ -98,6 +99,10 @@ final class Rest_Documents {
 						'search' => array(
 							'type'              => 'string',
 							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'lang'   => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_key',
 						),
 					),
 				),
@@ -207,6 +212,7 @@ final class Rest_Documents {
 				'last_sync'        => $last_sync,
 				'incoming_id'      => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',
 				'drive_connection' => Google_OAuth::instance()->get_connection_payload(),
+				'multilingual'     => Language_Provider_Registry::get_rest_payload(),
 			),
 			200
 		);
@@ -226,7 +232,15 @@ final class Rest_Documents {
 			return new WP_REST_Response( array( 'message' => __( 'Not found.', '4wp-drive' ) ), 404 );
 		}
 
-		return new WP_REST_Response( self::serialize_row( $repo, $row, true ), 200 );
+		return new WP_REST_Response(
+			array_merge(
+				self::serialize_row( $repo, $row, true ),
+				array(
+					'multilingual' => Language_Provider_Registry::get_rest_payload(),
+				)
+			),
+			200
+		);
 	}
 
 	/**
@@ -246,6 +260,9 @@ final class Rest_Documents {
 		);
 		if ( isset( $params['target_post_id'] ) ) {
 			$options['target_post_id'] = (int) $params['target_post_id'];
+		}
+		if ( isset( $params['language'] ) ) {
+			$options['language'] = sanitize_key( (string) $params['language'] );
 		}
 
 		$result = ( new Import_Runner() )->import( $id, $options );
@@ -277,7 +294,9 @@ final class Rest_Documents {
 			$config->get_import_post_type(),
 			(string) $request->get_param( 'slug' ),
 			(string) $request->get_param( 'title' ),
-			(string) $request->get_param( 'search' )
+			(string) $request->get_param( 'search' ),
+			30,
+			(string) $request->get_param( 'lang' )
 		);
 
 		return new WP_REST_Response(
@@ -285,6 +304,7 @@ final class Rest_Documents {
 				'post_type'    => $config->get_import_post_type(),
 				'targets'      => $result['targets'],
 				'suggested_id' => $result['suggested_id'],
+				'multilingual' => Language_Provider_Registry::get_rest_payload(),
 			),
 			200
 		);

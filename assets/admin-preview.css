@@ -154,6 +154,31 @@
 	line-height: 1.45;
 }
 
+#forwp-drive-preview .forwp-drive-import-language-wrap {
+	border-top: 1px solid #e8e8e8;
+	margin-top: 14px;
+	padding-top: 14px;
+}
+
+#forwp-drive-preview .forwp-drive-import-language-wrap__label {
+	color: #1d2327;
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+	margin-bottom: 6px;
+}
+
+#forwp-drive-preview .forwp-drive-import-language-wrap select {
+	max-width: 100%;
+	min-width: min(100%, 420px);
+}
+
+#forwp-drive-preview .forwp-drive-import-language-wrap__hint {
+	margin: 8px 0 0;
+	max-width: 72ch;
+}
+
 #forwp-drive-preview .forwp-drive-import-target-wrap {
 	border-top: 1px solid #e8e8e8;
 	margin-top: 14px;

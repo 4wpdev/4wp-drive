@@ -225,6 +225,12 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 				<h3 class="forwp-drive-admin-section-title forwp-drive-registry-title"><?php esc_html_e( 'Source registry', '4wp-drive' ); ?></h3>
 				<p class="forwp-drive-admin-muted forwp-drive-registry-hint"><?php esc_html_e( 'Click a card to open provider settings or roadmap details.', '4wp-drive' ); ?></p>
 				<div id="forwp-drive-source-registry-grid" class="forwp-drive-provider-grid" aria-live="polite"></div>
+
+				<h3 class="forwp-drive-admin-section-title forwp-drive-registry-title"><?php esc_html_e( 'Multilingual integration', '4wp-drive' ); ?></h3>
+				<p class="forwp-drive-admin-muted forwp-drive-registry-hint">
+					<?php esc_html_e( 'Drive import assigns post language through the active multilingual plugin. Language is chosen in the Inbox when your site has more than one language — not from Drive folders.', '4wp-drive' ); ?>
+				</p>
+				<div id="forwp-drive-language-provider-grid" class="forwp-drive-provider-grid forwp-drive-provider-grid--readonly" aria-live="polite"></div>
 			</div>
 
 			<div id="forwp-drive-panel-documentation" role="tabpanel" aria-labelledby="forwp-drive-tab-documentation" class="components-tab-panel__tab-content" hidden>
@@ -297,6 +303,33 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 									<h3><?php esc_html_e( 'Example document header', '4wp-drive' ); ?></h3>
 									<pre class="forwp-drive-code" id="forwp-drive-sample-template"></pre>
 									<p class="description"><?php esc_html_e( 'Place files with this header in your provider’s incoming folder (e.g. Google Drive incoming).', '4wp-drive' ); ?></p>
+								</div>
+							</details>
+
+							<details class="forwp-drive-accordion__item">
+								<summary class="forwp-drive-accordion__summary">
+									<span class="forwp-drive-accordion__title"><?php esc_html_e( 'Multilingual import', '4wp-drive' ); ?></span>
+									<span class="forwp-drive-accordion__hint"><?php esc_html_e( 'Polylang (live), WPML (planned)', '4wp-drive' ); ?></span>
+								</summary>
+								<div class="forwp-drive-accordion__panel">
+									<p class="description">
+										<?php esc_html_e( '4WP Drive uses Polylang when it is active. When multiple languages are configured, editors pick the content language in the Inbox before import. Update mode lists and validates targets in that language only.', '4wp-drive' ); ?>
+									</p>
+									<p class="description">
+										<?php esc_html_e( 'WPML support is planned for a future release and is not used for import yet.', '4wp-drive' ); ?>
+									</p>
+									<p class="description">
+										<?php
+										printf(
+											/* translators: %s: link to Storage sources tab section */
+											esc_html__( 'See %s on the Storage sources tab for the active provider and site languages.', '4wp-drive' ),
+											'<strong>' . esc_html__( 'Multilingual integration', '4wp-drive' ) . '</strong>'
+										);
+										?>
+									</p>
+									<p class="description">
+										<a href="<?php echo esc_url( admin_url( 'admin.php?page=forwp-drive-inbox' ) ); ?>"><?php esc_html_e( 'Open Inbox', '4wp-drive' ); ?></a>
+									</p>
 								</div>
 							</details>
 

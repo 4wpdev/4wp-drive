@@ -11,6 +11,7 @@ use ForWP\Drive\Api\Google_Drive_Client;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
+use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Source_Registry;
 use ForWP\Drive\Parse\Template_Config;
 use WP_Error;
@@ -46,6 +47,13 @@ final class Import_Runner {
 			return new WP_Error( 'forwp_drive_invalid_status', __( 'Document cannot be imported in its current state.', '4wp-drive' ) );
 		}
 
+		$lang = Import_Language_Resolver::resolve(
+			isset( $options['language'] ) ? (string) $options['language'] : ''
+		);
+		if ( is_wp_error( $lang ) ) {
+			return $lang;
+		}
+
 		$this->repository->update(
 			$document_id,
 			array(
@@ -62,7 +70,7 @@ final class Import_Runner {
 
 		if ( 'update' === $mode ) {
 			$target_id = isset( $options['target_post_id'] ) ? (int) $options['target_post_id'] : 0;
-			$target_id = Import_Target_Resolver::resolve_for_import( $target_id, $config->get_import_post_type() );
+			$target_id = Import_Target_Resolver::resolve_for_import( $target_id, $config->get_import_post_type(), $lang );
 			if ( is_wp_error( $target_id ) ) {
 				$this->repository->update(
 					$document_id,
@@ -118,6 +126,10 @@ final class Import_Runner {
 			$this->fail( $document_id, (string) $row->file_id, $post_id->get_error_message(), $metadata );
 
 			return $post_id;
+		}
+
+		if ( '' !== $lang ) {
+			Language_Provider_Registry::get_active()->assign_post_language( (int) $post_id, $lang );
 		}
 
 		$image_warning    = $this->maybe_attach_featured_image( $metadata, (int) $post_id );

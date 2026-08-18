@@ -46,6 +46,13 @@ defined( 'ABSPATH' ) || exit;
 			<p id="forwp-drive-import-options-label" class="forwp-drive-import-options__label">
 				<?php esc_html_e( 'Import destination', '4wp-drive' ); ?>
 			</p>
+			<div id="forwp-drive-import-language-wrap" class="forwp-drive-import-language-wrap" hidden>
+				<label class="forwp-drive-import-language-wrap__label" for="forwp-drive-import-language"><?php esc_html_e( 'Content language', '4wp-drive' ); ?></label>
+				<select id="forwp-drive-import-language" class="forwp-drive-import-language"></select>
+				<p class="description forwp-drive-import-language-wrap__hint">
+					<?php esc_html_e( 'Required on multilingual sites. Update mode lists only posts in this language.', '4wp-drive' ); ?>
+				</p>
+			</div>
 			<div class="forwp-drive-import-options__choices" role="radiogroup" aria-labelledby="forwp-drive-import-options-label">
 				<label class="forwp-drive-import-options__choice">
 					<input type="radio" name="forwp-drive-import-mode" value="create" checked />
@@ -66,7 +73,7 @@ defined( 'ABSPATH' ) || exit;
 				<label class="forwp-drive-import-target-wrap__label" for="forwp-drive-import-target"><?php esc_html_e( 'Target post', '4wp-drive' ); ?></label>
 				<select id="forwp-drive-import-target" class="forwp-drive-import-target"></select>
 				<p class="description forwp-drive-import-target-wrap__hint">
-					<?php esc_html_e( 'Matches by slug or title when possible. Status and permalink are preserved.', '4wp-drive' ); ?>
+					<?php esc_html_e( 'Matches by slug or title when possible. Only posts in the selected language are listed.', '4wp-drive' ); ?>
 				</p>
 			</div>
 		</div>

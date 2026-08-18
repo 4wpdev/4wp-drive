@@ -9,6 +9,7 @@ namespace ForWP\Drive\Rest;
 
 use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Auth\Google_OAuth;
+use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Parse\Template_Config;
 use ForWP\Drive\Source_Registry;
 use ForWP\Drive\Sync\Incoming_Scanner;
@@ -88,6 +89,8 @@ final class Rest_Settings {
 		return new WP_REST_Response(
 			array(
 				'sources'                      => Source_Registry::get_admin_status_rows(),
+				'language_providers'           => Language_Provider_Registry::get_admin_status_rows(),
+				'multilingual'                 => Language_Provider_Registry::get_rest_payload(),
 				'connected'                    => $oauth->is_connected(),
 				'drive_connection'             => $oauth->get_connection_payload(),
 				'has_client_config'            => $oauth->has_client_config(),

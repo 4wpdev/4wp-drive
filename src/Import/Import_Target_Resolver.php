@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive\Import;
 
+use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use WP_Error;
 use WP_Post;
 use WP_Query;
@@ -26,6 +27,7 @@ final class Import_Target_Resolver {
 	 * @param string $title     Parsed document title.
 	 * @param string $search    Optional admin search string.
 	 * @param int    $limit     Max rows in picker list.
+	 * @param string $lang      Content language slug (multilingual sites).
 	 * @return array{targets: array<int, array<string, mixed>>, suggested_id: int|null}
 	 */
 	public static function suggest(
@@ -33,7 +35,8 @@ final class Import_Target_Resolver {
 		string $slug = '',
 		string $title = '',
 		string $search = '',
-		int $limit = 30
+		int $limit = 30,
+		string $lang = ''
 	): array {
 		$post_type = sanitize_key( $post_type );
 		if ( ! post_type_exists( $post_type ) ) {
@@ -43,18 +46,19 @@ final class Import_Target_Resolver {
 			);
 		}
 
+		$lang      = sanitize_key( $lang );
 		$suggested = null;
 
 		if ( '' !== $slug ) {
-			$by_slug = self::find_by_slug( $slug, $post_type );
-			if ( $by_slug instanceof WP_Post ) {
+			$by_slug = self::find_by_slug( $slug, $post_type, $lang );
+			if ( $by_slug instanceof WP_Post && self::post_matches_language( $by_slug, $lang ) ) {
 				$suggested = (int) $by_slug->ID;
 			}
 		}
 
 		if ( null === $suggested && '' !== $title ) {
-			$by_title = self::find_by_title( $title, $post_type );
-			if ( $by_title instanceof WP_Post ) {
+			$by_title = self::find_by_title( $title, $post_type, $lang );
+			if ( $by_title instanceof WP_Post && self::post_matches_language( $by_title, $lang ) ) {
 				$suggested = (int) $by_title->ID;
 			}
 		}
@@ -74,6 +78,8 @@ final class Import_Target_Resolver {
 		if ( '' !== trim( $search ) ) {
 			$query_args['s'] = sanitize_text_field( $search );
 		}
+
+		$query_args = self::apply_language_to_query( $query_args, $lang );
 
 		$query   = new WP_Query( $query_args );
 		$targets = array();
@@ -111,9 +117,10 @@ final class Import_Target_Resolver {
 	 *
 	 * @param int    $post_id   Target post id.
 	 * @param string $post_type Expected post type.
+	 * @param string $lang      Expected content language.
 	 * @return int|WP_Error
 	 */
-	public static function resolve_for_import( int $post_id, string $post_type ) {
+	public static function resolve_for_import( int $post_id, string $post_type, string $lang = '' ) {
 		$post_id   = max( 0, $post_id );
 		$post_type = sanitize_key( $post_type );
 
@@ -150,6 +157,15 @@ final class Import_Target_Resolver {
 			);
 		}
 
+		$lang = sanitize_key( $lang );
+		if ( '' !== $lang && ! self::post_matches_language( $post, $lang ) ) {
+			return new WP_Error(
+				'forwp_drive_target_wrong_language',
+				__( 'Target post is not in the selected language.', '4wp-drive' ),
+				array( 'status' => 400 )
+			);
+		}
+
 		return $post_id;
 	}
 
@@ -158,12 +174,34 @@ final class Import_Target_Resolver {
 	 *
 	 * @param string $slug      Document or desired slug.
 	 * @param string $post_type Post type.
+	 * @param string $lang      Content language slug.
 	 * @return WP_Post|null
 	 */
-	private static function find_by_slug( string $slug, string $post_type ): ?WP_Post {
+	private static function find_by_slug( string $slug, string $post_type, string $lang = '' ): ?WP_Post {
 		$slug = sanitize_title( $slug );
 		if ( '' === $slug ) {
 			return null;
+		}
+
+		$provider = Language_Provider_Registry::get_active();
+		if ( $provider->requires_manual_selection() && '' !== sanitize_key( $lang ) ) {
+			$query = new WP_Query(
+				self::apply_language_to_query(
+					array(
+						'post_type'              => $post_type,
+						'name'                   => $slug,
+						'post_status'            => self::importable_statuses(),
+						'posts_per_page'         => 1,
+						'no_found_rows'          => true,
+						'update_post_meta_cache' => false,
+						'update_post_term_cache' => false,
+					),
+					$lang
+				)
+			);
+			$post = $query->posts[0] ?? null;
+
+			return $post instanceof WP_Post ? $post : null;
 		}
 
 		$post = get_page_by_path( $slug, OBJECT, $post_type );
@@ -176,9 +214,10 @@ final class Import_Target_Resolver {
 	 *
 	 * @param string $title     Document title.
 	 * @param string $post_type Post type.
+	 * @param string $lang      Content language slug.
 	 * @return WP_Post|null
 	 */
-	private static function find_by_title( string $title, string $post_type ): ?WP_Post {
+	private static function find_by_title( string $title, string $post_type, string $lang = '' ): ?WP_Post {
 		$title = trim( $title );
 		if ( '' === $title ) {
 			return null;
@@ -190,15 +229,18 @@ final class Import_Target_Resolver {
 		}
 
 		$posts = get_posts(
-			array(
-				'post_type'              => $post_type,
-				'post_status'            => self::importable_statuses(),
-				'posts_per_page'         => 100,
-				'orderby'                => 'title',
-				'order'                  => 'ASC',
-				'no_found_rows'          => true,
-				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
+			self::apply_language_to_query(
+				array(
+					'post_type'              => $post_type,
+					'post_status'            => self::importable_statuses(),
+					'posts_per_page'         => 100,
+					'orderby'                => 'title',
+					'order'                  => 'ASC',
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => false,
+					'update_post_term_cache' => false,
+				),
+				$lang
 			)
 		);
 
@@ -227,13 +269,58 @@ final class Import_Target_Resolver {
 	 * @return array{id: int, title: string, slug: string, status: string, edit_url: string, modified: string}
 	 */
 	private static function serialize_post( WP_Post $post ): array {
+		$provider = Language_Provider_Registry::get_active();
+		$lang     = $provider->get_post_language( (int) $post->ID );
+		$lang_name = $lang;
+
+		foreach ( $provider->get_languages() as $language ) {
+			if ( $language['code'] === $lang ) {
+				$lang_name = $language['name'];
+				break;
+			}
+		}
+
 		return array(
-			'id'       => (int) $post->ID,
-			'title'    => (string) $post->post_title,
-			'slug'     => (string) $post->post_name,
-			'status'   => (string) $post->post_status,
-			'edit_url' => (string) get_edit_post_link( $post, 'raw' ),
-			'modified' => (string) $post->post_modified,
+			'id'            => (int) $post->ID,
+			'title'         => (string) $post->post_title,
+			'slug'          => (string) $post->post_name,
+			'status'        => (string) $post->post_status,
+			'language'      => $lang,
+			'language_name' => (string) $lang_name,
+			'edit_url'      => (string) get_edit_post_link( $post, 'raw' ),
+			'modified'      => (string) $post->post_modified,
 		);
+	}
+
+	/**
+	 * @param WP_Post $post Post object.
+	 * @param string  $lang Expected language slug.
+	 */
+	private static function post_matches_language( WP_Post $post, string $lang ): bool {
+		$lang = sanitize_key( $lang );
+		if ( '' === $lang ) {
+			return true;
+		}
+
+		$provider = Language_Provider_Registry::get_active();
+		if ( ! $provider->requires_manual_selection() ) {
+			return true;
+		}
+
+		return $provider->get_post_language( (int) $post->ID ) === $lang;
+	}
+
+	/**
+	 * @param array<string, mixed> $query_args Query args.
+	 * @param string               $lang       Language slug.
+	 * @return array<string, mixed>
+	 */
+	private static function apply_language_to_query( array $query_args, string $lang ): array {
+		$lang = sanitize_key( $lang );
+		if ( '' === $lang ) {
+			return $query_args;
+		}
+
+		return Language_Provider_Registry::get_active()->apply_language_to_query_args( $query_args, $lang );
 	}
 }

@@ -45,6 +45,71 @@
 
 	let previewId = null;
 	let previewDoc = null;
+	let multilingualConfig = forwpDriveAdmin.multilingual || null;
+
+	function getMultilingualConfig() {
+		return multilingualConfig || forwpDriveAdmin.multilingual || null;
+	}
+
+	function requiresImportLanguage() {
+		const config = getMultilingualConfig();
+		return !!( config && config.requires_selection );
+	}
+
+	function getSelectedImportLanguage() {
+		const select = document.getElementById( 'forwp-drive-import-language' );
+		if ( ! select ) {
+			return '';
+		}
+		return select.value || '';
+	}
+
+	function setupImportLanguageUi( configOverride ) {
+		const wrap = document.getElementById( 'forwp-drive-import-language-wrap' );
+		const select = document.getElementById( 'forwp-drive-import-language' );
+		if ( ! wrap || ! select ) {
+			return;
+		}
+
+		const config = configOverride || getMultilingualConfig();
+		const strings = forwpDriveAdmin.strings || {};
+		if ( ! config || ! config.requires_selection ) {
+			wrap.hidden = true;
+			select.innerHTML = '';
+			return;
+		}
+
+		wrap.hidden = false;
+		const placeholder =
+			strings.selectLanguagePlaceholder || 'Select language…';
+		select.innerHTML =
+			`<option value="">${ escapeHtml( placeholder ) }</option>` +
+			( config.languages || [] )
+				.map(
+					( language ) =>
+						`<option value="${ escapeHtml( language.code ) }">${ escapeHtml(
+							language.name
+						) }</option>`
+				)
+				.join( '' );
+		select.value = '';
+	}
+
+	function resetImportTargetSelect( message ) {
+		const select = document.getElementById( 'forwp-drive-import-target' );
+		if ( ! select ) {
+			return;
+		}
+		const strings = forwpDriveAdmin.strings || {};
+		select.innerHTML =
+			'<option value="">' +
+			escapeHtml(
+				message ||
+					strings.selectLanguageFirst ||
+					'Select a language to list matching posts.'
+			) +
+			'</option>';
+	}
 
 	function getImportMode() {
 		const selected = document.querySelector(
@@ -85,7 +150,9 @@
 
 		select.innerHTML = targets
 			.map( ( target ) => {
-				const label = `${ target.title } (#${ target.id }) · ${ target.status } · ${ target.slug }`;
+				const langLabel = target.language_name || target.language || '';
+				const langPart = langLabel ? ` · ${ langLabel }` : '';
+				const label = `${ target.title } (#${ target.id }) · ${ target.status } · ${ target.slug }${ langPart }`;
 				return `<option value="${ target.id }">${ escapeHtml( label ) }</option>`;
 			} )
 			.join( '' );
@@ -99,6 +166,12 @@
 		if ( ! doc ) {
 			return;
 		}
+
+		if ( requiresImportLanguage() && ! getSelectedImportLanguage() ) {
+			resetImportTargetSelect();
+			return;
+		}
+
 		const params = new URLSearchParams();
 		if ( doc.slug ) {
 			params.set( 'slug', doc.slug );
@@ -106,10 +179,17 @@
 		if ( doc.title ) {
 			params.set( 'title', doc.title );
 		}
+		const lang = getSelectedImportLanguage();
+		if ( lang ) {
+			params.set( 'lang', lang );
+		}
 		const query = params.toString();
 		api( 'import-targets' + ( query ? '?' + query : '' ) ).then(
 			( { ok, data } ) => {
 				if ( ok ) {
+					if ( data.multilingual ) {
+						multilingualConfig = data.multilingual;
+					}
 					renderImportTargets( data );
 				}
 			}
@@ -119,6 +199,21 @@
 	function getImportPayload() {
 		const mode = getImportMode();
 		const payload = { mode };
+		const lang = getSelectedImportLanguage();
+
+		if ( requiresImportLanguage() ) {
+			if ( ! lang ) {
+				window.alert(
+					forwpDriveAdmin.strings.languageRequired ||
+						'Select a content language for this import.'
+				);
+				return null;
+			}
+			payload.language = lang;
+		} else if ( lang ) {
+			payload.language = lang;
+		}
+
 		if ( mode === 'update' ) {
 			const select = document.getElementById( 'forwp-drive-import-target' );
 			const targetId = select ? parseInt( select.value, 10 ) : 0;
@@ -426,6 +521,9 @@
 				return;
 			}
 			renderDriveConnectionAlert( data.drive_connection );
+			if ( data.multilingual ) {
+				multilingualConfig = data.multilingual;
+			}
 			const docs = data.documents || [];
 			setStatus( status, inboxStatusMessage( data.last_sync, docs.length ) );
 			renderInbox( docs, data.last_sync );
@@ -466,6 +564,9 @@
 				return;
 			}
 			previewDoc = data;
+			if ( data.multilingual ) {
+				multilingualConfig = data.multilingual;
+			}
 			panel.hidden = false;
 			meta.innerHTML = `<p class="forwp-drive-preview__title">${ escapeHtml( data.title ) }</p>
 				<p class="forwp-drive-preview__meta">Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }${ data.has_image ? ' · Featured image: ' + escapeHtml( data.image_name || 'yes' ) : '' }</p>`;
@@ -478,6 +579,10 @@
 				modeInput.checked = true;
 			}
 			setImportModeUi();
+			setupImportLanguageUi( data.multilingual );
+			if ( requiresImportLanguage() ) {
+				resetImportTargetSelect();
+			}
 			loadImportTargets( data );
 			panel.scrollIntoView( { behavior: 'smooth', block: 'start' } );
 			if ( options.focusImport !== false ) {
@@ -699,6 +804,56 @@
 					</div>
 					<p class="forwp-drive-provider-status">${ escapeHtml( row.status || '' ) }</p>
 				</div>`;
+			} )
+			.join( '' );
+	}
+
+	function renderLanguageProviderRegistry( providers ) {
+		const grid = document.getElementById( 'forwp-drive-language-provider-grid' );
+		if ( ! grid ) {
+			return;
+		}
+		const list = providers && providers.length ? providers : [];
+		grid.innerHTML = list
+			.map( ( row ) => {
+				let badge =
+					'<span class="forwp-drive-badge forwp-drive-badge--planned">' +
+					escapeHtml( 'Not installed' ) +
+					'</span>';
+				if ( row.planned ) {
+					badge =
+						'<span class="forwp-drive-badge forwp-drive-badge--planned">' +
+						escapeHtml( 'Planned' ) +
+						'</span>';
+				} else if ( row.active ) {
+					badge =
+						'<span class="forwp-drive-badge forwp-drive-badge--live">' +
+						escapeHtml( 'Active' ) +
+						'</span>';
+				} else if ( row.available ) {
+					badge =
+						'<span class="forwp-drive-badge forwp-drive-badge--standby">' +
+						escapeHtml( 'Installed' ) +
+						'</span>';
+				} else if ( row.installed ) {
+					badge =
+						'<span class="forwp-drive-badge forwp-drive-badge--inactive">' +
+						escapeHtml( 'Inactive' ) +
+						'</span>';
+				}
+				return `
+				<article class="forwp-drive-provider-card-wrap forwp-drive-provider-card-wrap--readonly${
+					row.active ? ' is-active-provider' : ''
+				}">
+					<div class="forwp-drive-provider-card-head">
+						<div>
+							<div class="forwp-drive-provider-label">${ escapeHtml( row.label ) }</div>
+							<div class="forwp-drive-provider-slug"><code>${ escapeHtml( row.slug ) }</code></div>
+						</div>
+						${ badge }
+					</div>
+					<p class="forwp-drive-provider-status">${ escapeHtml( row.status || '' ) }</p>
+				</article>`;
 			} )
 			.join( '' );
 	}
@@ -1121,6 +1276,7 @@
 			updateConnectionPreviewHint( data );
 			updateGoogleSetupHint( data );
 			renderSourceRegistry( data.sources || [] );
+			renderLanguageProviderRegistry( data.language_providers || [] );
 		} );
 	}
 
@@ -1131,6 +1287,14 @@
 			target.name === 'forwp-drive-import-mode'
 		) {
 			setImportModeUi();
+			if ( previewDoc ) {
+				loadImportTargets( previewDoc );
+			}
+		}
+		if ( target instanceof HTMLSelectElement && target.id === 'forwp-drive-import-language' ) {
+			if ( previewDoc ) {
+				loadImportTargets( previewDoc );
+			}
 		}
 	} );
 

@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,7 +32,7 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 2. Create Google OAuth credentials and connect Drive in **Storage sources**.
 3. Set your Drive **root folder ID**; the plugin uses `incoming/` and `published/` subfolders.
 4. Drop a Google Doc (with optional image) into `incoming/` or run **Sync**.
-5. Open **Inbox** → Preview → **Import as Draft**, **Update existing post**, or Reject.
+5. Open **Inbox** → Preview → choose **Content language** (Polylang, when applicable) → **Create new draft**, **Update existing post**, or Reject.
 6. On import, files move to `published/` in Drive.
 
 = Key features =
@@ -44,6 +44,7 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 * **Configurable field map** — title, slug, categories, tags, author, dates, SEO meta (when supported)
 * **Featured image** — import image from the same Drive subfolder
 * **Update existing content** — search and pick a post or page, then replace its content from the Drive document
+* **Polylang multilingual import** — pick content language in the Inbox when the site has multiple languages; assign language on create; filter update targets by language (WPML planned)
 * **REST API** + **WP-CLI** `wp forwp-drive sync` for manual sync
 * **Roadmap sources** — GitHub Markdown/MDX and additional storage providers registered for future releases
 
@@ -143,6 +144,18 @@ You must select a target and confirm before import. If the slug or title in the 
 
 It works with whichever post type you set as the import type in **Document template**. Switch the import type to **Page** (or another public type with editor support) to update pages instead of posts. The target must match that same type.
 
+= Does 4WP Drive work with multilingual sites? =
+
+**Polylang (1.2.0):** When more than one language is configured, open **Inbox → Preview & import** and select **Content language** before import (no default). New drafts receive that language; **Update existing post** lists and validates targets in the selected language only. Language is not read from Drive folder names.
+
+**WPML:** Shown as **Planned** under **Settings → Multilingual integration**; not used for import in this release.
+
+Single-language sites (no Polylang) behave as before — no language picker in the Inbox.
+
+= Where do I see which multilingual plugin is active? =
+
+**4WP Drive → Settings → Storage sources** — scroll to **Multilingual integration**. Cards show Polylang (live), WPML (planned), and single-language fallback, with status badges (Active, Inactive, Not installed, Planned).
+
 == Screenshots ==
 
 1. Storage sources — source registry (Google Drive live; GitHub, OneDrive, Dropbox planned).
@@ -156,6 +169,13 @@ It works with whichever post type you set as the import type in **Document templ
 9. Published post — front-end article after import from Drive.
 
 == Changelog ==
+
+= 1.2.0 =
+* **Polylang multilingual import** — pluggable language providers; manual **Content language** in Inbox when the site has multiple languages (no default; no Drive subfolders).
+* **Import** — assign post language on create via Polylang; **Update existing post** lists and validates targets in the selected language only.
+* **Settings** — **Multilingual integration** registry (Polylang live, WPML planned, single-language fallback) with Active / Inactive / Not installed / Planned badges.
+* **REST** — `language` on document import; `lang` on import-targets; `multilingual` payload on inbox, preview, settings, and targets.
+* **Developers** — `Language_Provider_Interface`, `Language_Provider_Registry`, `Import_Language_Resolver`; filter `forwp_drive_language_providers`. WPML provider class kept; not enabled for import until a future release.
 
 = 1.1.0 =
 * Inbox: **Update existing post** — import a Drive document into a selected post or page instead of creating a new draft.
@@ -178,6 +198,9 @@ It works with whichever post type you set as the import type in **Document templ
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Polylang sites: pick content language in the Inbox before import; update mode respects the selected language. WPML is planned. See Settings → Multilingual integration.
 
 = 1.1.0 =
 Update existing posts and pages from the Inbox—pick a target post before import.

@@ -291,4 +291,13 @@ if ( ! function_exists( 'is_wp_error' ) ) {
 	}
 }
 
+if ( ! function_exists( 'determine_locale' ) ) {
+	/**
+	 * @return string
+	 */
+	function determine_locale() {
+		return 'en_US';
+	}
+}
+
 // phpcs:enable WordPress.NamingConventions.PrefixAllGlobals

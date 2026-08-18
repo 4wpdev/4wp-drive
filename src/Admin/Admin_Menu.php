@@ -7,6 +7,8 @@
 
 namespace ForWP\Drive\Admin;
 
+use ForWP\Drive\Multilingual\Language_Provider_Registry;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -132,11 +134,15 @@ final class Admin_Menu {
 			array(
 				'restUrl'  => rest_url( 'forwp-drive/v1/' ),
 				'restPath' => trailingslashit( $rest_path ),
-				'nonce'    => wp_create_nonce( 'wp_rest' ),
-				'strings'  => array(
+				'nonce'        => wp_create_nonce( 'wp_rest' ),
+				'multilingual' => Language_Provider_Registry::get_rest_payload(),
+				'strings'      => array(
 					'importConfirm'           => __( 'Import this document as a draft?', '4wp-drive' ),
 					'updateConfirm'           => __( 'Update the selected post with this document content?', '4wp-drive' ),
 					'updateTargetRequired'    => __( 'Select an existing post to update.', '4wp-drive' ),
+					'languageRequired'        => __( 'Select a content language for this import.', '4wp-drive' ),
+					'selectLanguageFirst'     => __( 'Select a language to list matching posts.', '4wp-drive' ),
+					'selectLanguagePlaceholder' => __( 'Select language…', '4wp-drive' ),
 					'rejectConfirm'           => __( 'Reject this document?', '4wp-drive' ),
 					'previewAndImport'        => __( 'Preview & import', '4wp-drive' ),
 					'importAsDraft'           => __( 'Import as draft', '4wp-drive' ),
