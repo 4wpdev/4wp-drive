@@ -283,6 +283,26 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 										</tr>
 									</table>
 
+									<h3><?php esc_html_e( 'Body → block templates', '4wp-drive' ); ?></h3>
+									<p class="description"><?php esc_html_e( 'Build your import collection: when the document body matches a section heading, Drive inserts the chosen Gutenberg block template.', '4wp-drive' ); ?></p>
+									<table class="widefat forwp-drive-block-mapping-table" id="forwp-drive-block-mapping-table">
+										<thead>
+											<tr>
+												<th><?php esc_html_e( 'On', '4wp-drive' ); ?></th>
+												<th><?php esc_html_e( 'Block template', '4wp-drive' ); ?></th>
+												<th><?php esc_html_e( 'Section heading in document (H2)', '4wp-drive' ); ?></th>
+												<th><?php esc_html_e( 'Keep H2', '4wp-drive' ); ?></th>
+												<th></th>
+											</tr>
+										</thead>
+										<tbody id="forwp-drive-block-mapping-rows"></tbody>
+									</table>
+									<p>
+										<button type="button" class="button" id="forwp-drive-block-mapping-add-row"><?php esc_html_e( 'Add template rule', '4wp-drive' ); ?></button>
+									</p>
+									<p class="description"><?php esc_html_e( 'Templates: 4WP FAQ (forwp/faq + accordion), Core Accordion (core/accordion only). Custom CTA — planned for a later release.', '4wp-drive' ); ?></p>
+									<p class="description"><?php esc_html_e( 'Document pattern: Heading 2 = section title, Heading 3 = question, paragraphs or lists = answer.', '4wp-drive' ); ?></p>
+
 									<h3><?php esc_html_e( 'Front-matter fields', '4wp-drive' ); ?></h3>
 									<p class="description"><?php esc_html_e( 'Use plain Label: value lines at the top of each source document, then its own paragraph with only equals signs (three or more, e.g. ===== or ======) or ---, then the post body. Author matches WordPress display name or nickname. Match existing taxonomy term names.', '4wp-drive' ); ?></p>
 									<table class="widefat forwp-drive-template-table" id="forwp-drive-template-table">

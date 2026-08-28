@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive\Parse;
 
+use ForWP\Drive\Blocks\Block_Recipe_Engine;
 use ForWP\Drive\Import\Google_Doc_Content;
 
 defined( 'ABSPATH' ) || exit;
@@ -118,6 +119,14 @@ final class Template_Parser {
 		}
 
 		$slug = $this->resolve_slug( (string) $meta['slug'], (string) $meta['title'] );
+
+		$body_html = ( new Block_Recipe_Engine() )->apply(
+			$body_html,
+			array(
+				'title' => $meta['title'],
+				'slug'  => $slug,
+			)
+		);
 
 		return array(
 			'title'      => $meta['title'],

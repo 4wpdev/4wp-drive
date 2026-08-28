@@ -15,7 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Reset in-memory options between tests.
  */
 function forwp_drive_tests_reset_options(): void {
-	$GLOBALS['forwp_drive_test_options'] = array();
+	$GLOBALS['forwp_drive_test_options']  = array();
+	$GLOBALS['forwp_drive_test_filters'] = array();
 }
 
 forwp_drive_tests_reset_options();
@@ -233,9 +234,99 @@ if ( ! function_exists( 'apply_filters' ) ) {
 	 * @return mixed
 	 */
 	function apply_filters( $hook, $value ) {
-		unset( $hook );
+		if ( ! isset( $GLOBALS['forwp_drive_test_filters'][ $hook ] ) ) {
+			return $value;
+		}
+
+		$args = func_get_args();
+		array_shift( $args );
+
+		foreach ( $GLOBALS['forwp_drive_test_filters'][ $hook ] as $callback ) {
+			$value = call_user_func_array( $callback, $args );
+			$args[0] = $value;
+		}
 
 		return $value;
+	}
+}
+
+if ( ! function_exists( 'add_filter' ) ) {
+	/**
+	 * @param string   $hook     Hook.
+	 * @param callable $callback Callback.
+	 * @param int      $priority Priority.
+	 * @param int      $args     Accepted args.
+	 * @return true
+	 */
+	function add_filter( $hook, $callback, $priority = 10, $args = 1 ) {
+		unset( $priority, $args );
+		if ( ! isset( $GLOBALS['forwp_drive_test_filters'] ) ) {
+			$GLOBALS['forwp_drive_test_filters'] = array();
+		}
+		if ( ! isset( $GLOBALS['forwp_drive_test_filters'][ $hook ] ) ) {
+			$GLOBALS['forwp_drive_test_filters'][ $hook ] = array();
+		}
+		$GLOBALS['forwp_drive_test_filters'][ $hook ][] = $callback;
+
+		return true;
+	}
+}
+
+if ( ! function_exists( 'remove_all_filters' ) ) {
+	/**
+	 * @param string $hook Hook.
+	 */
+	function remove_all_filters( $hook ) {
+		unset( $GLOBALS['forwp_drive_test_filters'][ $hook ] );
+	}
+}
+
+if ( ! function_exists( 'has_blocks' ) ) {
+	/**
+	 * @param string $content Content.
+	 */
+	function has_blocks( $content ) {
+		return false !== strpos( (string) $content, '<!-- wp:' );
+	}
+}
+
+if ( ! function_exists( 'wp_json_encode' ) ) {
+	/**
+	 * @param mixed $data Data.
+	 * @param int   $options JSON options.
+	 * @return string|false
+	 */
+	function wp_json_encode( $data, $options = 0 ) {
+		return json_encode( $data, $options );
+	}
+}
+
+if ( ! function_exists( 'trailingslashit' ) ) {
+	/**
+	 * @param string $string Path.
+	 */
+	function trailingslashit( $string ) {
+		return rtrim( (string) $string, '/\\' ) . '/';
+	}
+}
+
+if ( ! function_exists( 'wp_normalize_path' ) ) {
+	/**
+	 * @param string $path Path.
+	 */
+	function wp_normalize_path( $path ) {
+		return str_replace( '\\', '/', (string) $path );
+	}
+}
+
+if ( ! function_exists( 'is_plugin_active' ) ) {
+	/**
+	 * @param string $plugin Plugin bootstrap path.
+	 */
+	function is_plugin_active( $plugin ) {
+		unset( $plugin );
+
+		return defined( 'FORWP_FAQ_VERSION' );
 	}
 }
 
@@ -297,6 +388,19 @@ if ( ! function_exists( 'determine_locale' ) ) {
 	 */
 	function determine_locale() {
 		return 'en_US';
+	}
+}
+
+if ( ! function_exists( 'wp_generate_password' ) ) {
+	/**
+	 * @param int  $length Length.
+	 * @param bool $special_chars Special chars.
+	 * @param bool $extra_special_chars Extra special chars.
+	 */
+	function wp_generate_password( $length = 12, $special_chars = true, $extra_special_chars = false ) {
+		unset( $special_chars, $extra_special_chars );
+
+		return substr( md5( (string) microtime( true ) ), 0, max( 1, (int) $length ) );
 	}
 }
 

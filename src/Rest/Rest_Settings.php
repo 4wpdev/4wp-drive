@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive\Rest;
 
+use ForWP\Drive\Blocks\Block_Mapping_Settings;
 use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
@@ -85,6 +86,7 @@ final class Rest_Settings {
 		$auth_url    = $oauth->get_auth_url();
 		$template    = new Template_Config();
 		$post_type   = $template->get_import_post_type();
+		$block_map   = new Block_Mapping_Settings();
 
 		return new WP_REST_Response(
 			array(
@@ -116,6 +118,7 @@ final class Rest_Settings {
 				'meta_fields'                  => Template_Config::get_available_meta_fields(),
 				'template_fields'              => $template->get_fields(),
 				'sample_template'              => $template->build_sample_document(),
+				'block_mapping'                => $block_map->get_for_rest(),
 				'setup_links'                  => Google_OAuth::get_setup_links(),
 			),
 			200
@@ -178,6 +181,7 @@ final class Rest_Settings {
 		}
 
 		$template = new Template_Config();
+		$block_map = new Block_Mapping_Settings();
 
 		if ( array_key_exists( 'oauth_redirect_uri', $params ) ) {
 			$template->set_oauth_redirect_uri( esc_url_raw( (string) $params['oauth_redirect_uri'] ) );
@@ -192,6 +196,11 @@ final class Rest_Settings {
 		if ( array_key_exists( 'template_fields', $params ) && is_array( $params['template_fields'] ) ) {
 			$template->set_fields( $params['template_fields'] );
 			$messages[] = __( 'Document template saved.', '4wp-drive' );
+		}
+
+		if ( array_key_exists( 'block_mapping', $params ) && is_array( $params['block_mapping'] ) ) {
+			$block_map->save( Block_Mapping_Settings::normalize_from_rest( $params['block_mapping'] ) );
+			$messages[] = __( 'Body block mapping saved.', '4wp-drive' );
 		}
 
 		if ( empty( $messages ) && empty( $errors ) ) {
@@ -231,6 +240,7 @@ final class Rest_Settings {
 				'template_fields'   => $template->get_fields(),
 				'taxonomies'        => Template_Config::get_taxonomies_for_post_type( $post_type ),
 				'sample_template'   => $template->build_sample_document(),
+				'block_mapping'     => $block_map->get_for_rest(),
 			),
 			200
 		);

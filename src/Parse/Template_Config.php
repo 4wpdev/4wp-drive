@@ -547,4 +547,5 @@ final class Template_Config {
 
 		return '';
 	}
+
 }

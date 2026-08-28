@@ -164,7 +164,22 @@ final class Post_Creator {
 			return wpautop( esc_html( $plain ) );
 		}
 
+		if ( $this->contains_block_markup( $content ) ) {
+			return $content;
+		}
+
 		return wp_kses_post( $content );
+	}
+
+	/**
+	 * Detect Gutenberg block comments in import content.
+	 */
+	private function contains_block_markup( string $content ): bool {
+		if ( function_exists( 'has_blocks' ) && has_blocks( $content ) ) {
+			return true;
+		}
+
+		return false !== strpos( $content, '<!-- wp:' );
 	}
 
 	/**

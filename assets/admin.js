@@ -571,6 +571,12 @@
 			meta.innerHTML = `<p class="forwp-drive-preview__title">${ escapeHtml( data.title ) }</p>
 				<p class="forwp-drive-preview__meta">Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }${ data.has_image ? ' · Featured image: ' + escapeHtml( data.image_name || 'yes' ) : '' }</p>`;
 			body.innerHTML = data.body_html || escapeHtml( data.body || '' );
+			if ( data.body_html && data.body_html.includes( '<!-- wp:' ) ) {
+				body.insertAdjacentHTML(
+					'afterbegin',
+					'<p class="description forwp-drive-preview__blocks-note">Block markup preview — imported posts store Gutenberg blocks, not raw HTML.</p>'
+				);
+			}
 			const mode = options.mode === 'update' ? 'update' : 'create';
 			const modeInput = document.querySelector(
 				`input[name="forwp-drive-import-mode"][value="${ mode }"]`
@@ -653,6 +659,7 @@
 
 	let settingsCache = null;
 	let templateRows = [];
+	let blockMappingRows = [];
 	let selectedSourceSlug = null;
 	const GOOGLE_DRIVE_SLUG = 'google_drive';
 
@@ -1088,6 +1095,77 @@
 		return lines.join( '\n' );
 	}
 
+	function buildBlockTemplateOptions( selected ) {
+		const templates = settingsCache?.block_mapping?.templates || [];
+		return templates
+			.map( ( template ) => {
+				const disabled = ! template.available;
+				const suffix = disabled ? ' (coming soon)' : ! template.ready && template.status ? ' (needs setup)' : '';
+				return `<option value="${ escapeHtml( template.id ) }"${
+					template.id === selected ? ' selected' : ''
+				}${ disabled ? ' disabled' : '' }>${ escapeHtml( ( template.label || template.id ) + suffix ) }</option>`;
+			} )
+			.join( '' );
+	}
+
+	function renderBlockMappingRows() {
+		const tbody = document.getElementById( 'forwp-drive-block-mapping-rows' );
+		if ( ! tbody || ! settingsCache ) {
+			return;
+		}
+
+		tbody.innerHTML = blockMappingRows
+			.map( ( row, index ) => {
+				const status = row.template_status
+					? `<p class="description">${ escapeHtml( row.template_status ) }</p>`
+					: '';
+				return `<tr data-index="${ index }">
+					<td><input type="checkbox" class="forwp-drive-block-rule-enabled" ${
+						row.enabled ? 'checked' : ''
+					} /></td>
+					<td>
+						<select class="forwp-drive-block-rule-template">${ buildBlockTemplateOptions(
+							row.template || '4wp-faq'
+						) }</select>
+						${ status }
+					</td>
+					<td><input type="text" class="regular-text forwp-drive-block-rule-headings" value="${ escapeHtml(
+						row.section_headings || ''
+					) }" /></td>
+					<td><input type="checkbox" class="forwp-drive-block-rule-keep-heading" ${
+						row.keep_section_heading ? 'checked' : ''
+					} /></td>
+					<td><button type="button" class="button-link forwp-drive-block-rule-remove" data-block-remove="${ index }">Remove</button></td>
+				</tr>`;
+			} )
+			.join( '' );
+	}
+
+	function collectBlockMappingFromDom() {
+		const tbody = document.getElementById( 'forwp-drive-block-mapping-rows' );
+		if ( ! tbody ) {
+			return { rules: blockMappingRows };
+		}
+
+		const rows = [];
+		tbody.querySelectorAll( 'tr' ).forEach( ( tr, index ) => {
+			const base = blockMappingRows[ index ] || {};
+			const enabledEl = tr.querySelector( '.forwp-drive-block-rule-enabled' );
+			const templateEl = tr.querySelector( '.forwp-drive-block-rule-template' );
+			const headingsEl = tr.querySelector( '.forwp-drive-block-rule-headings' );
+			const keepEl = tr.querySelector( '.forwp-drive-block-rule-keep-heading' );
+			rows.push( {
+				id: base.id || 'rule_' + Date.now() + '_' + index,
+				enabled: !! ( enabledEl && enabledEl.checked ),
+				template: templateEl ? templateEl.value : base.template || '4wp-faq',
+				section_headings: headingsEl ? headingsEl.value.trim() : '',
+				keep_section_heading: !! ( keepEl && keepEl.checked ),
+			} );
+		} );
+
+		return { rules: rows };
+	}
+
 	function collectTemplateRowsFromDom() {
 		const tbody = document.getElementById( 'forwp-drive-template-rows' );
 		if ( ! tbody ) {
@@ -1147,6 +1225,7 @@
 
 			settingsCache = data;
 			templateRows = ( data.template_fields || [] ).map( ( f ) => ( { ...f } ) );
+			blockMappingRows = ( data.block_mapping?.rules || [] ).map( ( rule ) => ( { ...rule } ) );
 
 			if ( data.redirect_uri ) {
 				redirectCodes.forEach( ( el ) => {
@@ -1179,6 +1258,7 @@
 					)
 					.join( '' );
 			}
+			renderBlockMappingRows();
 			if ( sampleTemplate && data.sample_template ) {
 				sampleTemplate.textContent = data.sample_template;
 			}
@@ -1499,6 +1579,7 @@
 				method: 'POST',
 				body: JSON.stringify( {
 					import_post_type: postType ? postType.value : 'post',
+					block_mapping: collectBlockMappingFromDom(),
 					template_fields: collectTemplateRowsFromDom(),
 				} ),
 			} ).then( ( { ok, data } ) => {
@@ -1511,6 +1592,23 @@
 					loadSettings();
 				}
 			} );
+		}
+		if ( target.id === 'forwp-drive-block-mapping-add-row' ) {
+			blockMappingRows = collectBlockMappingFromDom().rules;
+			blockMappingRows.push( {
+				id: 'rule_' + Date.now(),
+				enabled: true,
+				template: '4wp-faq',
+				section_headings: 'FAQ, Frequently Asked Questions',
+				keep_section_heading: true,
+			} );
+			renderBlockMappingRows();
+		}
+		if ( target.hasAttribute( 'data-block-remove' ) ) {
+			const index = parseInt( target.getAttribute( 'data-block-remove' ), 10 );
+			blockMappingRows = collectBlockMappingFromDom().rules;
+			blockMappingRows.splice( index, 1 );
+			renderBlockMappingRows();
 		}
 		if ( target.id === 'forwp-drive-template-add-row' ) {
 			templateRows = collectTemplateRowsFromDom();
