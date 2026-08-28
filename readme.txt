@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -170,6 +170,12 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 
 == Changelog ==
 
+= 1.3.0 =
+* **Body → block templates** — build an import collection in Settings: map document section headings to Gutenberg block templates.
+* **4WP FAQ template** — converts FAQ sections (Heading 2 + Heading 3 Q/A) into `forwp/faq` + core accordion (requires 4WP FAQ plugin).
+* **Core Accordion template** — same document pattern, outputs `core/accordion` only (no FAQ wrapper).
+* **Import** — block markup preserved in post content; Inbox preview notes when body is block markup.
+
 = 1.2.0 =
 * **Polylang multilingual import** — pluggable language providers; manual **Content language** in Inbox when the site has multiple languages (no default; no Drive subfolders).
 * **Import** — assign post language on create via Polylang; **Update existing post** lists and validates targets in the selected language only.
@@ -198,6 +204,9 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Map Google Doc FAQ sections to Gutenberg blocks from Settings → Body → block templates (4WP FAQ or Core Accordion).
 
 = 1.2.0 =
 Polylang sites: pick content language in the Inbox before import; update mode respects the selected language. WPML is planned. See Settings → Multilingual integration.
