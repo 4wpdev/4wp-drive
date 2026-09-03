@@ -2,7 +2,7 @@
 	"name": "4wp-dev/4wp-drive",
 	"description": "4WP Drive — Google Drive to WordPress draft import pipeline.",
 	"type": "wordpress-plugin",
-	"version": "1.0.1",
+	"version": "1.4.0",
 	"license": "GPL-2.0-or-later",
 	"require": {
 		"php": ">=7.4"

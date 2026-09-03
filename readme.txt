@@ -2,9 +2,9 @@
 Contributors: 4wpdev, anatolikkk
 Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,21 +32,22 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 2. Create Google OAuth credentials and connect Drive in **Storage sources**.
 3. Set your Drive **root folder ID**; the plugin uses `incoming/` and `published/` subfolders.
 4. Drop a Google Doc (with optional image) into `incoming/` or run **Sync**.
-5. Open **Inbox** → Preview → choose **Content language** (Polylang, when applicable) → **Create new draft**, **Update existing post**, or Reject.
+5. Open **Inbox** — pick a storage source tab (Google Drive today; GitHub and others on the roadmap), sync, select a document in the queue, then preview and **Create new draft**, **Update existing post**, or Reject in the workspace.
 6. On import, files move to `published/` in Drive.
 
 = Key features =
 
 * **Google Drive OAuth** — connect an admin Google account; tokens stored encrypted
 * **Folder sync** — scan `incoming/` for new Google Docs and images
-* **Admin Inbox** — preview HTML, import as draft, update an existing post or page, or reject
+* **Editorial Inbox** — status bar, source tabs, document queue + side workspace for preview and import
 * **Document template** — front-matter lines before a separator (`---` or `=====`) map to post fields; body becomes post content (headings, lists, bold preserved)
+* **Body → block templates** — map FAQ-style sections to **4WP FAQ** or core Accordion blocks (Settings)
 * **Configurable field map** — title, slug, categories, tags, author, dates, SEO meta (when supported)
 * **Featured image** — import image from the same Drive subfolder
 * **Update existing content** — search and pick a post or page, then replace its content from the Drive document
 * **Polylang multilingual import** — pick content language in the Inbox when the site has multiple languages; assign language on create; filter update targets by language (WPML planned)
 * **REST API** + **WP-CLI** `wp forwp-drive sync` for manual sync
-* **Roadmap sources** — GitHub Markdown/MDX and additional storage providers registered for future releases
+* **Roadmap sources** — GitHub Markdown/MDX, OneDrive, and Dropbox registered for future releases
 
 = Privacy =
 
@@ -170,6 +171,11 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 
 == Changelog ==
 
+= 1.4.0 =
+* **Inbox** — editorial dashboard: connection/sync status, storage **source tabs** (Google Drive live; GitHub, OneDrive, Dropbox marked Soon), document **queue** + side **workspace** for preview and import.
+* **UX** — select a document to preview beside the queue (no long scroll); Open folder + Sync in one chrome block; brand icons per source.
+* **Compatibility** — Tested up to WordPress 7.1.
+
 = 1.3.0 =
 * **Body → block templates** — build an import collection in Settings: map document section headings to Gutenberg block templates.
 * **4WP FAQ template** — converts FAQ sections (Heading 2 + Heading 3 Q/A) into `forwp/faq` + core accordion (requires 4WP FAQ plugin).
@@ -204,6 +210,9 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.4.0 =
+Editorial Inbox: source tabs, status bar, queue + workspace preview. Tested up to WordPress 7.1.
 
 = 1.3.0 =
 Map Google Doc FAQ sections to Gutenberg blocks from Settings → Body → block templates (4WP FAQ or Core Accordion).

@@ -8,6 +8,7 @@
 namespace ForWP\Drive\Admin;
 
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
+use ForWP\Drive\Source_Registry;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -136,6 +137,8 @@ final class Admin_Menu {
 				'restPath' => trailingslashit( $rest_path ),
 				'nonce'        => wp_create_nonce( 'wp_rest' ),
 				'multilingual' => Language_Provider_Registry::get_rest_payload(),
+				'sources'      => Source_Registry::get_admin_status_rows(),
+				'activeSource' => 'google_drive',
 				'strings'      => array(
 					'importConfirm'           => __( 'Import this document as a draft?', '4wp-drive' ),
 					'updateConfirm'           => __( 'Update the selected post with this document content?', '4wp-drive' ),
@@ -155,9 +158,13 @@ final class Admin_Menu {
 					'clearCredentialsRunning' => __( 'Clearing…', '4wp-drive' ),
 					'reconnectDrive'          => __( 'Reconnect Google Drive', '4wp-drive' ),
 					'openInDrive'             => __( 'Open in Drive', '4wp-drive' ),
+					'openFolder'              => __( 'Open folder', '4wp-drive' ),
 					'openSettings'            => __( 'Open Settings', '4wp-drive' ),
 					'connectionProblemTitle'  => __( 'Google Drive connection problem', '4wp-drive' ),
 					'inboxStaleNote'          => __( 'The inbox below may be outdated until Drive access is restored and you sync again.', '4wp-drive' ),
+					'sourceSoon'              => __( 'This connector is on the roadmap. Configure Google Drive for now, or check Settings → Storage sources.', '4wp-drive' ),
+					'syncLabel'               => __( 'Sync', '4wp-drive' ),
+					'syncFromDrive'           => __( 'Sync from Drive', '4wp-drive' ),
 				),
 			)
 		);

@@ -5,6 +5,7 @@
 phpcs.xml
 .wordpress-org/
 assets/images/
+info/
 README.md
 CHANGELOG.md
 node_modules/
