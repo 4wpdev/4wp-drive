@@ -148,4 +148,50 @@ final class Block_Markup_Builder {
 
 		return implode( "\n\n", $parts );
 	}
+
+	/**
+	 * Build a core/image block for an uploaded attachment.
+	 *
+	 * @param string $align         left|center|right or empty.
+	 */
+	public function build_image_block( int $attachment_id, string $url, string $alt = '', string $align = '' ): string {
+		if ( $attachment_id <= 0 || '' === $url ) {
+			return '';
+		}
+
+		$align = sanitize_key( $align );
+		if ( ! in_array( $align, array( 'left', 'center', 'right' ), true ) ) {
+			$align = '';
+		}
+
+		$attrs = array(
+			'id'              => $attachment_id,
+			'sizeSlug'        => 'large',
+			'linkDestination' => 'none',
+		);
+		if ( '' !== $align ) {
+			$attrs['align'] = $align;
+		}
+
+		$encoded = wp_json_encode( $attrs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		if ( ! is_string( $encoded ) ) {
+			$encoded = '{}';
+		}
+
+		$class = 'wp-block-image size-large';
+		if ( '' !== $align ) {
+			$class .= ' align' . $align;
+		}
+
+		return sprintf(
+			'<!-- wp:image %1$s -->
+<figure class="%2$s"><img src="%3$s" alt="%4$s" class="wp-image-%5$d"/></figure>
+<!-- /wp:image -->',
+			$encoded,
+			esc_attr( $class ),
+			esc_url( $url ),
+			esc_attr( $alt ),
+			$attachment_id
+		);
+	}
 }

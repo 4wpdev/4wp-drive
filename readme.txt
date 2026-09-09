@@ -4,15 +4,15 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Import Google Docs from Drive into WordPress drafts—or update existing posts and pages from the Inbox.
+Import Google Docs and Markdown from Drive or GitHub into WordPress drafts—or update existing posts and pages from Incoming.
 
 == Description ==
 
-**4WP Drive** connects a Google Drive folder workflow to WordPress: writers drop documents in Drive, editors review them in an admin **Inbox**, and approved content becomes **draft posts** or updates **existing posts and pages**—without copy-paste.
+**4WP Drive** connects Drive and GitHub folder workflows to WordPress: writers drop documents in `incoming/`, editors review them on the admin **Incoming** screen, and approved content becomes **draft posts** or updates **existing posts and pages**—without copy-paste.
 
 A plugin by [4wp.dev](https://4wp.dev/).
 
@@ -41,7 +41,7 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 * **Folder sync** — scan `incoming/` for new Google Docs and images
 * **Editorial Inbox** — status bar, source tabs, document queue + side workspace for preview and import
 * **Document template** — front-matter lines before a separator (`---` or `=====`) map to post fields; body becomes post content (headings, lists, bold preserved)
-* **Body → block templates** — map FAQ-style sections to **4WP FAQ** or core Accordion blocks (Settings)
+* **Body → block templates** — map FAQ-style sections to **4WP FAQ** or core Accordion; **Core Image** (default on) replaces `[image:filename.jpeg]` with `core/image` from the package folder
 * **Configurable field map** — title, slug, categories, tags, author, dates, SEO meta (when supported)
 * **Featured image** — import image from the same Drive subfolder
 * **Update existing content** — search and pick a post or page, then replace its content from the Drive document
@@ -159,11 +159,11 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 
 == Screenshots ==
 
-1. Storage sources — source registry (Google Drive live; GitHub, OneDrive, Dropbox planned).
+1. Storage sources — source registry (Google Drive and GitHub live; OneDrive, Dropbox planned).
 2. Google Drive — OAuth credentials, Connect, and folder mapping.
 3. Document template — map front-matter labels to post fields and taxonomies.
 4. Drive folders — WordPress settings alongside the matching `incoming` / `published` / `failed` folders in Drive.
-5. Inbox — synced articles from `incoming/` with Preview, Import as Draft, and Reject.
+5. Incoming — synced articles from `incoming/` with Preview, Import as Draft, and Reject.
 6. Document template — example header format next to a Google Doc with front-matter.
 7. Inbox preview — parsed metadata and featured image before import.
 8. Imported draft — post editor with content, featured image, categories, and Yoast SEO fields.
@@ -171,9 +171,18 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 
 == Changelog ==
 
+= 1.5.0 =
+* **Incoming** — queue, preview, and import (same `forwp-drive-inbox` slug).
+* **Markdown** — Drive `incoming/` packages accept `.md` / `.markdown` as the article (preferred over Google Doc / Word when several files sit in the folder). Pick which document to import.
+* **Gutenberg** — import serializes headings, paragraphs, lists, quotes, code, and inline strong/em/u to core blocks. Image markers support left / right / center alignment.
+* **Image pin** — package images can be placed in the preview before import (click image, click paragraph). Markdown `![](file.png)` in the same folder becomes `[image:file.png]`.
+* **GitHub** — live source: PAT + owner/repo, scan `incoming/`, import Markdown packages, move to published/failed, sideload package images.
+
 = 1.4.0 =
 * **Inbox** — editorial dashboard: connection/sync status, storage **source tabs** (Google Drive live; GitHub, OneDrive, Dropbox marked Soon), document **queue** + side **workspace** for preview and import.
-* **UX** — select a document to preview beside the queue (no long scroll); Open folder + Sync in one chrome block; brand icons per source.
+* **UX** — select a document to preview beside the queue; Open folder + Sync in one chrome block; brand icons per source; compact **Import** / Edit in Google Docs / Reject actions.
+* **Package folder** — for articles in an `incoming/` subfolder, show doc/image counts, file names, and Open folder (after Sync).
+* **Core Image template (default)** — `[image:filename.jpeg]` markers sideload from the package folder into `core/image` blocks on import.
 * **Compatibility** — Tested up to WordPress 7.1.
 
 = 1.3.0 =
@@ -215,7 +224,7 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 Editorial Inbox: source tabs, status bar, queue + workspace preview. Tested up to WordPress 7.1.
 
 = 1.3.0 =
-Map Google Doc FAQ sections to Gutenberg blocks from Settings → Body → block templates (4WP FAQ or Core Accordion).
+Map Google Doc FAQ / image sections from **4WP Drive → Patterns** (4WP FAQ, Core Accordion, Core Image).
 
 = 1.2.0 =
 Polylang sites: pick content language in the Inbox before import; update mode respects the selected language. WPML is planned. See Settings → Multilingual integration.

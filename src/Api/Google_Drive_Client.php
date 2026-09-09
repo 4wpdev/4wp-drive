@@ -9,6 +9,8 @@ namespace ForWP\Drive\Api;
 
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Import\Docx_Content;
+use ForWP\Drive\Import\Importable_Document;
+use ForWP\Drive\Import\Markdown_Content;
 use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
@@ -102,7 +104,7 @@ final class Google_Drive_Client {
 			array(
 				'q'        => $q,
 				'fields'   => 'files(id,name,mimeType,modifiedTime)',
-				'pageSize' => 20,
+				'pageSize' => 50,
 			)
 		);
 
@@ -191,17 +193,14 @@ final class Google_Drive_Client {
 	}
 
 	/**
-	 * List Google Docs in a folder.
+	 * List importable article files (Google Doc, Word, Markdown) in a folder.
 	 *
 	 * @param string $folder_id Parent folder id.
 	 * @return array<int, array<string, mixed>>|WP_Error
 	 */
 	public function list_documents_in_folder( string $folder_id ) {
 		$q = sprintf(
-			"'%s' in parents and trashed = false and ("
-			. "mimeType = 'application/vnd.google-apps.document' "
-			. "or mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'"
-			. ')',
+			"'%s' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder' and mimeType != 'application/vnd.google-apps.shortcut' and not mimeType contains 'image/'",
 			$folder_id
 		);
 
@@ -211,7 +210,7 @@ final class Google_Drive_Client {
 			array(
 				'q'        => $q,
 				'fields'   => 'files(id,name,mimeType,modifiedTime,md5Checksum)',
-				'pageSize' => 50,
+				'pageSize' => 100,
 			)
 		);
 
@@ -219,7 +218,21 @@ final class Google_Drive_Client {
 			return $response;
 		}
 
-		return isset( $response['files'] ) && is_array( $response['files'] ) ? $response['files'] : array();
+		$files = isset( $response['files'] ) && is_array( $response['files'] ) ? $response['files'] : array();
+		$out   = array();
+
+		foreach ( $files as $file ) {
+			if ( ! is_array( $file ) ) {
+				continue;
+			}
+
+			$kind = Importable_Document::kind( (string) ( $file['mimeType'] ?? '' ), (string) ( $file['name'] ?? '' ) );
+			if ( Importable_Document::is_article( $kind ) ) {
+				$out[] = $file;
+			}
+		}
+
+		return $out;
 	}
 
 	/**
@@ -272,15 +285,21 @@ final class Google_Drive_Client {
 	 *
 	 * @param string $file_id   Drive file id.
 	 * @param string $mime_type Optional mimeType from list_files.
+	 * @param string $file_name Optional filename (used to detect Markdown).
 	 * @return string|WP_Error
 	 */
-	public function fetch_document_content( string $file_id, string $mime_type = '' ) {
-		if ( '' === $mime_type ) {
+	public function fetch_document_content( string $file_id, string $mime_type = '', string $file_name = '' ) {
+		if ( '' === $mime_type || '' === $file_name ) {
 			$file = $this->get_file( $file_id );
 			if ( is_wp_error( $file ) ) {
 				return $file;
 			}
-			$mime_type = (string) ( $file['mimeType'] ?? '' );
+			if ( '' === $mime_type ) {
+				$mime_type = (string) ( $file['mimeType'] ?? '' );
+			}
+			if ( '' === $file_name ) {
+				$file_name = (string) ( $file['name'] ?? '' );
+			}
 		}
 
 		if ( 'application/vnd.google-apps.document' === $mime_type ) {
@@ -302,9 +321,19 @@ final class Google_Drive_Client {
 			return Docx_Content::extract_html_document( $binary );
 		}
 
+		$kind = Importable_Document::kind( $mime_type, $file_name );
+		if ( Importable_Document::KIND_MARKDOWN === $kind ) {
+			$raw = $this->download_file( $file_id );
+			if ( is_wp_error( $raw ) ) {
+				return $raw;
+			}
+
+			return Markdown_Content::to_html_document( (string) $raw );
+		}
+
 		return new WP_Error(
 			'forwp_drive_unsupported_mime',
-			__( 'Unsupported document type. Use a Google Doc or .docx file.', '4wp-drive' )
+			__( 'Unsupported document type. Use a Google Doc, Markdown (.md), or .docx file.', '4wp-drive' )
 		);
 	}
 

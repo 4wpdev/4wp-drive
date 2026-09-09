@@ -65,11 +65,14 @@ final class Language_Provider_Registry {
 	public static function get_rest_payload(): array {
 		$provider  = self::get_active();
 		$languages = $provider->get_languages();
+		// One language ⇒ no Inbox picker (even if a plugin is active).
+		$requires  = count( $languages ) > 1 && $provider->requires_manual_selection();
 
 		return array(
 			'provider_id'        => $provider->get_id(),
 			'provider_label'     => $provider->get_label(),
-			'requires_selection' => $provider->requires_manual_selection(),
+			'requires_selection' => $requires,
+			'default_language'   => $provider->get_default_language(),
 			'languages'          => $languages,
 		);
 	}

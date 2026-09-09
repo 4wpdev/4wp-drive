@@ -7,9 +7,8 @@
 
 namespace ForWP\Drive\Tests;
 
-use ForWP\Drive\Blocks\Block_Mapping_Settings;
 use ForWP\Drive\Blocks\Block_Recipe_Engine;
-use ForWP\Drive\Blocks\Block_Template_Registry;
+use ForWP\Drive\Patterns\Pattern_Library;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -33,17 +32,11 @@ class Block_Recipe_EngineTest extends TestCase {
 	 * @return void
 	 */
 	public function test_applies_4wp_faq_template_rule(): void {
-		( new Block_Mapping_Settings() )->save(
+		Pattern_Library::save_preset_enabled_overrides(
 			array(
-				'rules' => array(
-					array(
-						'id'                   => 'rule_faq',
-						'enabled'              => true,
-						'template'             => Block_Template_Registry::TEMPLATE_4WP_FAQ,
-						'section_headings'     => 'FAQ, Frequently Asked Questions',
-						'keep_section_heading' => true,
-					),
-				),
+				'core-image'     => false,
+				'4wp-faq'        => true,
+				'core-accordion' => false,
 			)
 		);
 
@@ -57,17 +50,11 @@ class Block_Recipe_EngineTest extends TestCase {
 	 * @return void
 	 */
 	public function test_applies_core_accordion_template_without_faq_wrapper(): void {
-		( new Block_Mapping_Settings() )->save(
+		Pattern_Library::save_preset_enabled_overrides(
 			array(
-				'rules' => array(
-					array(
-						'id'                   => 'rule_accordion',
-						'enabled'              => true,
-						'template'             => Block_Template_Registry::TEMPLATE_CORE_ACCORDION,
-						'section_headings'     => 'Frequently Asked Questions',
-						'keep_section_heading' => true,
-					),
-				),
+				'core-image'     => false,
+				'4wp-faq'        => false,
+				'core-accordion' => true,
 			)
 		);
 
@@ -81,7 +68,15 @@ class Block_Recipe_EngineTest extends TestCase {
 	/**
 	 * @return void
 	 */
-	public function test_returns_html_when_no_rules_enabled(): void {
+	public function test_returns_html_when_no_heading_rules_enabled(): void {
+		Pattern_Library::save_preset_enabled_overrides(
+			array(
+				'core-image'     => false,
+				'4wp-faq'        => false,
+				'core-accordion' => false,
+			)
+		);
+
 		$html   = '<p>Plain body.</p>';
 		$result = ( new Block_Recipe_Engine() )->apply( $html );
 

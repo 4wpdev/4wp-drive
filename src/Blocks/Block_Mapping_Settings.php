@@ -7,10 +7,15 @@
 
 namespace ForWP\Drive\Blocks;
 
+use ForWP\Drive\Patterns\Pattern_Library;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Admin-defined collection of document section → block template rules.
+ * Legacy option storage for block mapping rules.
+ *
+ * Active import recipes resolve via {@see Pattern_Library} (code presets until customize, then CPT).
+ * This class remains for rule helpers and migrating older `forwp_drive_block_mapping` installs.
  */
 final class Block_Mapping_Settings {
 
@@ -49,57 +54,37 @@ final class Block_Mapping_Settings {
 	}
 
 	/**
-	 * REST/admin payload.
+	 * REST/admin payload (delegates to Pattern library).
 	 *
 	 * @return array<string, mixed>
 	 */
 	public function get_for_rest(): array {
-		$mapping = $this->get();
-		$rules   = array();
-
-		foreach ( $mapping['rules'] as $rule ) {
-			if ( ! is_array( $rule ) ) {
-				continue;
-			}
-
-			$template = Block_Template_Registry::get( (string) ( $rule['template'] ?? '' ) );
-			$rule['template_label']  = $template ? (string) ( $template['label'] ?? '' ) : '';
-			$rule['template_ready']  = $template ? Block_Template_Registry::is_template_ready( $template ) : false;
-			$rule['template_status'] = $template ? Block_Template_Registry::get_status_message( $template ) : '';
-			$rules[]                 = $rule;
-		}
-
-		return array(
-			'rules'     => $rules,
-			'templates' => Block_Template_Registry::get_for_rest(),
-		);
+		return Pattern_Library::get_for_rest();
 	}
 
 	/**
+	 * Active recipes for import (presets or CPT).
+	 *
 	 * @return array<int, array<string, mixed>>
 	 */
 	public function active_recipe_configs(): array {
-		$configs = array();
+		return Pattern_Library::active_recipe_configs();
+	}
 
-		foreach ( $this->get()['rules'] as $rule ) {
-			if ( ! is_array( $rule ) ) {
-				continue;
-			}
+	/**
+	 * Default Core Image recipe config (no heading match required).
+	 *
+	 * @return array<string, mixed>
+	 */
+	public static function default_core_image_config(): array {
+		$template = Block_Template_Registry::get( Block_Template_Registry::TEMPLATE_CORE_IMAGE );
 
-			$config = self::rule_to_recipe_config( $rule );
-			if ( null !== $config ) {
-				$configs[] = $config;
-			}
-		}
-
-		/**
-		 * Add programmatic import recipes (agencies).
-		 *
-		 * @param array<int, array<string, mixed>> $configs Recipe configs.
-		 */
-		$configs = apply_filters( 'forwp_drive_block_mapping_recipes', $configs );
-
-		return is_array( $configs ) ? $configs : array();
+		return array(
+			'type'             => 'core-image',
+			'template'         => Block_Template_Registry::TEMPLATE_CORE_IMAGE,
+			'requires_plugins' => array(),
+			'doc_hint'         => $template ? (string) ( $template['doc_hint'] ?? '' ) : '',
+		);
 	}
 
 	/**
@@ -117,6 +102,18 @@ final class Block_Mapping_Settings {
 			return null;
 		}
 
+		$recipe_type = sanitize_key( (string) ( $template['recipe_type'] ?? 'faq-accordion' ) );
+
+		if ( 'core-image' === $recipe_type ) {
+			return array(
+				'type'             => 'core-image',
+				'template'         => $template_id,
+				'requires_plugins' => isset( $template['requires_plugins'] ) && is_array( $template['requires_plugins'] )
+					? $template['requires_plugins']
+					: array(),
+			);
+		}
+
 		$headings = self::parse_heading_list( (string) ( $rule['section_headings'] ?? '' ) );
 		if ( empty( $headings ) ) {
 			return null;
@@ -130,7 +127,7 @@ final class Block_Mapping_Settings {
 		);
 
 		return array(
-			'type'                 => (string) ( $template['recipe_type'] ?? 'faq-accordion' ),
+			'type'                 => $recipe_type,
 			'template'             => $template_id,
 			'requires_plugins'     => isset( $template['requires_plugins'] ) && is_array( $template['requires_plugins'] )
 				? $template['requires_plugins']
@@ -172,7 +169,8 @@ final class Block_Mapping_Settings {
 			}
 
 			$template = sanitize_key( (string) ( $rule['template'] ?? Block_Template_Registry::TEMPLATE_4WP_FAQ ) );
-			if ( null === Block_Template_Registry::get( $template ) ) {
+			$definition = Block_Template_Registry::get( $template );
+			if ( null === $definition ) {
 				continue;
 			}
 
@@ -181,12 +179,16 @@ final class Block_Mapping_Settings {
 				$id = 'rule_' . wp_generate_password( 8, false, false );
 			}
 
+			$is_image = 'core-image' === sanitize_key( (string) ( $definition['recipe_type'] ?? '' ) );
+
 			$rules[] = array(
 				'id'                   => $id,
 				'enabled'              => ! empty( $rule['enabled'] ),
 				'template'             => $template,
-				'section_headings'     => self::sanitize_heading_list( (string) ( $rule['section_headings'] ?? 'FAQ' ) ),
-				'keep_section_heading' => ! empty( $rule['keep_section_heading'] ),
+				'section_headings'     => $is_image
+					? ''
+					: self::sanitize_heading_list( (string) ( $rule['section_headings'] ?? 'FAQ' ) ),
+				'keep_section_heading' => $is_image ? false : ! empty( $rule['keep_section_heading'] ),
 			);
 		}
 

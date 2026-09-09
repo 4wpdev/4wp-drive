@@ -182,4 +182,25 @@ class Google_Doc_ContentTest extends TestCase {
 		$this->assertStringNotContainsString( 'Title: Article', $result );
 		$this->assertStringNotContainsString( 'Slug: article', $result );
 	}
+
+	/**
+	 * @return void
+	 */
+	public function test_courier_paragraphs_become_pre_code(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<html><head><style>.c1{font-family:"Courier New";font-size:11pt}</style></head><body>'
+			. '<p class="c1"><span class="c1">echo 1;</span></p>'
+			. '<p class="c1"><span class="c1">echo 2;</span></p>'
+			. '</body></html>';
+
+		$result = Google_Doc_Content::prepare( $html );
+
+		$this->assertStringContainsString( '<pre>', $result );
+		$this->assertStringContainsString( '<code>', $result );
+		$this->assertStringContainsString( 'echo 1;', $result );
+		$this->assertStringContainsString( 'echo 2;', $result );
+	}
 }

@@ -36,73 +36,113 @@ final class Incoming_Scanner {
 	 * @return array<string, mixed>|WP_Error Summary.
 	 */
 	public function run() {
-		$source = Source_Registry::get_default();
-		if ( ! $source || ! $source->is_ready() ) {
-			return new WP_Error( 'forwp_drive_not_ready', __( 'Drive source is not ready.', '4wp-drive' ) );
-		}
-
-		$items = $source->scan_incoming();
-		if ( is_wp_error( $items ) ) {
-			return $items;
-		}
-
 		$new_ready     = 0;
 		$scanned       = 0;
 		$export_errors = 0;
-		$seen_file_ids = array();
+		$removed       = 0;
+		$any_ready     = false;
 
-		foreach ( $items as $item ) {
-			++$scanned;
-			$file_id = (string) $item['file_id'];
-			if ( '' === $file_id ) {
+		foreach ( Source_Registry::all() as $source ) {
+			if ( ! $source->is_ready() ) {
 				continue;
 			}
 
-			$seen_file_ids[] = $file_id;
-			$hash            = (string) $item['content_hash'];
-			$existing        = $this->repository->find_by_file_id( $file_id );
+			$any_ready = true;
+			$items     = $source->scan_incoming();
+			if ( is_wp_error( $items ) ) {
+				return $items;
+			}
 
-			if ( $existing && $existing->content_hash === $hash && Document_Status::READY === $existing->status ) {
-				$stored = $this->repository->decode_metadata( $existing );
-				if ( $this->stored_parse_looks_valid( $stored ) ) {
-					$stored_html = isset( $stored['body_html'] ) ? (string) $stored['body_html'] : '';
-					$stored_body = isset( $stored['body'] ) ? trim( (string) $stored['body'] ) : '';
-					$has_text    = '' !== trim( wp_strip_all_tags( $stored_html ) ) || '' !== $stored_body;
-					if ( $has_text ) {
-						continue;
+			$seen_file_ids = array();
+
+			foreach ( $items as $item ) {
+				++$scanned;
+				$file_id = (string) ( $item['file_id'] ?? '' );
+				if ( '' === $file_id ) {
+					continue;
+				}
+
+				$metadata = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : array();
+				$existing = $this->repository->find_by_file_id( $file_id );
+				if ( ! $existing ) {
+					$package_id = (string) ( $metadata['package_folder_id'] ?? '' );
+					if ( '' !== $package_id ) {
+						$existing = $this->find_by_package_folder( $package_id, $source->get_slug() );
 					}
+				}
+
+				$item = $this->maybe_rescan_selected( $source, $item, $existing );
+				$file_id  = (string) ( $item['file_id'] ?? $file_id );
+				$metadata = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : $metadata;
+
+				$seen_file_ids[] = $file_id;
+				foreach ( $this->extra_seen_file_ids( $metadata ) as $extra_id ) {
+					$seen_file_ids[] = $extra_id;
+				}
+
+				$hash = (string) ( $item['content_hash'] ?? '' );
+
+				if ( $existing && $existing->content_hash === $hash && Document_Status::READY === $existing->status ) {
+					$stored = $this->repository->decode_metadata( $existing );
+					if ( $this->stored_parse_looks_valid( $stored ) ) {
+						$stored_html = isset( $stored['body_html'] ) ? (string) $stored['body_html'] : '';
+						$stored_body = isset( $stored['body'] ) ? trim( (string) $stored['body'] ) : '';
+						$has_text    = '' !== trim( wp_strip_all_tags( $stored_html ) ) || '' !== $stored_body;
+						if ( $has_text ) {
+							continue;
+						}
+					}
+				}
+
+				$export_failed = ! empty( $item['export_failed'] );
+				if ( $export_failed ) {
+					++$export_errors;
+				}
+
+				$was_new = ! $existing || Document_Status::READY !== $existing->status;
+
+				if ( $existing ) {
+					$this->repository->update(
+						(int) $existing->id,
+						array(
+							'file_id'       => $file_id,
+							'file_name'     => (string) ( $item['file_name'] ?? $existing->file_name ),
+							'content_hash'  => $hash,
+							'status'        => Document_Status::READY,
+							'folder_role'   => 'incoming',
+							'metadata_json' => wp_json_encode( $metadata ),
+							'error_message' => $export_failed ? (string) ( $metadata['scan_error'] ?? '' ) : null,
+							'updated_at'    => current_time( 'mysql', true ),
+						)
+					);
+				} else {
+					$this->repository->upsert_from_scan(
+						array(
+							'source'        => $source->get_slug(),
+							'file_id'       => $file_id,
+							'file_name'     => (string) ( $item['file_name'] ?? '' ),
+							'content_hash'  => $hash,
+							'status'        => Document_Status::READY,
+							'folder_role'   => 'incoming',
+							'metadata_json' => wp_json_encode( $metadata ),
+							'error_message' => $export_failed ? (string) ( $metadata['scan_error'] ?? '' ) : null,
+							'detected_at'   => current_time( 'mysql', true ),
+							'updated_at'    => current_time( 'mysql', true ),
+						)
+					);
+				}
+
+				if ( $was_new ) {
+					++$new_ready;
 				}
 			}
 
-			$metadata      = $item['metadata'] ?? array();
-			$export_failed = ! empty( $item['export_failed'] );
-			if ( $export_failed ) {
-				++$export_errors;
-			}
-
-			$was_new = ! $existing || Document_Status::READY !== $existing->status;
-
-			$this->repository->upsert_from_scan(
-				array(
-					'source'        => $source->get_slug(),
-					'file_id'       => $file_id,
-					'file_name'     => (string) ( $item['file_name'] ?? '' ),
-					'content_hash'  => $hash,
-					'status'        => Document_Status::READY,
-					'folder_role'   => 'incoming',
-					'metadata_json' => wp_json_encode( $metadata ),
-					'error_message' => $export_failed ? (string) ( $metadata['scan_error'] ?? '' ) : null,
-					'detected_at'   => $existing && $existing->detected_at ? $existing->detected_at : current_time( 'mysql', true ),
-					'updated_at'    => current_time( 'mysql', true ),
-				)
-			);
-
-			if ( $was_new ) {
-				++$new_ready;
-			}
+			$removed += $this->repository->mark_missing_as_removed( array_values( array_unique( $seen_file_ids ) ), $source->get_slug() );
 		}
 
-		$removed = $this->repository->mark_missing_as_removed( $seen_file_ids, $source->get_slug() );
+		if ( ! $any_ready ) {
+			return new WP_Error( 'forwp_drive_not_ready', __( 'No storage source is ready.', '4wp-drive' ) );
+		}
 
 		$ready_count = $this->repository->count_by_statuses( Document_Status::inbox_statuses() );
 		Settings::instance()->set_ready_count( $ready_count );
@@ -123,6 +163,64 @@ final class Incoming_Scanner {
 		Settings::instance()->set_last_sync( $summary );
 
 		return $summary;
+	}
+
+	/**
+	 * @param object $source  Storage source.
+	 * @param array<string, mixed> $item Scan item.
+	 * @param object|null $existing Existing row.
+	 * @return array<string, mixed>
+	 */
+	private function maybe_rescan_selected( $source, array $item, $existing ): array {
+		if ( ! $existing || ! is_object( $source ) || ! method_exists( $source, 'rescan_source_file' ) ) {
+			return $item;
+		}
+
+		$stored   = $this->repository->decode_metadata( $existing );
+		$selected = (string) ( $stored['selected_file_id'] ?? '' );
+		$current  = (string) ( $item['file_id'] ?? '' );
+		if ( '' === $selected || $selected === $current ) {
+			return $item;
+		}
+
+		$rescanned = $source->rescan_source_file( $item, $selected );
+
+		return is_array( $rescanned ) ? $rescanned : $item;
+	}
+
+	/**
+	 * @param array<string, mixed> $metadata Metadata.
+	 * @return string[]
+	 */
+	private function extra_seen_file_ids( array $metadata ): array {
+		$ids = array();
+		if ( ! empty( $metadata['package_files'] ) && is_array( $metadata['package_files'] ) ) {
+			foreach ( $metadata['package_files'] as $file ) {
+				if ( is_array( $file ) && ! empty( $file['id'] ) && 'document' === ( $file['kind'] ?? '' ) ) {
+					$ids[] = (string) $file['id'];
+				}
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * @return object|null
+	 */
+	private function find_by_package_folder( string $package_folder_id, string $source ) {
+		$rows = $this->repository->list_by_statuses( Document_Status::inbox_statuses(), 200 );
+		foreach ( $rows as $row ) {
+			if ( (string) $row->source !== $source ) {
+				continue;
+			}
+			$meta = $this->repository->decode_metadata( $row );
+			if ( (string) ( $meta['package_folder_id'] ?? '' ) === $package_folder_id ) {
+				return $row;
+			}
+		}
+
+		return null;
 	}
 
 	/**

@@ -26,6 +26,7 @@ final class Schema {
 	 */
 	public static function activate(): void {
 		self::create_table();
+		\ForWP\Drive\Patterns\Pattern_Post_Type::activate();
 		\ForWP\Drive\Sync\Sync_Scheduler::activate();
 	}
 

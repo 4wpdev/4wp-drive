@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive\Import;
 
+use ForWP\Drive\Blocks\Gutenberg_Content;
 use ForWP\Drive\Import\Post_Author_Resolver;
 use ForWP\Drive\Import\Post_Date_Parser;
 use ForWP\Drive\Import\Seo_Meta_Applicator;
@@ -162,6 +163,11 @@ final class Post_Creator {
 		$plain   = isset( $metadata['body'] ) ? trim( (string) $metadata['body'] ) : '';
 		if ( '' === trim( wp_strip_all_tags( $content ) ) && '' !== $plain ) {
 			return wpautop( esc_html( $plain ) );
+		}
+
+		$blocks = Gutenberg_Content::from_mixed( $content );
+		if ( '' !== $blocks ) {
+			return $blocks;
 		}
 
 		if ( $this->contains_block_markup( $content ) ) {

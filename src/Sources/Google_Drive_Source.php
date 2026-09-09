@@ -11,7 +11,9 @@ use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Api\Google_Drive_Client;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Contracts\Storage_Source_Interface;
+use ForWP\Drive\Import\Featured_Image_Chooser;
 use ForWP\Drive\Import\Featured_Image_Importer;
+use ForWP\Drive\Import\Importable_Document;
 use ForWP\Drive\Parse\Template_Parser;
 use WP_Error;
 
@@ -213,14 +215,68 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 			return null;
 		}
 
-		$doc    = $docs[0];
+		$doc = Importable_Document::pick_default( $docs );
+		if ( ! is_array( $doc ) ) {
+			$doc = $docs[0];
+		}
+
 		$doc_id = (string) ( $doc['id'] ?? '' );
 		if ( '' === $doc_id ) {
 			return null;
 		}
 
 		$images = $client->list_images_in_folder( $folder_id );
-		$image  = ( is_array( $images ) && ! empty( $images ) ) ? $images[0] : null;
+		if ( is_wp_error( $images ) ) {
+			$images = array();
+		}
+
+		$package_files = array();
+		foreach ( $docs as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$name = (string) ( $row['name'] ?? '' );
+			$id   = (string) ( $row['id'] ?? '' );
+			if ( '' === $name || '' === $id ) {
+				continue;
+			}
+			$package_files[] = array(
+				'id'   => $id,
+				'name' => $name,
+				'kind' => 'document',
+				'mime' => (string) ( $row['mimeType'] ?? '' ),
+			);
+		}
+
+		$image_rows = array();
+		foreach ( $images as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$name = (string) ( $row['name'] ?? '' );
+			$id   = (string) ( $row['id'] ?? '' );
+			if ( '' === $name || '' === $id ) {
+				continue;
+			}
+			$image_rows[] = array(
+				'id'   => $id,
+				'name' => $name,
+			);
+			$package_files[] = array(
+				'id'   => $id,
+				'name' => $name,
+				'kind' => 'image',
+			);
+		}
+
+		$suggested = Featured_Image_Chooser::suggest( $image_rows );
+		$image     = null;
+		if ( null !== $suggested ) {
+			$image = array(
+				'id'   => $suggested['id'],
+				'name' => $suggested['name'],
+			);
+		}
 
 		return $this->scan_document_file(
 			$client,
@@ -229,19 +285,22 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 			(string) ( $doc['name'] ?? $folder_name ),
 			$folder_id,
 			$image,
-			(string) ( $doc['mimeType'] ?? '' )
+			(string) ( $doc['mimeType'] ?? '' ),
+			$package_files
 		);
 	}
 
 	/**
 	 * Export and parse a document; attach package/image metadata when present.
 	 *
-	 * @param Google_Drive_Client       $client      Drive client.
-	 * @param Template_Parser           $parser      Template parser.
-	 * @param string                    $file_id     Document file id.
-	 * @param string                    $file_name   Document filename.
+	 * @param Google_Drive_Client       $client            Drive client.
+	 * @param Template_Parser           $parser            Template parser.
+	 * @param string                    $file_id           Document file id.
+	 * @param string                    $file_name         Document filename.
 	 * @param string                    $package_folder_id Article subfolder in incoming (empty for flat docs).
-	 * @param array<string, mixed>|null $image           Drive image file row.
+	 * @param array<string, mixed>|null $image             Drive image file row.
+	 * @param string                    $mime_type         Document mime type.
+	 * @param array<int, array<string, string>> $package_files Sibling files in the package folder.
 	 * @return array<string, mixed>|null
 	 */
 	private function scan_document_file(
@@ -251,16 +310,21 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 		string $file_name,
 		string $package_folder_id,
 		?array $image,
-		string $mime_type = ''
+		string $mime_type = '',
+		array $package_files = array()
 	): ?array {
-		$raw = $client->fetch_document_content( $file_id, $mime_type );
+		$raw = $client->fetch_document_content( $file_id, $mime_type, $file_name );
 
 		$meta_extra = array(
-			'image_file_id'   => is_array( $image ) ? (string) ( $image['id'] ?? '' ) : '',
-			'image_file_name' => is_array( $image ) ? (string) ( $image['name'] ?? '' ) : '',
+			'image_file_id'     => is_array( $image ) ? (string) ( $image['id'] ?? '' ) : '',
+			'image_file_name'   => is_array( $image ) ? (string) ( $image['name'] ?? '' ) : '',
+			'selected_file_id'  => $file_id,
 		);
 		if ( '' !== $package_folder_id ) {
 			$meta_extra['package_folder_id'] = $package_folder_id;
+		}
+		if ( ! empty( $package_files ) ) {
+			$meta_extra['package_files'] = $package_files;
 		}
 
 		if ( is_wp_error( $raw ) ) {
@@ -282,6 +346,9 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 		$hash = md5( (string) $raw );
 		if ( is_array( $image ) && ! empty( $image['modifiedTime'] ) ) {
 			$hash = md5( $hash . (string) $image['modifiedTime'] );
+		}
+		if ( ! empty( $package_files ) ) {
+			$hash = md5( $hash . wp_json_encode( $package_files ) );
 		}
 
 		$meta = $parser->parse( (string) $raw );
@@ -325,5 +392,50 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 		}
 
 		return new WP_Error( 'forwp_drive_parent', __( 'Could not determine Drive folder parent.', '4wp-drive' ) );
+	}
+
+	/**
+	 * Re-parse a package using a chosen article file.
+	 *
+	 * @param array<string, mixed> $item    Original scan-shaped item (needs metadata.package_*).
+	 * @param string               $file_id Selected Drive file id.
+	 * @return array<string, mixed>|null
+	 */
+	public function rescan_source_file( array $item, string $file_id ): ?array {
+		$meta = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : array();
+		$files = isset( $meta['package_files'] ) && is_array( $meta['package_files'] ) ? $meta['package_files'] : array();
+		$found = null;
+		foreach ( $files as $file ) {
+			if ( is_array( $file ) && (string) ( $file['id'] ?? '' ) === $file_id && 'document' === ( $file['kind'] ?? '' ) ) {
+				$found = $file;
+				break;
+			}
+		}
+
+		if ( ! is_array( $found ) ) {
+			return null;
+		}
+
+		$image = null;
+		if ( ! empty( $meta['image_file_id'] ) ) {
+			$image = array(
+				'id'   => (string) $meta['image_file_id'],
+				'name' => (string) ( $meta['image_file_name'] ?? '' ),
+			);
+		}
+
+		$client = new Google_Drive_Client( Google_OAuth::instance() );
+		$parser = new Template_Parser();
+
+		return $this->scan_document_file(
+			$client,
+			$parser,
+			$file_id,
+			(string) ( $found['name'] ?? '' ),
+			(string) ( $meta['package_folder_id'] ?? '' ),
+			$image,
+			(string) ( $found['mime'] ?? '' ),
+			$files
+		);
 	}
 }

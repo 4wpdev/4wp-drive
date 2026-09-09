@@ -190,6 +190,7 @@ final class Google_Doc_Content {
 	private static function transform_content( \DOMElement $root, array $style_map ): void {
 		self::normalize_existing_headings( $root );
 		self::apply_inline_formatting( $root, $style_map );
+		self::convert_code_blocks( $root, $style_map );
 		self::convert_paragraph_headings( $root, $style_map );
 	}
 
@@ -233,31 +234,42 @@ final class Google_Doc_Content {
 
 		foreach ( $spans as $span ) {
 			$styles = self::resolve_element_styles( $span, $style_map );
-			$bold   = (int) $styles['font_weight'] >= 700;
-			$italic = ! empty( $styles['font_style_italic'] );
+			$bold      = (int) $styles['font_weight'] >= 700;
+			$italic    = ! empty( $styles['font_style_italic'] );
+			$underline = ! empty( $styles['font_underline'] );
 
-			if ( ! $bold && ! $italic ) {
+			if ( ! $bold && ! $italic && ! $underline ) {
 				continue;
 			}
 
-			$wrapper_tag = $bold ? 'strong' : 'em';
-			if ( $bold && $italic ) {
-				// Nest em inside strong for bold+italic runs.
-				$strong = $span->ownerDocument->createElement( 'strong' );
-				$em     = $span->ownerDocument->createElement( 'em' );
-				while ( $span->firstChild ) {
-					$em->appendChild( $span->firstChild );
-				}
-				$strong->appendChild( $em );
-				$span->parentNode->replaceChild( $strong, $span );
+			$doc = $span->ownerDocument;
+			if ( ! $doc || ! $span->parentNode ) {
 				continue;
 			}
 
-			$wrapper = $span->ownerDocument->createElement( $wrapper_tag );
+			$inner = $doc->createDocumentFragment();
 			while ( $span->firstChild ) {
-				$wrapper->appendChild( $span->firstChild );
+				$inner->appendChild( $span->firstChild );
 			}
-			$span->parentNode->replaceChild( $wrapper, $span );
+
+			$wrapped = $inner;
+			if ( $underline ) {
+				$u = $doc->createElement( 'u' );
+				$u->appendChild( $wrapped );
+				$wrapped = $u;
+			}
+			if ( $italic ) {
+				$em = $doc->createElement( 'em' );
+				$em->appendChild( $wrapped );
+				$wrapped = $em;
+			}
+			if ( $bold ) {
+				$strong = $doc->createElement( 'strong' );
+				$strong->appendChild( $wrapped );
+				$wrapped = $strong;
+			}
+
+			$span->parentNode->replaceChild( $wrapped, $span );
 		}
 	}
 
@@ -448,6 +460,8 @@ final class Google_Doc_Content {
 		$font_size   = isset( $base['font_size'] ) ? (float) $base['font_size'] : 11.0;
 		$font_weight = isset( $base['font_weight'] ) ? (int) $base['font_weight'] : 400;
 		$italic      = ! empty( $base['font_style_italic'] );
+		$underline   = ! empty( $base['font_underline'] );
+		$font_family = isset( $base['font_family'] ) ? (string) $base['font_family'] : '';
 
 		if ( preg_match( '/font-size\s*:\s*([\d.]+)\s*pt/i', $rules, $m ) ) {
 			$font_size = (float) $m[1];
@@ -460,12 +474,167 @@ final class Google_Doc_Content {
 		if ( preg_match( '/font-style\s*:\s*italic/i', $rules, $m ) ) {
 			$italic = true;
 		}
+		if ( preg_match( '/text-decoration\s*:[^;]*underline/i', $rules ) ) {
+			$underline = true;
+		}
+		if ( preg_match( '/font-family\s*:\s*([^;]+)/i', $rules, $m ) ) {
+			$font_family = trim( $m[1] );
+		}
 
-		return array(
+		$parsed = array(
 			'font_size'         => $font_size,
 			'font_weight'       => $font_weight,
 			'font_style_italic' => $italic,
+			'font_underline'    => $underline,
 		);
+		if ( '' !== $font_family ) {
+			$parsed['font_family'] = $font_family;
+		}
+
+		return $parsed;
+	}
+
+	/**
+	 * Courier / Consolas / <pre> paragraphs → <pre><code> (Docs exports one line per <p>).
+	 *
+	 * @param \DOMElement                         $root      Root.
+	 * @param array<string, array<string, mixed>> $style_map Styles.
+	 */
+	private static function convert_code_blocks( \DOMElement $root, array $style_map ): void {
+		self::convert_code_in_parent( $root, $style_map );
+		$divs = array();
+		foreach ( $root->getElementsByTagName( 'div' ) as $div ) {
+			if ( $div instanceof \DOMElement ) {
+				$divs[] = $div;
+			}
+		}
+		foreach ( $divs as $div ) {
+			self::convert_code_in_parent( $div, $style_map );
+		}
+	}
+
+	/**
+	 * @param \DOMElement                         $parent    Parent.
+	 * @param array<string, array<string, mixed>> $style_map Styles.
+	 */
+	private static function convert_code_in_parent( \DOMElement $parent, array $style_map ): void {
+		$doc = $parent->ownerDocument;
+		if ( ! $doc ) {
+			return;
+		}
+
+		$children = array();
+		foreach ( $parent->childNodes as $child ) {
+			if ( $child instanceof \DOMElement ) {
+				$children[] = $child;
+			}
+		}
+
+		$run   = array();
+		$flush = static function () use ( &$run, $parent, $doc ): void {
+			if ( empty( $run ) ) {
+				return;
+			}
+			$lines = array();
+			foreach ( $run as $el ) {
+				$lines[] = rtrim( str_replace( "\xc2\xa0", ' ', (string) $el->textContent ) );
+			}
+			$pre  = $doc->createElement( 'pre' );
+			$code = $doc->createElement( 'code' );
+			$code->appendChild( $doc->createTextNode( implode( "\n", $lines ) ) );
+			$pre->appendChild( $code );
+			$parent->replaceChild( $pre, $run[0] );
+			$count = count( $run );
+			for ( $i = 1; $i < $count; $i++ ) {
+				if ( $run[ $i ]->parentNode ) {
+					$run[ $i ]->parentNode->removeChild( $run[ $i ] );
+				}
+			}
+			$run = array();
+		};
+
+		foreach ( $children as $el ) {
+			if ( self::element_is_code_block( $el, $style_map ) ) {
+				$run[] = $el;
+				continue;
+			}
+			$flush();
+		}
+		$flush();
+	}
+
+	/**
+	 * @param \DOMElement                         $element   Element.
+	 * @param array<string, array<string, mixed>> $style_map Styles.
+	 */
+	private static function element_is_code_block( \DOMElement $element, array $style_map ): bool {
+		$tag = strtolower( $element->tagName );
+		if ( 'pre' === $tag ) {
+			return true;
+		}
+		if ( ! in_array( $tag, array( 'p', 'div' ), true ) ) {
+			return false;
+		}
+		if ( '' === trim( (string) $element->textContent ) ) {
+			return false;
+		}
+
+		$family = '';
+		$parsed = self::parse_css_rules( $element->getAttribute( 'style' ), array() );
+		if ( ! empty( $parsed['font_family'] ) ) {
+			$family = (string) $parsed['font_family'];
+		}
+		if ( '' === $family ) {
+			$class = $element->getAttribute( 'class' );
+			if ( '' !== $class ) {
+				foreach ( preg_split( '/\s+/', $class ) as $class_name ) {
+					if ( ! empty( $style_map[ $class_name ]['font_family'] ) ) {
+						$family = (string) $style_map[ $class_name ]['font_family'];
+						break;
+					}
+				}
+			}
+		}
+
+		if ( '' === $family ) {
+			foreach ( $element->getElementsByTagName( 'span' ) as $span ) {
+				if ( ! $span instanceof \DOMElement ) {
+					continue;
+				}
+				$span_parsed = self::parse_css_rules( $span->getAttribute( 'style' ), array() );
+				if ( ! empty( $span_parsed['font_family'] ) ) {
+					$family = (string) $span_parsed['font_family'];
+					break;
+				}
+				$span_class = $span->getAttribute( 'class' );
+				if ( '' !== $span_class ) {
+					foreach ( preg_split( '/\s+/', $span_class ) as $class_name ) {
+						if ( ! empty( $style_map[ $class_name ]['font_family'] ) ) {
+							$family = (string) $style_map[ $class_name ]['font_family'];
+							break 2;
+						}
+					}
+				}
+			}
+		}
+
+		return self::is_monospace_family( $family );
+	}
+
+	private static function is_monospace_family( string $family ): bool {
+		$family = strtolower( str_replace( array( '"', "'", '&quot;' ), '', $family ) );
+		if ( '' === $family ) {
+			return false;
+		}
+
+		$needles = array( 'courier', 'consolas', 'menlo', 'monaco', 'inconsolata', 'source code', 'roboto mono', 'lucida console', 'monospace' );
+		foreach ( $needles as $needle ) {
+			if ( false !== strpos( $family, $needle ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -481,8 +650,11 @@ final class Google_Doc_Content {
 		}
 
 		foreach ( $paragraphs as $p ) {
+			$styles = self::resolve_element_styles( $p, $style_map );
+			if ( self::is_monospace_family( (string) ( $styles['font_family'] ?? '' ) ) ) {
+				continue;
+			}
 			$class_level = self::heading_level_from_class( $p->getAttribute( 'class' ) );
-			$styles      = self::resolve_element_styles( $p, $style_map );
 			$tag         = null !== $class_level ? 'h' . $class_level : self::heading_tag_for_styles( $styles, $p );
 
 			if ( null === $tag ) {
@@ -507,6 +679,8 @@ final class Google_Doc_Content {
 			'font_size'         => 11.0,
 			'font_weight'       => 400,
 			'font_style_italic' => false,
+			'font_underline'    => false,
+			'font_family'       => '',
 		);
 
 		$class = $element->getAttribute( 'class' );
@@ -555,6 +729,12 @@ final class Google_Doc_Content {
 		}
 		if ( ! empty( $add['font_style_italic'] ) ) {
 			$base['font_style_italic'] = true;
+		}
+		if ( ! empty( $add['font_underline'] ) ) {
+			$base['font_underline'] = true;
+		}
+		if ( ! empty( $add['font_family'] ) ) {
+			$base['font_family'] = (string) $add['font_family'];
 		}
 
 		return $base;

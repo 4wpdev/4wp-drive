@@ -63,11 +63,12 @@ final class Preview_Styles {
 		 */
 		do_action( 'forwp_drive_enqueue_preview_styles', ( new Template_Config() )->get_import_post_type() );
 
+		$preview_css = FORWP_DRIVE_PATH . 'assets/admin-preview.css';
 		wp_enqueue_style(
 			'forwp-drive-admin-preview',
 			FORWP_DRIVE_URL . 'assets/admin-preview.css',
 			array( 'forwp-drive-admin', 'forwp-drive-preview-theme-scoped' ),
-			FORWP_DRIVE_VERSION
+			file_exists( $preview_css ) ? (string) filemtime( $preview_css ) : FORWP_DRIVE_VERSION
 		);
 	}
 

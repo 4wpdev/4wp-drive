@@ -16,6 +16,7 @@ final class Block_Template_Registry {
 
 	public const TEMPLATE_4WP_FAQ         = '4wp-faq';
 	public const TEMPLATE_CORE_ACCORDION  = 'core-accordion';
+	public const TEMPLATE_CORE_IMAGE      = 'core-image';
 	public const TEMPLATE_CUSTOM_CTA      = 'custom-cta';
 
 	/**
@@ -30,6 +31,15 @@ final class Block_Template_Registry {
 		$templates = apply_filters(
 			'forwp_drive_block_templates',
 			array(
+				self::TEMPLATE_CORE_IMAGE     => array(
+					'label'            => __( 'Core Image', '4wp-drive' ),
+					'description'      => __( 'Replaces [image:filename.jpeg] markers with core/image blocks from the article package folder (default on).', '4wp-drive' ),
+					'recipe_type'      => 'core-image',
+					'requires_plugins' => array(),
+					'available'        => true,
+					'default_enabled'  => true,
+					'doc_hint'         => __( 'Put images in the article subfolder. In the Google Doc write [image:exact-filename.jpeg]. AI prompts like [IMAGE 2 — …] are ignored.', '4wp-drive' ),
+				),
 				self::TEMPLATE_4WP_FAQ        => array(
 					'label'            => __( '4WP FAQ', '4wp-drive' ),
 					'description'      => __( 'Wraps matched sections in forwp/faq + core accordion (needs 4WP FAQ plugin).', '4wp-drive' ),

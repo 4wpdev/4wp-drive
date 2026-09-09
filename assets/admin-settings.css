@@ -669,3 +669,157 @@
 	background: #f0f6fc;
 	color: #1d2327;
 }
+
+.forwp-drive-patterns-page .forwp-drive-patterns__heading {
+	margin: 0 0 8px;
+	font-size: 15px;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__divider {
+	margin: 28px 0;
+	border: 0;
+	border-top: 1px solid #dcdcde;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns-panel {
+	padding: 20px 22px 24px;
+	max-width: 960px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__lead {
+	margin: 0 0 22px;
+	font-size: 13px;
+	line-height: 1.5;
+	color: #646970;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__kicker {
+	margin: 0 0 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #646970;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns-section + .forwp-drive-patterns-section {
+	margin-top: 22px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-auto-map {
+	margin-top: 4px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns-mode {
+	display: none;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns-section {
+	margin: 0;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__hint {
+	margin: 0 0 10px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns-empty {
+	margin: 8px 0 14px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table .button-link-delete {
+	color: #b32d2e;
+	text-decoration: none;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table .button-link-delete:hover {
+	color: #8a2424;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table {
+	margin: 0 0 14px;
+	border-collapse: collapse;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table th,
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table td {
+	vertical-align: top;
+	padding: 10px 12px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table__on,
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table__keep {
+	width: 56px;
+	text-align: center;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table__actions {
+	width: 72px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table .forwp-drive-block-rule-template {
+	max-width: 100%;
+	width: 100%;
+}
+
+.forwp-drive-patterns-page .forwp-drive-block-mapping-table .forwp-drive-block-rule-headings {
+	width: 100%;
+	max-width: 280px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin: 0;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns-actions [hidden] {
+	display: none !important;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__steps {
+	margin: 0 0 14px 1.25em;
+	padding: 0;
+	font-size: 13px;
+	line-height: 1.55;
+	color: #1d2327;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__steps li {
+	margin: 0 0 6px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__map-label {
+	margin: 0 0 8px;
+	font-size: 13px;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__map-table {
+	margin: 0 0 12px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__map-table th,
+.forwp-drive-patterns-page .forwp-drive-patterns__map-table td {
+	font-size: 12px;
+	line-height: 1.45;
+	vertical-align: top;
+}
+
+.forwp-drive-patterns-page .forwp-drive-patterns__map-table code {
+	font-size: 12px;
+}
+
+.forwp-drive-patterns-page .forwp-drive-code {
+	margin: 8px 0 12px;
+	padding: 10px 12px;
+	border-radius: 4px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	font-size: 12px;
+	overflow-x: auto;
+}

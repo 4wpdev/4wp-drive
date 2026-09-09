@@ -125,7 +125,7 @@ if ( ! function_exists( 'wp_kses_post' ) ) {
 	 * @param string $data HTML.
 	 */
 	function wp_kses_post( $data ) {
-		return preg_replace( '/<(?!\/?(?:a|b|blockquote|br|cite|code|del|em|h[1-6]|hr|i|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|tfoot|th|thead|tr|u|ul)\b)[^>]+>/i', '', (string) $data );
+		return preg_replace( '/<(?!\/?(?:a|b|blockquote|br|cite|code|del|em|h[1-6]|hr|i|img|li|ol|p|pre|s|span|strong|sub|sup|table|tbody|td|tfoot|th|thead|tr|u|ul)\b)[^>]+>/i', '', (string) $data );
 	}
 }
 
@@ -178,6 +178,24 @@ if ( ! function_exists( 'esc_url_raw' ) ) {
 	 */
 	function esc_url_raw( $url ) {
 		return trim( (string) $url );
+	}
+}
+
+if ( ! function_exists( 'esc_url' ) ) {
+	/**
+	 * @param string $url URL.
+	 */
+	function esc_url( $url ) {
+		return trim( (string) $url );
+	}
+}
+
+if ( ! function_exists( 'esc_attr' ) ) {
+	/**
+	 * @param string $text Text.
+	 */
+	function esc_attr( $text ) {
+		return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
 	}
 }
 
@@ -287,6 +305,143 @@ if ( ! function_exists( 'has_blocks' ) ) {
 	 */
 	function has_blocks( $content ) {
 		return false !== strpos( (string) $content, '<!-- wp:' );
+	}
+}
+
+if ( ! function_exists( 'parse_blocks' ) ) {
+	/**
+	 * Minimal parse_blocks: freeform HTML plus top-level `<!-- wp: -->` regions.
+	 *
+	 * Nested inner blocks stay inside innerHTML (enough for Drive import tests).
+	 *
+	 * @param string $content Content.
+	 * @return array<int, array<string, mixed>>
+	 */
+	function parse_blocks( $content ) {
+		$content = (string) $content;
+		$blocks  = array();
+		$offset  = 0;
+		$length  = strlen( $content );
+
+		while ( $offset < $length ) {
+			if ( ! preg_match( '/<!--\s+wp:([a-z0-9\-\/]+)(\s+\{.*?\})?\s+-->/s', $content, $match, PREG_OFFSET_CAPTURE, $offset ) ) {
+				$rest = substr( $content, $offset );
+				if ( '' !== trim( $rest ) ) {
+					$blocks[] = forwp_drive_test_freeform_block( $rest );
+				}
+				break;
+			}
+
+			$start = (int) $match[0][1];
+			if ( $start > $offset ) {
+				$free = substr( $content, $offset, $start - $offset );
+				if ( '' !== trim( $free ) ) {
+					$blocks[] = forwp_drive_test_freeform_block( $free );
+				}
+			}
+
+			$short    = $match[1][0];
+			$name     = false === strpos( $short, '/' ) ? 'core/' . $short : $short;
+			$open_end = $start + strlen( $match[0][0] );
+			$close    = '<!-- /wp:' . $short . ' -->';
+			$close_at = strpos( $content, $close, $open_end );
+			if ( false === $close_at ) {
+				$inner  = substr( $content, $open_end );
+				$offset = $length;
+			} else {
+				$inner  = substr( $content, $open_end, $close_at - $open_end );
+				$offset = $close_at + strlen( $close );
+			}
+
+			$attrs = array();
+			if ( ! empty( $match[2][0] ) ) {
+				$decoded = json_decode( trim( (string) $match[2][0] ), true );
+				if ( is_array( $decoded ) ) {
+					$attrs = $decoded;
+				}
+			}
+
+			$blocks[] = array(
+				'blockName'    => $name,
+				'attrs'        => $attrs,
+				'innerBlocks'  => array(),
+				'innerHTML'    => $inner,
+				'innerContent' => array( $inner ),
+			);
+		}
+
+		return $blocks ? $blocks : array( forwp_drive_test_freeform_block( $content ) );
+	}
+
+	/**
+	 * @param string $html HTML.
+	 * @return array<string, mixed>
+	 */
+	function forwp_drive_test_freeform_block( $html ) {
+		return array(
+			'blockName'    => null,
+			'attrs'        => array(),
+			'innerBlocks'  => array(),
+			'innerHTML'    => (string) $html,
+			'innerContent' => array( (string) $html ),
+		);
+	}
+}
+
+if ( ! function_exists( 'serialize_block' ) ) {
+	/**
+	 * @param array<string, mixed> $block Block.
+	 */
+	function serialize_block( $block ) {
+		$name = $block['blockName'] ?? null;
+		if ( empty( $name ) ) {
+			return (string) ( $block['innerHTML'] ?? '' );
+		}
+
+		$short = ( 0 === strpos( (string) $name, 'core/' ) ) ? substr( (string) $name, 5 ) : (string) $name;
+		$attrs = '';
+		if ( isset( $block['attrs'] ) && is_array( $block['attrs'] ) && ! empty( $block['attrs'] ) ) {
+			$encoded = wp_json_encode( $block['attrs'] );
+			if ( is_string( $encoded ) ) {
+				$attrs = ' ' . $encoded;
+			}
+		}
+
+		$inner         = '';
+		$inner_blocks  = isset( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ? $block['innerBlocks'] : array();
+		$inner_content = isset( $block['innerContent'] ) && is_array( $block['innerContent'] ) ? $block['innerContent'] : null;
+
+		if ( null !== $inner_content && ( ! empty( $inner_blocks ) || in_array( null, $inner_content, true ) ) ) {
+			$child = 0;
+			foreach ( $inner_content as $chunk ) {
+				if ( is_string( $chunk ) ) {
+					$inner .= $chunk;
+					continue;
+				}
+				if ( isset( $inner_blocks[ $child ] ) ) {
+					$inner .= serialize_block( $inner_blocks[ $child ] );
+					++$child;
+				}
+			}
+		} else {
+			$inner = (string) ( $block['innerHTML'] ?? '' );
+		}
+
+		return sprintf( '<!-- wp:%1$s%2$s -->%3$s<!-- /wp:%1$s -->', $short, $attrs, $inner );
+	}
+}
+
+if ( ! function_exists( 'serialize_blocks' ) ) {
+	/**
+	 * @param array<int, array<string, mixed>> $blocks Blocks.
+	 */
+	function serialize_blocks( $blocks ) {
+		$out = '';
+		foreach ( $blocks as $block ) {
+			$out .= serialize_block( $block );
+		}
+
+		return $out;
 	}
 }
 

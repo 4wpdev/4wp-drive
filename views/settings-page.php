@@ -83,7 +83,7 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 					<div class="forwp-drive-intro-card__body">
 						<h3 class="forwp-drive-intro-card__title"><?php esc_html_e( 'About storage sources', '4wp-drive' ); ?></h3>
 						<p class="forwp-drive-intro-card__text">
-							<?php esc_html_e( 'Import documents from cloud storage into WordPress drafts. Live: Google Drive. Planned: GitHub, OneDrive, Dropbox.', '4wp-drive' ); ?>
+							<?php esc_html_e( 'Import documents from cloud storage into WordPress drafts. Live: Google Drive and GitHub Markdown. Planned: OneDrive, Dropbox.', '4wp-drive' ); ?>
 						</p>
 						<p class="forwp-drive-intro-card__text">
 							<?php esc_html_e( 'Open a card below to configure Google Drive or view roadmap status.', '4wp-drive' ); ?>
@@ -106,6 +106,41 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 						<div class="notice notice-info inline">
 							<p id="forwp-drive-planned-detail-text"></p>
 						</div>
+					</div>
+
+					<div id="forwp-drive-github-split" class="forwp-drive-panel forwp-drive-panel--nested" hidden>
+						<h2><?php esc_html_e( 'GitHub repository', '4wp-drive' ); ?></h2>
+						<p class="description">
+							<?php esc_html_e( 'Classic PAT with repo scope. Same incoming/ folder contract as Drive: Markdown articles, png/jpg images, subfolders as packages.', '4wp-drive' ); ?>
+						</p>
+						<table class="form-table" role="presentation">
+							<tr>
+								<th scope="row"><label for="forwp-drive-github-owner"><?php esc_html_e( 'Owner', '4wp-drive' ); ?></label></th>
+								<td><input type="text" class="regular-text" id="forwp-drive-github-owner" autocomplete="off" /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="forwp-drive-github-repo"><?php esc_html_e( 'Repository', '4wp-drive' ); ?></label></th>
+								<td><input type="text" class="regular-text" id="forwp-drive-github-repo" autocomplete="off" /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="forwp-drive-github-branch"><?php esc_html_e( 'Branch', '4wp-drive' ); ?></label></th>
+								<td><input type="text" class="regular-text" id="forwp-drive-github-branch" value="main" /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="forwp-drive-github-incoming"><?php esc_html_e( 'Incoming path', '4wp-drive' ); ?></label></th>
+								<td><input type="text" class="regular-text" id="forwp-drive-github-incoming" value="incoming" /></td>
+							</tr>
+							<tr>
+								<th scope="row"><label for="forwp-drive-github-token"><?php esc_html_e( 'Personal access token', '4wp-drive' ); ?></label></th>
+								<td>
+									<input type="password" class="regular-text" id="forwp-drive-github-token" autocomplete="new-password" />
+									<p class="description" id="forwp-drive-github-token-status"></p>
+								</td>
+							</tr>
+						</table>
+						<p>
+							<button type="button" class="button button-primary" id="forwp-drive-save-github"><?php esc_html_e( 'Save GitHub settings', '4wp-drive' ); ?></button>
+						</p>
 					</div>
 
 					<div id="forwp-drive-google-split" class="forwp-drive-google-layout">
@@ -238,7 +273,13 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 					<div class="forwp-drive-docs-layout__main">
 						<div class="forwp-drive-docs-intro">
 							<p class="forwp-drive-admin-muted">
-								<?php esc_html_e( 'Setup depends on which storage source you use. Configure providers under Storage sources, then map how each document becomes a WordPress draft below.', '4wp-drive' ); ?>
+								<?php
+								printf(
+									/* translators: %s: admin menu path */
+									esc_html__( 'Setup depends on which storage source you use. Block patterns (FAQ, images, accordion) live under %s. Below: connect Drive, map front-matter fields, and multilingual notes.', '4wp-drive' ),
+									'<strong>' . esc_html__( '4WP Drive → Patterns', '4wp-drive' ) . '</strong>'
+								);
+								?>
 							</p>
 						</div>
 
@@ -250,7 +291,7 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 								</summary>
 								<div class="forwp-drive-accordion__panel">
 									<p class="description">
-										<?php esc_html_e( 'Google Drive is available today. GitHub (Markdown/MDX), OneDrive, and Dropbox are on the roadmap — see Source registry on the Storage sources tab.', '4wp-drive' ); ?>
+										<?php esc_html_e( 'Google Drive (Docs, Markdown, Word) and GitHub (Markdown packages) are available today. OneDrive and Dropbox are on the roadmap — see Source registry on the Storage sources tab.', '4wp-drive' ); ?>
 									</p>
 
 									<details class="forwp-drive-accordion__item forwp-drive-accordion__item--nested">
@@ -270,7 +311,7 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 							<details class="forwp-drive-accordion__item" open>
 								<summary class="forwp-drive-accordion__summary">
 									<span class="forwp-drive-accordion__title"><?php esc_html_e( 'Document template & import mapping', '4wp-drive' ); ?></span>
-									<span class="forwp-drive-accordion__hint"><?php esc_html_e( 'Same format for every source', '4wp-drive' ); ?></span>
+									<span class="forwp-drive-accordion__hint"><?php esc_html_e( 'Front-matter → WordPress fields', '4wp-drive' ); ?></span>
 								</summary>
 								<div class="forwp-drive-accordion__panel">
 									<table class="form-table" role="presentation">
@@ -283,25 +324,16 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 										</tr>
 									</table>
 
-									<h3><?php esc_html_e( 'Body → block templates', '4wp-drive' ); ?></h3>
-									<p class="description"><?php esc_html_e( 'Build your import collection: when the document body matches a section heading, Drive inserts the chosen Gutenberg block template.', '4wp-drive' ); ?></p>
-									<table class="widefat forwp-drive-block-mapping-table" id="forwp-drive-block-mapping-table">
-										<thead>
-											<tr>
-												<th><?php esc_html_e( 'On', '4wp-drive' ); ?></th>
-												<th><?php esc_html_e( 'Block template', '4wp-drive' ); ?></th>
-												<th><?php esc_html_e( 'Section heading in document (H2)', '4wp-drive' ); ?></th>
-												<th><?php esc_html_e( 'Keep H2', '4wp-drive' ); ?></th>
-												<th></th>
-											</tr>
-										</thead>
-										<tbody id="forwp-drive-block-mapping-rows"></tbody>
-									</table>
-									<p>
-										<button type="button" class="button" id="forwp-drive-block-mapping-add-row"><?php esc_html_e( 'Add template rule', '4wp-drive' ); ?></button>
+									<p class="description">
+										<?php
+										printf(
+											/* translators: 1: opening link, 2: closing link */
+											esc_html__( 'FAQ, accordion, and image markers are configured under %1$sPatterns%2$s.', '4wp-drive' ),
+											'<a href="' . esc_url( admin_url( 'admin.php?page=forwp-drive-patterns' ) ) . '">',
+											'</a>'
+										);
+										?>
 									</p>
-									<p class="description"><?php esc_html_e( 'Templates: 4WP FAQ (forwp/faq + accordion), Core Accordion (core/accordion only). Custom CTA — planned for a later release.', '4wp-drive' ); ?></p>
-									<p class="description"><?php esc_html_e( 'Document pattern: Heading 2 = section title, Heading 3 = question, paragraphs or lists = answer.', '4wp-drive' ); ?></p>
 
 									<h3><?php esc_html_e( 'Front-matter fields', '4wp-drive' ); ?></h3>
 									<p class="description"><?php esc_html_e( 'Use plain Label: value lines at the top of each source document, then its own paragraph with only equals signs (three or more, e.g. ===== or ======) or ---, then the post body. Author matches WordPress display name or nickname. Match existing taxonomy term names.', '4wp-drive' ); ?></p>

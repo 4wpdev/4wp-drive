@@ -43,8 +43,144 @@
 		} );
 	};
 
+	let dialogResolver = null;
+	let dialogKeyHandler = null;
+
+	/**
+	 * Ensure a single in-page confirm dialog exists in the DOM.
+	 *
+	 * @return {HTMLElement} Dialog root.
+	 */
+	function ensureConfirmDialog() {
+		let root = document.getElementById( 'forwp-drive-confirm-dialog' );
+		if ( root ) {
+			return root;
+		}
+
+		root = document.createElement( 'div' );
+		root.id = 'forwp-drive-confirm-dialog';
+		root.className = 'forwp-drive-dialog forwp-drive-admin-chrome';
+		root.hidden = true;
+		root.setAttribute( 'role', 'dialog' );
+		root.setAttribute( 'aria-modal', 'true' );
+		root.setAttribute( 'aria-labelledby', 'forwp-drive-dialog-title' );
+		root.innerHTML = `
+			<div class="forwp-drive-dialog__backdrop" data-dialog-dismiss="1"></div>
+			<div class="forwp-drive-dialog__panel">
+				<div class="forwp-drive-dialog__header">
+					<h2 id="forwp-drive-dialog-title" class="forwp-drive-dialog__title"></h2>
+				</div>
+				<p id="forwp-drive-dialog-message" class="forwp-drive-dialog__body"></p>
+				<div class="forwp-drive-dialog__actions">
+					<button type="button" class="button forwp-drive-dialog__cancel" data-dialog-dismiss="1"></button>
+					<button type="button" class="button button-primary forwp-drive-dialog__confirm"></button>
+				</div>
+			</div>`;
+		document.body.appendChild( root );
+
+		root.addEventListener( 'click', ( event ) => {
+			const target = event.target;
+			if ( ! ( target instanceof HTMLElement ) ) {
+				return;
+			}
+			if ( target.closest( '[data-dialog-dismiss="1"]' ) ) {
+				closeConfirmDialog( false );
+				return;
+			}
+			if ( target.closest( '.forwp-drive-dialog__confirm' ) ) {
+				closeConfirmDialog( true );
+			}
+		} );
+
+		return root;
+	}
+
+	/**
+	 * @param {boolean} confirmed Whether the user confirmed.
+	 * @return {void}
+	 */
+	function closeConfirmDialog( confirmed ) {
+		const root = document.getElementById( 'forwp-drive-confirm-dialog' );
+		if ( root ) {
+			root.hidden = true;
+		}
+		if ( dialogKeyHandler ) {
+			document.removeEventListener( 'keydown', dialogKeyHandler );
+			dialogKeyHandler = null;
+		}
+		const resolve = dialogResolver;
+		dialogResolver = null;
+		if ( typeof resolve === 'function' ) {
+			resolve( !! confirmed );
+		}
+	}
+
+	/**
+	 * In-admin confirm dialog (replaces native window.confirm).
+	 *
+	 * @param {Object}  options               Options.
+	 * @param {string}  options.message       Body text.
+	 * @param {string}  [options.title]       Title.
+	 * @param {string}  [options.confirmLabel] Confirm button.
+	 * @param {string}  [options.cancelLabel] Cancel button.
+	 * @param {boolean} [options.danger]      Destructive confirm style.
+	 * @return {Promise<boolean>}
+	 */
+	function confirmDialog( options ) {
+		const strings = forwpDriveAdmin.strings || {};
+		const root = ensureConfirmDialog();
+		const titleEl = root.querySelector( '#forwp-drive-dialog-title' );
+		const messageEl = root.querySelector( '#forwp-drive-dialog-message' );
+		const confirmBtn = root.querySelector( '.forwp-drive-dialog__confirm' );
+		const cancelBtn = root.querySelector( '.forwp-drive-dialog__cancel' );
+
+		if ( dialogResolver ) {
+			closeConfirmDialog( false );
+		}
+
+		if ( titleEl ) {
+			titleEl.textContent =
+				options.title || strings.dialogConfirm || 'Confirm';
+		}
+		if ( messageEl ) {
+			messageEl.textContent = options.message || '';
+		}
+		if ( confirmBtn ) {
+			confirmBtn.textContent =
+				options.confirmLabel || strings.dialogConfirm || 'Confirm';
+			confirmBtn.classList.toggle(
+				'forwp-drive-dialog__confirm--danger',
+				!! options.danger
+			);
+		}
+		if ( cancelBtn ) {
+			cancelBtn.textContent =
+				options.cancelLabel || strings.dialogCancel || 'Cancel';
+		}
+
+		root.hidden = false;
+
+		return new Promise( ( resolve ) => {
+			dialogResolver = resolve;
+			dialogKeyHandler = ( event ) => {
+				if ( event.key === 'Escape' ) {
+					event.preventDefault();
+					closeConfirmDialog( false );
+				} else if ( event.key === 'Enter' ) {
+					event.preventDefault();
+					closeConfirmDialog( true );
+				}
+			};
+			document.addEventListener( 'keydown', dialogKeyHandler );
+			if ( confirmBtn && typeof confirmBtn.focus === 'function' ) {
+				confirmBtn.focus();
+			}
+		} );
+	}
+
 	let previewId = null;
 	let previewDoc = null;
+	let pinSelectedName = '';
 	let multilingualConfig = forwpDriveAdmin.multilingual || null;
 	let activeSourceSlug =
 		forwpDriveAdmin.activeSource || 'google_drive';
@@ -54,6 +190,46 @@
 		connection: null,
 		incomingId: '',
 	};
+
+	function documentsForSource( slug ) {
+		const docs = inboxCache.documents || [];
+		return docs.filter(
+			( doc ) => ! doc.source || doc.source === slug
+		);
+	}
+
+	function documentsForActiveSource() {
+		return documentsForSource( activeSourceSlug );
+	}
+
+	function incomingCountForSource( slug ) {
+		return documentsForSource( slug ).length;
+	}
+
+	function updateAdminMenuIncomingCount( total ) {
+		const n = Math.max( 0, Number( total ) || 0 );
+		const badgeHtml =
+			n > 0
+				? `<span class="update-plugins count-${ n }"><span class="plugin-count">${ n }</span></span>`
+				: '';
+		const topName = document.querySelector(
+			'#toplevel_page_forwp-drive-inbox > a.menu-top .wp-menu-name'
+		);
+		const subLink = document.querySelector(
+			'#toplevel_page_forwp-drive-inbox .wp-submenu a[href*="page=forwp-drive-inbox"]'
+		);
+
+		if ( topName ) {
+			const label =
+				( forwpDriveAdmin.strings && forwpDriveAdmin.strings.menuPlugin ) || '4WP Drive';
+			topName.innerHTML = label + ( badgeHtml ? ' ' + badgeHtml : '' );
+		}
+
+		if ( subLink ) {
+			subLink.textContent =
+				( forwpDriveAdmin.strings && forwpDriveAdmin.strings.menuIncoming ) || 'Incoming';
+		}
+	}
 
 	function getInboxSources() {
 		const sources = forwpDriveAdmin.sources;
@@ -123,9 +299,13 @@
 				const active = source.slug === activeSourceSlug;
 				const soon = ! source.implemented;
 				const icon = sourceIconMarkup( source.slug );
-				const badge = soon
-					? '<span class="forwp-drive-source-tab__badge">Soon</span>'
-					: '';
+				const incoming = soon ? 0 : incomingCountForSource( source.slug );
+				let badge = '';
+				if ( soon ) {
+					badge = '<span class="forwp-drive-source-tab__badge">Soon</span>';
+				} else if ( incoming > 0 ) {
+					badge = `<span class="forwp-drive-source-tab__count" aria-label="${ incoming } incoming">${ incoming }</span>`;
+				}
 				const classes = [
 					'forwp-drive-source-tab',
 					active ? 'is-active' : '',
@@ -180,9 +360,12 @@
 		if ( ! source ) {
 			return;
 		}
+		const sourceChanged = activeSourceSlug !== slug;
 		activeSourceSlug = slug;
 		applyActiveSourceChrome();
-		showWorkspacePlaceholder();
+		if ( sourceChanged ) {
+			showWorkspacePlaceholder();
+		}
 
 		if ( ! source.implemented ) {
 			const list = document.getElementById( 'forwp-drive-inbox-list' );
@@ -221,27 +404,204 @@
 		updateInboxStatusBar(
 			inboxCache.connection,
 			inboxCache.lastSync,
-			( inboxCache.documents || [] ).length,
+			documentsForActiveSource().length,
 			inboxCache.incomingId
 		);
-		renderInbox( inboxCache.documents, inboxCache.lastSync );
+		renderInbox( documentsForActiveSource(), inboxCache.lastSync );
 	}
 
 	function getMultilingualConfig() {
 		return multilingualConfig || forwpDriveAdmin.multilingual || null;
 	}
 
+	function getConfiguredLanguages( configOverride ) {
+		const config = configOverride || getMultilingualConfig();
+		return config && Array.isArray( config.languages ) ? config.languages : [];
+	}
+
+	/**
+	 * Show the language picker only when the site has more than one language.
+	 *
+	 * @return {boolean}
+	 */
 	function requiresImportLanguage() {
+		const languages = getConfiguredLanguages();
+		if ( languages.length <= 1 ) {
+			return false;
+		}
 		const config = getMultilingualConfig();
 		return !!( config && config.requires_selection );
 	}
 
+	/**
+	 * Sole / default language when the picker is hidden.
+	 *
+	 * @return {string}
+	 */
+	function getImplicitImportLanguage() {
+		const config = getMultilingualConfig();
+		const languages = getConfiguredLanguages();
+		if ( languages.length === 1 && languages[0].code ) {
+			return String( languages[0].code );
+		}
+		if ( config && config.default_language ) {
+			return String( config.default_language );
+		}
+		return '';
+	}
+
 	function getSelectedImportLanguage() {
+		if ( ! requiresImportLanguage() ) {
+			return getImplicitImportLanguage();
+		}
 		const select = document.getElementById( 'forwp-drive-import-language' );
 		if ( ! select ) {
-			return '';
+			return getImplicitImportLanguage();
 		}
 		return select.value || '';
+	}
+
+	/**
+	 * Mark a required import field as valid/invalid (red chrome when missing).
+	 *
+	 * @param {string}  wrapId   Wrapper element id.
+	 * @param {string}  selectId Select element id.
+	 * @param {string}  errorId  Inline error element id.
+	 * @param {boolean} invalid  Whether the field is invalid.
+	 * @param {string}  message  Error message.
+	 * @param {boolean} [shake]  Brief shake attention.
+	 * @return {void}
+	 */
+	function setImportFieldInvalid( wrapId, selectId, errorId, invalid, message, shake ) {
+		const wrap = document.getElementById( wrapId );
+		const select = document.getElementById( selectId );
+		const errorEl = document.getElementById( errorId );
+		if ( wrap ) {
+			wrap.classList.toggle( 'is-invalid', !! invalid );
+			if ( shake && invalid ) {
+				wrap.classList.remove( 'is-shake' );
+				// Force reflow so the animation can replay.
+				void wrap.offsetWidth;
+				wrap.classList.add( 'is-shake' );
+				window.setTimeout( () => {
+					wrap.classList.remove( 'is-shake' );
+				}, 450 );
+			}
+		}
+		if ( select ) {
+			select.setAttribute( 'aria-invalid', invalid ? 'true' : 'false' );
+		}
+		if ( errorEl ) {
+			errorEl.textContent = invalid ? message || '' : '';
+			errorEl.hidden = ! invalid;
+		}
+	}
+
+	/**
+	 * Disable Import only when update-mode target is missing.
+	 * Language gaps stay clickable so validation can paint the field red.
+	 *
+	 * @return {void}
+	 */
+	function syncImportButtonState() {
+		const button = document.getElementById( 'forwp-drive-preview-import' );
+		const strings = forwpDriveAdmin.strings || {};
+		const langMissing =
+			requiresImportLanguage() && ! getSelectedImportLanguage();
+		const langMessage =
+			strings.languageRequired ||
+			'Select a content language for this import.';
+
+		setImportFieldInvalid(
+			'forwp-drive-import-language-wrap',
+			'forwp-drive-import-language',
+			'forwp-drive-import-language-error',
+			langMissing,
+			langMessage,
+			false
+		);
+
+		let targetMissing = false;
+		const targetMessage =
+			strings.updateTargetRequired ||
+			'Select an existing post to update.';
+		if ( getImportMode() === 'update' ) {
+			const select = document.getElementById( 'forwp-drive-import-target' );
+			const targetId = select ? parseInt( select.value, 10 ) : 0;
+			targetMissing = ! targetId;
+		}
+		setImportFieldInvalid(
+			'forwp-drive-import-target-wrap',
+			'forwp-drive-import-target',
+			'forwp-drive-import-target-error',
+			targetMissing,
+			targetMessage,
+			false
+		);
+
+		if ( ! button ) {
+			return;
+		}
+
+		// Keep Import clickable when only language is missing — red field is the cue.
+		const blocked = targetMissing;
+		button.disabled = blocked;
+		if ( blocked ) {
+			button.setAttribute( 'title', targetMessage );
+			button.setAttribute( 'aria-disabled', 'true' );
+		} else {
+			button.removeAttribute( 'title' );
+			button.removeAttribute( 'aria-disabled' );
+		}
+	}
+
+	/**
+	 * Surface validation failures in the status bar + red field highlight.
+	 *
+	 * @param {string} message Message.
+	 * @param {string} [focusId] Element id to focus.
+	 * @return {void}
+	 */
+	function showImportValidationError( message, focusId ) {
+		const status = document.getElementById( 'forwp-drive-inbox-status' );
+		setStatus( status, message, true );
+
+		if ( focusId === 'forwp-drive-import-language' ) {
+			setImportFieldInvalid(
+				'forwp-drive-import-language-wrap',
+				'forwp-drive-import-language',
+				'forwp-drive-import-language-error',
+				true,
+				message,
+				true
+			);
+		}
+		if ( focusId === 'forwp-drive-import-target' ) {
+			setImportFieldInvalid(
+				'forwp-drive-import-target-wrap',
+				'forwp-drive-import-target',
+				'forwp-drive-import-target-error',
+				true,
+				message,
+				true
+			);
+		}
+
+		if ( focusId ) {
+			const el = document.getElementById( focusId );
+			if ( el && typeof el.focus === 'function' ) {
+				el.focus();
+			}
+			const wrap =
+				focusId === 'forwp-drive-import-language'
+					? document.getElementById( 'forwp-drive-import-language-wrap' )
+					: focusId === 'forwp-drive-import-target'
+					? document.getElementById( 'forwp-drive-import-target-wrap' )
+					: el;
+			if ( wrap && typeof wrap.scrollIntoView === 'function' ) {
+				wrap.scrollIntoView( { behavior: 'smooth', block: 'nearest' } );
+			}
+		}
 	}
 
 	function setupImportLanguageUi( configOverride ) {
@@ -252,27 +612,402 @@
 		}
 
 		const config = configOverride || getMultilingualConfig();
+		const languages = getConfiguredLanguages( config );
+		// One language (or none): never show a pointless picker.
+		if ( ! config || languages.length <= 1 || ! config.requires_selection ) {
+			wrap.hidden = true;
+			select.innerHTML = '';
+			syncImportButtonState();
+			return;
+		}
+
+		wrap.hidden = false;
 		const strings = forwpDriveAdmin.strings || {};
-		if ( ! config || ! config.requires_selection ) {
+		const defaultCode =
+			( config.default_language &&
+				languages.some( ( language ) => language.code === config.default_language ) &&
+				String( config.default_language ) ) ||
+			( languages[0] && languages[0].code ) ||
+			'';
+		select.innerHTML = languages
+			.map(
+				( language ) =>
+					`<option value="${ escapeHtml( language.code ) }">${ escapeHtml(
+						language.name
+					) }</option>`
+			)
+			.join( '' );
+		select.value = defaultCode;
+		syncImportButtonState();
+	}
+
+	function nameSuggestsFeatured( name ) {
+		const base = String( name || '' )
+			.replace( /\.[^.]+$/, '' )
+			.toLowerCase();
+		return /(^|[-_\s])(cover|featured|hero|thumbnail|thumb)([-_\s]|$)/.test(
+			base
+		);
+	}
+
+	/**
+	 * Package images available for featured selection.
+	 *
+	 * @param {Object} doc Preview document.
+	 * @return {Array<{id: string, name: string}>}
+	 */
+	function getPackageImages( doc ) {
+		const files = Array.isArray( doc && doc.package_files )
+			? doc.package_files
+			: [];
+		return files
+			.filter(
+				( file ) =>
+					file &&
+					file.kind === 'image' &&
+					file.id &&
+					file.name
+			)
+			.map( ( file ) => ( {
+				id: String( file.id ),
+				name: String( file.name ),
+			} ) );
+	}
+
+	function dockPackageTools() {
+		const dock = document.getElementById( 'forwp-drive-package-dock' );
+		const pin = document.getElementById( 'forwp-drive-image-pin' );
+		if ( dock && pin ) {
+			dock.appendChild( pin );
+		}
+	}
+
+	function attachPackageToolsToSelectedCard() {
+		const pin = document.getElementById( 'forwp-drive-image-pin' );
+		if ( ! pin || pin.hidden ) {
+			dockPackageTools();
+			return;
+		}
+		const card = document.querySelector( '.forwp-drive-card.is-selected' );
+		if ( ! card ) {
+			dockPackageTools();
+			return;
+		}
+		let slot = card.querySelector( '.forwp-drive-card__tools' );
+		if ( ! slot ) {
+			slot = document.createElement( 'div' );
+			slot.className = 'forwp-drive-card__tools';
+			const folder = card.querySelector( '.forwp-drive-card__folder' );
+			const actions = card.querySelector( '.forwp-drive-card__actions' );
+			if ( folder ) {
+				folder.appendChild( slot );
+			} else if ( actions ) {
+				card.insertBefore( slot, actions );
+			} else {
+				card.appendChild( slot );
+			}
+		}
+		slot.appendChild( pin );
+	}
+
+	/**
+	 * @return {string} Selected Drive image file id (or empty).
+	 */
+	function getSelectedFeaturedImageId( doc ) {
+		const select = document.getElementById( 'forwp-drive-import-featured' );
+		if ( select && select.value ) {
+			return String( select.value );
+		}
+		if ( doc && doc.image_file_id ) {
+			return String( doc.image_file_id );
+		}
+		return '';
+	}
+
+	function setupFeaturedImageUi( doc ) {
+		const wrap = document.getElementById( 'forwp-drive-import-featured-wrap' );
+		const select = document.getElementById( 'forwp-drive-import-featured' );
+		if ( ! wrap || ! select ) {
+			return;
+		}
+
+		const images = getPackageImages( doc );
+		if ( ! images.length ) {
 			wrap.hidden = true;
 			select.innerHTML = '';
 			return;
 		}
 
+		const strings = forwpDriveAdmin.strings || {};
+		const suggestedLabel = strings.featuredImageSuggested || 'Suggested';
+		let featuredId = doc && doc.image_file_id ? String( doc.image_file_id ) : '';
+		if ( ! featuredId || ! images.some( ( image ) => image.id === featuredId ) ) {
+			const suggested = images.find( ( image ) =>
+				nameSuggestsFeatured( image.name )
+			);
+			featuredId = suggested ? suggested.id : images[ 0 ].id;
+		}
+
+		select.innerHTML = images
+			.map( ( image ) => {
+				const suggested = nameSuggestsFeatured( image.name )
+					? ` (${ suggestedLabel })`
+					: '';
+				return `<option value="${ escapeHtml( image.id ) }">${ escapeHtml(
+					image.name
+				) }${ escapeHtml( suggested ) }</option>`;
+			} )
+			.join( '' );
+		select.value = featuredId;
 		wrap.hidden = false;
-		const placeholder =
-			strings.selectLanguagePlaceholder || 'Select language…';
-		select.innerHTML =
-			`<option value="">${ escapeHtml( placeholder ) }</option>` +
-			( config.languages || [] )
-				.map(
-					( language ) =>
-						`<option value="${ escapeHtml( language.code ) }">${ escapeHtml(
-							language.name
-						) }</option>`
-				)
-				.join( '' );
-		select.value = '';
+	}
+
+	function getPackageDocuments( doc ) {
+		const files = Array.isArray( doc && doc.package_files )
+			? doc.package_files
+			: [];
+		return files.filter(
+			( file ) => file && file.kind === 'document' && file.id && file.name
+		);
+	}
+
+	function setupSourceFileUi( doc ) {
+		const wrap = document.getElementById( 'forwp-drive-import-source-wrap' );
+		const select = document.getElementById( 'forwp-drive-import-source-file' );
+		if ( ! wrap || ! select ) {
+			return;
+		}
+
+		const docs = getPackageDocuments( doc );
+		if ( docs.length < 2 ) {
+			wrap.hidden = true;
+			select.innerHTML = '';
+			return;
+		}
+
+		const selectedId = String( doc.selected_file_id || doc.file_id || '' );
+		select.innerHTML = docs
+			.map( ( file ) => {
+				const selected = String( file.id ) === selectedId ? ' selected' : '';
+				return `<option value="${ escapeHtml( String( file.id ) ) }"${ selected }>${ escapeHtml(
+					file.name
+				) }</option>`;
+			} )
+			.join( '' );
+		wrap.hidden = false;
+		select.onchange = () => {
+			const fileId = select.value;
+			if ( ! fileId || ! previewId ) {
+				return;
+			}
+			api( 'documents/' + previewId + '/source', {
+				method: 'POST',
+				body: JSON.stringify( { file_id: fileId } ),
+			} ).then( ( { ok, data } ) => {
+				if ( ok ) {
+					openPreview( previewId, { mode: getImportMode() } );
+				} else {
+					const status = document.getElementById( 'forwp-drive-inbox-status' );
+					setStatus( status, ( data && data.message ) || 'Could not switch file.', true );
+				}
+			} );
+		};
+	}
+
+	function getSelectedImageAlign() {
+		const selected = document.querySelector(
+			'input[name="forwp-drive-image-align"]:checked'
+		);
+		return selected ? String( selected.value || 'center' ) : 'center';
+	}
+
+	function isImageMarkerText( text ) {
+		return /^\[image:\s*[^\]]+\]$/i.test( String( text || '' ).trim() );
+	}
+
+	function getPreviewBodyHtml( body ) {
+		const clone = body.cloneNode( true );
+		clone
+			.querySelectorAll(
+				'.forwp-drive-image-marker__remove, .forwp-drive-preview__blocks-note'
+			)
+			.forEach( ( el ) => el.remove() );
+		clone.querySelectorAll( '.forwp-drive-image-marker' ).forEach( ( el ) => {
+			el.classList.remove( 'forwp-drive-image-marker' );
+			if ( ! el.className ) {
+				el.removeAttribute( 'class' );
+			}
+		} );
+		return clone.innerHTML;
+	}
+
+	function persistPreviewBody() {
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		if ( ! body || ! previewId ) {
+			return;
+		}
+		const html = getPreviewBodyHtml( body );
+		api( 'documents/' + previewId + '/body', {
+			method: 'POST',
+			body: JSON.stringify( { body_html: html } ),
+		} ).then( ( { ok } ) => {
+			if ( ok && previewDoc ) {
+				previewDoc.body_html = html;
+			}
+		} );
+	}
+
+	function decorateImageMarkers( body ) {
+		if ( ! body ) {
+			return;
+		}
+		const strings = forwpDriveAdmin.strings || {};
+		const removeLabel = strings.removeImageMarker || 'Remove';
+		body.querySelectorAll( 'p, h1, h2, h3, h4, h5, h6, li' ).forEach( ( node ) => {
+			if ( node.classList.contains( 'forwp-drive-preview__blocks-note' ) ) {
+				return;
+			}
+			if ( node.classList.contains( 'forwp-drive-image-marker' ) ) {
+				return;
+			}
+			if ( ! isImageMarkerText( node.textContent ) ) {
+				return;
+			}
+			node.classList.add( 'forwp-drive-image-marker' );
+			const button = document.createElement( 'button' );
+			button.type = 'button';
+			button.className =
+				'button-link-delete forwp-drive-image-marker__remove';
+			button.textContent = removeLabel;
+			node.appendChild( button );
+		} );
+	}
+
+	function bindPreviewBodyActions( body ) {
+		if ( ! body || body.dataset.drivePinBound === '1' ) {
+			return;
+		}
+		body.dataset.drivePinBound = '1';
+		body.addEventListener( 'click', ( event ) => {
+			const removeBtn = event.target.closest(
+				'.forwp-drive-image-marker__remove'
+			);
+			if ( removeBtn && body.contains( removeBtn ) ) {
+				event.preventDefault();
+				event.stopPropagation();
+				const marker = removeBtn.closest( '.forwp-drive-image-marker' );
+				if ( marker ) {
+					marker.remove();
+					persistPreviewBody();
+				}
+				return;
+			}
+
+			if ( ! pinSelectedName || ! previewId ) {
+				return;
+			}
+			if ( ! body.classList.contains( 'is-pinning' ) ) {
+				return;
+			}
+			if ( event.target.closest( '.forwp-drive-image-marker' ) ) {
+				return;
+			}
+			const node = event.target.closest( 'p, h1, h2, h3, h4, h5, h6, li' );
+			if (
+				! node ||
+				! body.contains( node ) ||
+				node.classList.contains( 'forwp-drive-preview__blocks-note' )
+			) {
+				return;
+			}
+			event.preventDefault();
+			const align = getSelectedImageAlign();
+			const marker = `[image:${ pinSelectedName } ${ align }]`;
+			const p = document.createElement( 'p' );
+			p.textContent = marker;
+			node.insertAdjacentElement( 'afterend', p );
+			decorateImageMarkers( body );
+			persistPreviewBody();
+		} );
+	}
+
+	function setupImagePinUi( doc ) {
+		const wrap = document.getElementById( 'forwp-drive-image-pin' );
+		const list = document.getElementById( 'forwp-drive-image-pin-list' );
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		const align = document.getElementById( 'forwp-drive-image-pin-align' );
+		if ( ! wrap || ! list || ! body ) {
+			return;
+		}
+
+		bindPreviewBodyActions( body );
+		decorateImageMarkers( body );
+
+		const images = getPackageImages( doc );
+		const docs = getPackageDocuments( doc );
+		const strings = forwpDriveAdmin.strings || {};
+		pinSelectedName = '';
+		body.classList.remove( 'is-pinning' );
+
+		if ( ! images.length && ! docs.length ) {
+			wrap.hidden = true;
+			list.innerHTML = '';
+			dockPackageTools();
+			return;
+		}
+
+		if ( align ) {
+			align.hidden = images.length === 0;
+		}
+
+		const destImage = escapeHtml( strings.destCoreImage || 'core/image' );
+		const destArticle = escapeHtml( strings.destArticle || 'Article' );
+
+		const docRows = docs
+			.map(
+				( file ) => `<div class="forwp-drive-image-pin__row forwp-drive-image-pin__row--doc">
+				<span class="forwp-drive-image-pin__name" title="${ escapeHtml(
+					file.name
+				) }">${ escapeHtml( file.name ) }</span>
+				<span class="forwp-drive-image-pin__dest">${ destArticle }</span>
+			</div>`
+			)
+			.join( '' );
+
+		const imageRows = images
+			.map(
+				( image ) => `<div class="forwp-drive-image-pin__row">
+				<button type="button" class="button forwp-drive-image-pin__file" data-image-name="${ escapeHtml(
+					image.name
+				) }" title="${ escapeHtml( image.name ) }">
+					<span class="forwp-drive-image-pin__name">${ escapeHtml( image.name ) }</span>
+					<span class="forwp-drive-image-pin__dest">${ destImage }</span>
+				</button>
+			</div>`
+			)
+			.join( '' );
+
+		wrap.hidden = false;
+		list.innerHTML = docRows + imageRows;
+
+		list.querySelectorAll( '[data-image-name]' ).forEach( ( button ) => {
+			button.addEventListener( 'click', () => {
+				const already = button.classList.contains( 'is-selected' );
+				list.querySelectorAll( '[data-image-name]' ).forEach( ( el ) =>
+					el.classList.remove( 'is-selected' )
+				);
+				if ( already ) {
+					pinSelectedName = '';
+					body.classList.remove( 'is-pinning' );
+					return;
+				}
+				button.classList.add( 'is-selected' );
+				pinSelectedName = button.getAttribute( 'data-image-name' ) || '';
+				body.classList.toggle( 'is-pinning', !! pinSelectedName );
+			} );
+		} );
+
+		attachPackageToolsToSelectedCard();
 	}
 
 	function resetImportTargetSelect( message ) {
@@ -311,6 +1046,7 @@
 				? strings.updateExistingPost || 'Update existing post'
 				: strings.importAsDraft || 'Import as draft';
 		}
+		syncImportButtonState();
 	}
 
 	function renderImportTargets( data ) {
@@ -325,6 +1061,7 @@
 				'<option value="">' +
 				escapeHtml( 'No matching posts found' ) +
 				'</option>';
+			syncImportButtonState();
 			return;
 		}
 
@@ -340,6 +1077,7 @@
 		if ( data.suggested_id ) {
 			select.value = String( data.suggested_id );
 		}
+		syncImportButtonState();
 	}
 
 	function loadImportTargets( doc ) {
@@ -383,9 +1121,10 @@
 
 		if ( requiresImportLanguage() ) {
 			if ( ! lang ) {
-				window.alert(
+				showImportValidationError(
 					forwpDriveAdmin.strings.languageRequired ||
-						'Select a content language for this import.'
+						'Select a content language for this import.',
+					'forwp-drive-import-language'
 				);
 				return null;
 			}
@@ -398,14 +1137,21 @@
 			const select = document.getElementById( 'forwp-drive-import-target' );
 			const targetId = select ? parseInt( select.value, 10 ) : 0;
 			if ( ! targetId ) {
-				window.alert(
+				showImportValidationError(
 					forwpDriveAdmin.strings.updateTargetRequired ||
-						'Select an existing post to update.'
+						'Select an existing post to update.',
+					'forwp-drive-import-target'
 				);
 				return null;
 			}
 			payload.target_post_id = targetId;
 		}
+
+		const featuredId = getSelectedFeaturedImageId( previewDoc );
+		if ( featuredId ) {
+			payload.featured_image_file_id = featuredId;
+		}
+
 		return payload;
 	}
 
@@ -440,6 +1186,29 @@
 
 		if ( hasMessage && typeof el.scrollIntoView === 'function' ) {
 			el.scrollIntoView( { behavior: 'smooth', block: 'nearest' } );
+		}
+	}
+
+	function setBusyOverlay( message ) {
+		const overlay = document.getElementById( 'forwp-drive-busy' );
+		const text = document.getElementById( 'forwp-drive-busy-message' );
+		const wrap = document.querySelector( '.forwp-drive-inbox-dashboard' );
+		const on = !! message;
+		if ( text ) {
+			text.textContent = message || '';
+		}
+		if ( overlay ) {
+			overlay.hidden = ! on;
+			if ( on && typeof overlay.querySelector === 'function' ) {
+				const panel = overlay.querySelector( '.forwp-drive-busy__panel' );
+				if ( panel && typeof panel.focus === 'function' ) {
+					panel.focus();
+				}
+			}
+		}
+		document.body.classList.toggle( 'forwp-drive-is-busy', on );
+		if ( wrap ) {
+			wrap.setAttribute( 'aria-busy', on ? 'true' : 'false' );
 		}
 	}
 
@@ -587,6 +1356,7 @@
 			card.setAttribute( 'aria-selected', 'false' );
 		} );
 		if ( ! id ) {
+			dockPackageTools();
 			return;
 		}
 		const selected = document.querySelector(
@@ -595,6 +1365,7 @@
 		if ( selected ) {
 			selected.classList.add( 'is-selected' );
 			selected.setAttribute( 'aria-selected', 'true' );
+			attachPackageToolsToSelectedCard();
 		}
 	}
 
@@ -611,6 +1382,19 @@
 		}
 		previewId = null;
 		previewDoc = null;
+		const featuredWrap = document.getElementById(
+			'forwp-drive-import-featured-wrap'
+		);
+		const featuredSelect = document.getElementById(
+			'forwp-drive-import-featured'
+		);
+		if ( featuredWrap ) {
+			featuredWrap.hidden = true;
+		}
+		if ( featuredSelect ) {
+			featuredSelect.innerHTML = '';
+		}
+		dockPackageTools();
 		setSelectedQueueCard( null );
 	}
 
@@ -620,16 +1404,25 @@
 			return;
 		}
 
+		const isGithub = activeSourceSlug === 'github';
 		let syncHint = '';
-		if ( lastSync && typeof lastSync.scanned === 'number' ) {
+		if ( ! isGithub && lastSync && typeof lastSync.scanned === 'number' ) {
 			if ( lastSync.scanned === 0 ) {
 				syncHint =
-					'<p>No Google Docs found in <code>incoming</code>. Use a native Google Doc (not a shortcut).</p>';
+					'<p>No articles found in <code>incoming</code>. Use a Google Doc, Markdown (<code>.md</code>), or <code>.docx</code> (not a shortcut).</p>';
 			} else if ( ( lastSync.ready_total ?? 0 ) === 0 ) {
 				syncHint =
-					'<p>Files were seen in Drive but none are ready. Sync again after editing, or check the file is a native Google Doc.</p>';
+					'<p>Files were seen in Drive but none are ready. Sync again after editing, or check the file is a Google Doc, Markdown, or .docx.</p>';
 			}
 		}
+
+		const checklist = isGithub
+			? `<li>Each article: a subfolder inside <strong>incoming/</strong> with a <strong>.md</strong> file plus png/jpg images.</li>
+					<li>Click <strong>Sync</strong> after pushing to the repo.</li>
+					<li>Already imported? Check the <strong>published</strong> path in the repo.</li>`
+			: `<li>Each article: a subfolder inside <strong>incoming/</strong> with a <strong>Google Doc</strong>, <strong>.md</strong>, or <strong>.docx</strong> plus a featured <strong>image</strong>.</li>
+					<li>Click <strong>Sync from source</strong> after adding or editing the file.</li>
+					<li>Already imported? Check the <strong>published</strong> folder on Drive.</li>`;
 
 		list.innerHTML = `
 			<div class="forwp-drive-empty-panel forwp-drive-admin-chrome">
@@ -637,9 +1430,7 @@
 				${ syncHint }
 				<p class="forwp-drive-empty-panel__label">Checklist</p>
 				<ul class="forwp-drive-empty-panel__list">
-					<li>Each article: a subfolder inside <strong>incoming/</strong> with a <strong>Google Doc</strong> or <strong>.docx</strong> plus a featured <strong>image</strong>.</li>
-					<li>Click <strong>Sync from Drive</strong> after adding or editing the file.</li>
-					<li>Already imported? Check the <strong>published</strong> folder on Drive.</li>
+					${ checklist }
 				</ul>
 			</div>`;
 		showWorkspacePlaceholder();
@@ -657,6 +1448,7 @@
 		}
 
 		const keepId = previewId;
+		dockPackageTools();
 		list.innerHTML = documents
 			.map( ( doc ) => {
 				const title = doc.title || doc.file_name || '';
@@ -683,9 +1475,23 @@
 				const meta = metaParts.length
 					? `<div class="forwp-drive-card__meta">${ metaParts.join( ' · ' ) }</div>`
 					: '';
-				const previewLabel = escapeHtml(
-					forwpDriveAdmin.strings.previewAndImport || 'Preview & import'
+				const folderBlock = renderPackageFolderBlock( doc );
+				const openDriveLabel = escapeHtml(
+					forwpDriveAdmin.strings.editInGoogleDocs ||
+						'Edit in Google Docs'
 				);
+				const importLabel = escapeHtml(
+					forwpDriveAdmin.strings.queueImport || 'Import'
+				);
+				const rejectLabel = escapeHtml(
+					forwpDriveAdmin.strings.reject || 'Reject'
+				);
+				const driveUrl = driveFileUrl( doc.file_id );
+				const driveLink = driveUrl
+					? `<a class="forwp-drive-card__link" href="${ escapeHtml(
+							driveUrl
+					  ) }" target="_blank" rel="noopener noreferrer" data-action="open-external">${ openDriveLabel }</a>`
+					: '';
 				return `
 				<article
 					class="forwp-drive-card forwp-drive-admin-chrome"
@@ -697,10 +1503,12 @@
 				>
 					<h3>${ escapeHtml( title ) }</h3>
 					${ meta }
+					${ folderBlock }
 					${ warning }
 					<div class="forwp-drive-card__actions">
-						<button type="button" class="button button-primary" data-action="preview" data-id="${ doc.id }">${ previewLabel }</button>
-						<button type="button" class="button" data-action="reject" data-id="${ doc.id }">Reject</button>
+						<button type="button" class="button button-primary forwp-drive-card__import" data-action="preview" data-id="${ doc.id }">${ importLabel }</button>
+						${ driveLink }
+						<button type="button" class="button-link button-link-delete forwp-drive-card__reject" data-action="reject" data-id="${ doc.id }">${ rejectLabel }</button>
 					</div>
 				</article>`;
 			} )
@@ -711,6 +1519,9 @@
 			documents.some( ( doc ) => String( doc.id ) === String( keepId ) );
 		if ( stillThere ) {
 			setSelectedQueueCard( keepId );
+			if ( previewDoc ) {
+				setupImagePinUi( previewDoc );
+			}
 		} else {
 			showWorkspacePlaceholder();
 		}
@@ -740,6 +1551,85 @@
 		return div.innerHTML;
 	}
 
+	function renderPackageFolderBlock( doc ) {
+		const folderId = doc && doc.package_folder_id ? String( doc.package_folder_id ) : '';
+		const files = Array.isArray( doc && doc.package_files ) ? doc.package_files : [];
+		if ( ! folderId && ! files.length ) {
+			return '';
+		}
+
+		const strings = forwpDriveAdmin.strings || {};
+		const parts = [];
+		const docsCount =
+			typeof doc.package_docs === 'number'
+				? doc.package_docs
+				: files.filter( ( f ) => f.kind === 'document' ).length;
+		const imagesCount =
+			typeof doc.package_images === 'number'
+				? doc.package_images
+				: files.filter( ( f ) => f.kind === 'image' ).length;
+
+		if ( docsCount ) {
+			parts.push(
+				docsCount === 1
+					? strings.packageDocOne || '1 doc'
+					: ( strings.packageDocsMany || '%d docs' ).replace(
+							'%d',
+							String( docsCount )
+					  )
+			);
+		}
+		if ( imagesCount ) {
+			parts.push(
+				imagesCount === 1
+					? strings.packageImageOne || '1 image'
+					: ( strings.packageImagesMany || '%d images' ).replace(
+							'%d',
+							String( imagesCount )
+					  )
+			);
+		}
+
+		const summary =
+			parts.length > 0
+				? parts.join( ' · ' )
+				: strings.packageFolder || 'Folder';
+		const openLabel = escapeHtml( strings.openFolder || 'Open folder' );
+		const folderUrl = driveFolderUrl( folderId );
+		const openLink = folderUrl
+			? `<a class="forwp-drive-card__link" href="${ escapeHtml(
+					folderUrl
+			  ) }" target="_blank" rel="noopener noreferrer" data-action="open-external">${ openLabel }</a>`
+			: '';
+
+		const nameItems = files
+			.map( ( file ) => {
+				const kind =
+					file.kind === 'image'
+						? 'image'
+						: file.kind === 'document'
+						? 'doc'
+						: 'file';
+				return `<li class="forwp-drive-card__folder-file forwp-drive-card__folder-file--${ kind }">${ escapeHtml(
+					file.name || ''
+				) }</li>`;
+			} )
+			.join( '' );
+		const list =
+			files.length > 0
+				? `<ul class="forwp-drive-card__folder-list">${ nameItems }</ul>`
+				: '';
+
+		return `<div class="forwp-drive-card__folder">
+			<div class="forwp-drive-card__folder-head">
+				<span class="forwp-drive-card__folder-summary">${ escapeHtml( summary ) }</span>
+				${ openLink }
+			</div>
+			${ list }
+			<div class="forwp-drive-card__tools"></div>
+		</div>`;
+	}
+
 	function driveFolderUrl( folderId ) {
 		const id = String( folderId || '' ).trim();
 		if ( ! id ) {
@@ -748,6 +1638,19 @@
 		return (
 			'https://drive.google.com/drive/folders/' +
 			encodeURIComponent( id )
+		);
+	}
+
+	function driveFileUrl( fileId ) {
+		const id = String( fileId || '' ).trim();
+		if ( ! id ) {
+			return '';
+		}
+		// Native Google Doc — open the article in the Docs editor.
+		return (
+			'https://docs.google.com/document/d/' +
+			encodeURIComponent( id ) +
+			'/edit'
 		);
 	}
 
@@ -864,6 +1767,7 @@
 				connection: data.drive_connection,
 				incomingId: data.incoming_id || '',
 			};
+			updateAdminMenuIncomingCount( docs.length );
 			renderInboxSourceTabs();
 			applyActiveSourceChrome();
 			setStatus( status, '' );
@@ -912,8 +1816,14 @@
 		body.innerHTML = '';
 		api( 'documents/' + id ).then( ( { ok, data } ) => {
 			if ( ! ok ) {
+				const detail =
+					data && data.message
+						? String( data.message )
+						: 'Could not load preview.';
 				meta.innerHTML =
-					'<p class="forwp-drive-preview__meta">Could not load preview.</p>';
+					'<p class="forwp-drive-preview__meta">' +
+					escapeHtml( detail ) +
+					'</p>';
 				return;
 			}
 			if ( String( previewId ) !== String( id ) ) {
@@ -941,6 +1851,9 @@
 			}
 			setImportModeUi();
 			setupImportLanguageUi( data.multilingual );
+			setupSourceFileUi( data );
+			setupFeaturedImageUi( data );
+			setupImagePinUi( data );
 			if ( requiresImportLanguage() ) {
 				resetImportTargetSelect();
 			}
@@ -953,38 +1866,56 @@
 		if ( payload === null ) {
 			return;
 		}
-		const confirmText =
-			payload.mode === 'update'
-				? forwpDriveAdmin.strings.updateConfirm
-				: forwpDriveAdmin.strings.importConfirm;
-		if ( ! window.confirm( confirmText ) ) {
-			return;
-		}
-		const status = document.getElementById( 'forwp-drive-inbox-status' );
-		setStatus( status, forwpDriveAdmin.strings.importRunning );
-		api( 'documents/' + id + '/import', {
-			method: 'POST',
-			body: JSON.stringify( payload ),
-		} ).then( ( { ok, data } ) => {
-			if ( ! ok ) {
-				setStatus( status, data.message || 'Import failed.', true );
+		const strings = forwpDriveAdmin.strings || {};
+		const isUpdate = payload.mode === 'update';
+		confirmDialog( {
+			title: isUpdate
+				? strings.dialogUpdateTitle || 'Update post'
+				: strings.dialogImportTitle || 'Import document',
+			message: isUpdate ? strings.updateConfirm : strings.importConfirm,
+			confirmLabel: isUpdate
+				? strings.updateExistingPost || 'Update existing post'
+				: strings.importAsDraft || 'Import as draft',
+		} ).then( ( confirmed ) => {
+			if ( ! confirmed ) {
 				return;
 			}
-			if ( data.edit_url ) {
-				window.location.href = data.edit_url;
-				return;
-			}
-			loadInbox();
+			const status = document.getElementById( 'forwp-drive-inbox-status' );
+			setBusyOverlay( strings.importRunning || 'Importing…' );
+			setStatus( status, strings.importRunning, false, true );
+			api( 'documents/' + id + '/import', {
+				method: 'POST',
+				body: JSON.stringify( payload ),
+			} ).then( ( { ok, data } ) => {
+				if ( ! ok ) {
+					setBusyOverlay( '' );
+					setStatus( status, data.message || 'Import failed.', true );
+					return;
+				}
+				if ( data.edit_url ) {
+					window.location.href = data.edit_url;
+					return;
+				}
+				loadInbox();
+			} );
 		} );
 	}
 
 	function rejectDoc( id ) {
-		if ( ! window.confirm( forwpDriveAdmin.strings.rejectConfirm ) ) {
-			return;
-		}
-		api( 'documents/' + id + '/reject', { method: 'POST' } ).then( () => {
-			showWorkspacePlaceholder();
-			loadInbox();
+		const strings = forwpDriveAdmin.strings || {};
+		confirmDialog( {
+			title: strings.dialogRejectTitle || 'Reject document',
+			message: strings.rejectConfirm,
+			confirmLabel: strings.reject || 'Reject',
+			danger: true,
+		} ).then( ( confirmed ) => {
+			if ( ! confirmed ) {
+				return;
+			}
+			api( 'documents/' + id + '/reject', { method: 'POST' } ).then( () => {
+				showWorkspacePlaceholder();
+				loadInbox();
+			} );
 		} );
 	}
 
@@ -1009,6 +1940,7 @@
 	let settingsCache = null;
 	let templateRows = [];
 	let blockMappingRows = [];
+	let patternsCustomized = false;
 	let selectedSourceSlug = null;
 	const GOOGLE_DRIVE_SLUG = 'google_drive';
 
@@ -1214,6 +2146,31 @@
 			.join( '' );
 	}
 
+	function fillGitHubSettings( github ) {
+		const owner = document.getElementById( 'forwp-drive-github-owner' );
+		const repo = document.getElementById( 'forwp-drive-github-repo' );
+		const branch = document.getElementById( 'forwp-drive-github-branch' );
+		const incoming = document.getElementById( 'forwp-drive-github-incoming' );
+		const tokenStatus = document.getElementById( 'forwp-drive-github-token-status' );
+		if ( owner ) {
+			owner.value = github.owner || '';
+		}
+		if ( repo ) {
+			repo.value = github.repo || '';
+		}
+		if ( branch ) {
+			branch.value = github.branch || 'main';
+		}
+		if ( incoming ) {
+			incoming.value = github.incoming || 'incoming';
+		}
+		if ( tokenStatus ) {
+			tokenStatus.textContent = github.has_token
+				? 'A token is saved. Leave the field blank to keep it.'
+				: 'No token saved yet.';
+		}
+	}
+
 	function openSourceDetail( slug ) {
 		const sources = settingsCache?.sources || [];
 		const row = sources.find( ( s ) => s.slug === slug );
@@ -1226,6 +2183,7 @@
 		const detail = document.getElementById( 'forwp-drive-source-detail-wrap' );
 		const title = document.getElementById( 'forwp-drive-source-detail-title' );
 		const googleSplit = document.getElementById( 'forwp-drive-google-split' );
+		const githubSplit = document.getElementById( 'forwp-drive-github-split' );
 		const planned = document.getElementById( 'forwp-drive-planned-detail' );
 		const plannedText = document.getElementById( 'forwp-drive-planned-detail-text' );
 
@@ -1240,14 +2198,22 @@
 		}
 
 		const isGoogle = slug === GOOGLE_DRIVE_SLUG && row.implemented;
+		const isGithub = slug === 'github' && row.implemented;
 		if ( googleSplit ) {
 			googleSplit.hidden = ! isGoogle;
 		}
-		if ( planned ) {
-			planned.hidden = isGoogle;
+		if ( githubSplit ) {
+			githubSplit.hidden = ! isGithub;
 		}
-		if ( plannedText && ! isGoogle ) {
+		if ( planned ) {
+			planned.hidden = isGoogle || isGithub;
+		}
+		if ( plannedText && ! isGoogle && ! isGithub ) {
 			plannedText.textContent = row.status;
+		}
+
+		if ( isGithub && settingsCache && settingsCache.github ) {
+			fillGitHubSettings( settingsCache.github );
 		}
 
 		renderSourceRegistry( sources );
@@ -1458,9 +2424,18 @@
 	}
 
 	function renderBlockMappingRows() {
-		const tbody = document.getElementById( 'forwp-drive-block-mapping-rows' );
-		if ( ! tbody || ! settingsCache ) {
+		if ( ! settingsCache ) {
 			return;
+		}
+
+		const tbody = document.getElementById( 'forwp-drive-block-mapping-rows' );
+		const emptyEl = document.getElementById( 'forwp-drive-patterns-empty' );
+		if ( ! tbody ) {
+			return;
+		}
+
+		if ( emptyEl ) {
+			emptyEl.hidden = blockMappingRows.length > 0;
 		}
 
 		tbody.innerHTML = blockMappingRows
@@ -1468,26 +2443,47 @@
 				const status = row.template_status
 					? `<p class="description">${ escapeHtml( row.template_status ) }</p>`
 					: '';
+				const isImage = row.template === 'core-image';
+				const headingsValue = isImage
+					? ''
+					: escapeHtml( row.section_headings || '' );
+				const headingsPlaceholder = isImage
+					? '— [image:filename] markers —'
+					: 'FAQ, Frequently Asked Questions';
 				return `<tr data-index="${ index }">
-					<td><input type="checkbox" class="forwp-drive-block-rule-enabled" ${
-						row.enabled ? 'checked' : ''
-					} /></td>
+					<td class="forwp-drive-block-mapping-table__on">
+						<label class="forwp-drive-block-rule-enabled-label">
+							<input type="checkbox" class="forwp-drive-block-rule-enabled" ${
+								row.enabled ? 'checked' : ''
+							} />
+							<span class="screen-reader-text">${ escapeHtml(
+								'Enable pattern'
+							) }</span>
+						</label>
+					</td>
 					<td>
 						<select class="forwp-drive-block-rule-template">${ buildBlockTemplateOptions(
 							row.template || '4wp-faq'
 						) }</select>
 						${ status }
 					</td>
-					<td><input type="text" class="regular-text forwp-drive-block-rule-headings" value="${ escapeHtml(
-						row.section_headings || ''
-					) }" /></td>
-					<td><input type="checkbox" class="forwp-drive-block-rule-keep-heading" ${
+					<td><input type="text" class="regular-text forwp-drive-block-rule-headings" value="${ headingsValue }" placeholder="${ escapeHtml(
+						headingsPlaceholder
+					) }"${ isImage ? ' disabled' : '' } /></td>
+					<td class="forwp-drive-block-mapping-table__keep"><input type="checkbox" class="forwp-drive-block-rule-keep-heading" title="Keep H2 in content" ${
 						row.keep_section_heading ? 'checked' : ''
-					} /></td>
-					<td><button type="button" class="button-link forwp-drive-block-rule-remove" data-block-remove="${ index }">Remove</button></td>
+					}${ isImage ? ' disabled' : '' } /></td>
+					<td class="forwp-drive-block-mapping-table__actions"><button type="button" class="button-link-delete forwp-drive-block-rule-remove" data-block-remove="${ index }">Delete</button></td>
 				</tr>`;
 			} )
 			.join( '' );
+
+		tbody.querySelectorAll( '.forwp-drive-block-rule-template' ).forEach( ( select ) => {
+			select.addEventListener( 'change', () => {
+				blockMappingRows = collectBlockMappingFromDom().rules;
+				renderBlockMappingRows();
+			} );
+		} );
 	}
 
 	function collectBlockMappingFromDom() {
@@ -1505,14 +2501,47 @@
 			const keepEl = tr.querySelector( '.forwp-drive-block-rule-keep-heading' );
 			rows.push( {
 				id: base.id || 'rule_' + Date.now() + '_' + index,
+				post_id: base.post_id || 0,
+				preset_slug: base.preset_slug || '',
+				origin: base.origin || 'custom',
+				label: base.label || '',
 				enabled: !! ( enabledEl && enabledEl.checked ),
 				template: templateEl ? templateEl.value : base.template || '4wp-faq',
-				section_headings: headingsEl ? headingsEl.value.trim() : '',
+				section_headings: headingsEl ? headingsEl.value.trim() : base.section_headings || '',
 				keep_section_heading: !! ( keepEl && keepEl.checked ),
 			} );
 		} );
 
 		return { rules: rows };
+	}
+
+	function applyPatternsPayload( data ) {
+		if ( ! data ) {
+			return;
+		}
+		patternsCustomized = true;
+		blockMappingRows = ( data.rules || [] ).map( ( rule ) => ( { ...rule } ) );
+		if ( settingsCache ) {
+			settingsCache.block_mapping = data;
+		} else {
+			settingsCache = { block_mapping: data };
+		}
+		renderBlockMappingRows();
+	}
+
+	function loadPatternsPage() {
+		const status = document.getElementById( 'forwp-drive-patterns-status' );
+		api( 'patterns' ).then( ( { ok, data } ) => {
+			if ( ! ok ) {
+				setStatus(
+					status,
+					( data && data.message ) || 'Could not load patterns.',
+					true
+				);
+				return;
+			}
+			applyPatternsPayload( data );
+		} );
 	}
 
 	function collectTemplateRowsFromDom() {
@@ -1574,6 +2603,7 @@
 
 			settingsCache = data;
 			templateRows = ( data.template_fields || [] ).map( ( f ) => ( { ...f } ) );
+			patternsCustomized = !! data.block_mapping?.customized;
 			blockMappingRows = ( data.block_mapping?.rules || [] ).map( ( rule ) => ( { ...rule } ) );
 
 			if ( data.redirect_uri ) {
@@ -1719,11 +2749,16 @@
 			if ( previewDoc ) {
 				loadImportTargets( previewDoc );
 			}
+			syncImportButtonState();
 		}
 		if ( target instanceof HTMLSelectElement && target.id === 'forwp-drive-import-language' ) {
 			if ( previewDoc ) {
 				loadImportTargets( previewDoc );
 			}
+			syncImportButtonState();
+		}
+		if ( target instanceof HTMLSelectElement && target.id === 'forwp-drive-import-target' ) {
+			syncImportButtonState();
 		}
 	} );
 
@@ -1750,6 +2785,10 @@
 			return;
 		}
 
+		if ( target.closest( '#forwp-drive-image-pin' ) ) {
+			return;
+		}
+
 		const connectBtn = target.closest( '#forwp-drive-connect' );
 		if ( connectBtn && connectBtn.getAttribute( 'aria-disabled' ) === 'true' ) {
 			event.preventDefault();
@@ -1759,6 +2798,10 @@
 		const actionEl = target.closest( '[data-action]' );
 		const action = actionEl ? actionEl.getAttribute( 'data-action' ) : null;
 		const id = actionEl ? actionEl.getAttribute( 'data-id' ) : null;
+		if ( action === 'open-external' ) {
+			event.stopPropagation();
+			return;
+		}
 		if ( action === 'source-tab' && actionEl ) {
 			const slug = actionEl.getAttribute( 'data-source' );
 			if ( slug ) {
@@ -1796,31 +2839,72 @@
 		}
 		const disconnectBtn = target.closest( '#forwp-drive-disconnect' );
 		if ( disconnectBtn ) {
-			if (
-				! window.confirm(
-					forwpDriveAdmin.strings.disconnectConfirm ||
-						'Disconnect Google Drive from this site?'
-				)
-			) {
-				return;
-			}
-			const status = document.getElementById( 'forwp-drive-settings-status' );
-			setStatus(
-				status,
-				forwpDriveAdmin.strings.disconnectRunning || 'Disconnecting…'
-			);
-			api( 'oauth/disconnect', { method: 'POST' } ).then( ( { ok, data } ) => {
+			const strings = forwpDriveAdmin.strings || {};
+			confirmDialog( {
+				title: strings.dialogDisconnectTitle || 'Disconnect Drive',
+				message:
+					strings.disconnectConfirm ||
+					'Disconnect Google Drive from this site?',
+				confirmLabel: strings.dialogConfirm || 'Confirm',
+				danger: true,
+			} ).then( ( confirmed ) => {
+				if ( ! confirmed ) {
+					return;
+				}
+				const status = document.getElementById(
+					'forwp-drive-settings-status'
+				);
 				setStatus(
 					status,
-					ok
-						? data.message || 'Disconnected.'
-						: data.message || 'Could not disconnect.',
+					strings.disconnectRunning || 'Disconnecting…'
+				);
+				api( 'oauth/disconnect', { method: 'POST' } ).then(
+					( { ok, data } ) => {
+						setStatus(
+							status,
+							ok
+								? data.message || 'Disconnected.'
+								: data.message || 'Could not disconnect.',
+							! ok
+						);
+						if ( ok ) {
+							loadSettings();
+						}
+					}
+				);
+			} );
+			return;
+		}
+		if ( target.id === 'forwp-drive-save-github' ) {
+			const status = document.getElementById( 'forwp-drive-settings-status' );
+			const owner = document.getElementById( 'forwp-drive-github-owner' );
+			const repo = document.getElementById( 'forwp-drive-github-repo' );
+			const branch = document.getElementById( 'forwp-drive-github-branch' );
+			const incoming = document.getElementById( 'forwp-drive-github-incoming' );
+			const token = document.getElementById( 'forwp-drive-github-token' );
+			api( 'settings', {
+				method: 'POST',
+				body: JSON.stringify( {
+					github: {
+						owner: owner ? owner.value.trim() : '',
+						repo: repo ? repo.value.trim() : '',
+						branch: branch ? branch.value.trim() : 'main',
+						incoming: incoming ? incoming.value.trim() : 'incoming',
+						token: token ? token.value : '',
+					},
+				} ),
+			} ).then( ( { ok, data } ) => {
+				setStatus(
+					status,
+					ok ? data.message || 'Saved.' : data.message || 'Error.',
 					! ok
 				);
-				if ( ok ) {
-					loadSettings();
+				if ( ok && token ) {
+					token.value = '';
 				}
+				loadSettings();
 			} );
+			return;
 		}
 		if ( target.id === 'forwp-drive-save-credentials' ) {
 			const status = document.getElementById( 'forwp-drive-settings-status' );
@@ -1845,38 +2929,49 @@
 			} );
 		}
 		if ( target.id === 'forwp-drive-clear-credentials' ) {
-			if (
-				! window.confirm(
-					forwpDriveAdmin.strings.clearCredentialsConfirm ||
-						'Clear saved Client ID and Client Secret? This also disconnects your Drive account.'
-				)
-			) {
-				return;
-			}
-			const status = document.getElementById( 'forwp-drive-settings-status' );
-			const clearBtn = document.getElementById( 'forwp-drive-clear-credentials' );
-			setStatus(
-				status,
-				forwpDriveAdmin.strings.clearCredentialsRunning || 'Clearing…'
-			);
-			if ( clearBtn ) {
-				clearBtn.disabled = true;
-			}
-			api( 'settings', {
-				method: 'POST',
-				body: JSON.stringify( { clear_credentials: true } ),
-			} ).then( ( { ok, data } ) => {
+			const strings = forwpDriveAdmin.strings || {};
+			confirmDialog( {
+				title: strings.dialogClearCredsTitle || 'Clear credentials',
+				message:
+					strings.clearCredentialsConfirm ||
+					'Clear saved Client ID and Client Secret? This also disconnects your Drive account.',
+				confirmLabel: strings.dialogConfirm || 'Confirm',
+				danger: true,
+			} ).then( ( confirmed ) => {
+				if ( ! confirmed ) {
+					return;
+				}
+				const status = document.getElementById(
+					'forwp-drive-settings-status'
+				);
+				const clearBtn = document.getElementById(
+					'forwp-drive-clear-credentials'
+				);
 				setStatus(
 					status,
-					ok ? data.message || 'Cleared.' : data.message || 'Error.',
-					! ok
+					strings.clearCredentialsRunning || 'Clearing…'
 				);
-				if ( ok ) {
-					loadSettings();
-				} else if ( clearBtn ) {
-					clearBtn.disabled = false;
+				if ( clearBtn ) {
+					clearBtn.disabled = true;
 				}
+				api( 'settings', {
+					method: 'POST',
+					body: JSON.stringify( { clear_credentials: true } ),
+				} ).then( ( { ok, data } ) => {
+					setStatus(
+						status,
+						ok ? data.message || 'Cleared.' : data.message || 'Error.',
+						! ok
+					);
+					if ( ok ) {
+						loadSettings();
+					}
+					if ( clearBtn ) {
+						clearBtn.disabled = false;
+					}
+				} );
 			} );
+			return;
 		}
 		const copyRedirectBtn = target.closest( '.forwp-drive-copy-redirect' );
 		if ( copyRedirectBtn ) {
@@ -1954,6 +3049,25 @@
 				loadSettings();
 			} );
 		}
+		if ( target.id === 'forwp-drive-save-patterns' ) {
+			const status =
+				document.getElementById( 'forwp-drive-patterns-status' ) ||
+				document.getElementById( 'forwp-drive-settings-status' );
+			const payload = collectBlockMappingFromDom();
+			api( 'patterns', {
+				method: 'POST',
+				body: JSON.stringify( payload ),
+			} ).then( ( { ok, data } ) => {
+				setStatus(
+					status,
+					ok ? data.message || 'Patterns saved.' : data.message || 'Error.',
+					! ok
+				);
+				if ( ok ) {
+					applyPatternsPayload( data );
+				}
+			} );
+		}
 		if ( target.id === 'forwp-drive-save-import-template' ) {
 			const status = document.getElementById( 'forwp-drive-settings-status' );
 			const postType = document.getElementById( 'forwp-drive-import-post-type' );
@@ -1961,7 +3075,6 @@
 				method: 'POST',
 				body: JSON.stringify( {
 					import_post_type: postType ? postType.value : 'post',
-					block_mapping: collectBlockMappingFromDom(),
 					template_fields: collectTemplateRowsFromDom(),
 				} ),
 			} ).then( ( { ok, data } ) => {
@@ -1982,7 +3095,9 @@
 				enabled: true,
 				template: '4wp-faq',
 				section_headings: 'FAQ, Frequently Asked Questions',
-				keep_section_heading: true,
+				keep_section_heading: false,
+				origin: 'custom',
+				label: '',
 			} );
 			renderBlockMappingRows();
 		}
@@ -2055,5 +3170,10 @@
 	if ( document.getElementById( 'forwp-drive-source-registry-grid' ) ) {
 		initSettingsChrome();
 		loadSettings();
+	} else if (
+		document.getElementById( 'forwp-drive-block-mapping-rows' ) ||
+		document.getElementById( 'forwp-drive-patterns-preset-list' )
+	) {
+		loadPatternsPage();
 	}
 } )();

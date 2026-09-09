@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive\Blocks;
 
+use ForWP\Drive\Blocks\Recipes\Core_Image_Recipe;
 use ForWP\Drive\Blocks\Recipes\Faq_Accordion_Recipe;
 
 defined( 'ABSPATH' ) || exit;
@@ -28,6 +29,7 @@ final class Block_Recipe_Registry {
 		$map = apply_filters(
 			'forwp_drive_block_recipe_types',
 			array(
+				'core-image'    => Core_Image_Recipe::class,
 				'faq-accordion' => Faq_Accordion_Recipe::class,
 			)
 		);

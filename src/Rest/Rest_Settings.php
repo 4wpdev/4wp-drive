@@ -8,10 +8,12 @@
 namespace ForWP\Drive\Rest;
 
 use ForWP\Drive\Blocks\Block_Mapping_Settings;
+use ForWP\Drive\Admin\GitHub_Settings;
 use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Parse\Template_Config;
+use ForWP\Drive\Patterns\Pattern_Library;
 use ForWP\Drive\Source_Registry;
 use ForWP\Drive\Sync\Incoming_Scanner;
 use ForWP\Drive\Sync\Sync_Scheduler;
@@ -120,6 +122,7 @@ final class Rest_Settings {
 				'sample_template'              => $template->build_sample_document(),
 				'block_mapping'                => $block_map->get_for_rest(),
 				'setup_links'                  => Google_OAuth::get_setup_links(),
+				'github'                       => GitHub_Settings::get_public(),
 			),
 			200
 		);
@@ -198,9 +201,22 @@ final class Rest_Settings {
 			$messages[] = __( 'Document template saved.', '4wp-drive' );
 		}
 
+		if ( array_key_exists( 'github', $params ) && is_array( $params['github'] ) ) {
+			GitHub_Settings::save( $params['github'] );
+			$messages[] = __( 'GitHub settings saved.', '4wp-drive' );
+		}
+
 		if ( array_key_exists( 'block_mapping', $params ) && is_array( $params['block_mapping'] ) ) {
-			$block_map->save( Block_Mapping_Settings::normalize_from_rest( $params['block_mapping'] ) );
-			$messages[] = __( 'Body block mapping saved.', '4wp-drive' );
+			$rules = isset( $params['block_mapping']['rules'] ) && is_array( $params['block_mapping']['rules'] )
+				? $params['block_mapping']['rules']
+				: array();
+
+			$result = Pattern_Library::save_custom_rules( $rules );
+			if ( is_wp_error( $result ) ) {
+				$errors[] = $result->get_error_message();
+			} else {
+				$messages[] = __( 'Patterns saved.', '4wp-drive' );
+			}
 		}
 
 		if ( empty( $messages ) && empty( $errors ) ) {

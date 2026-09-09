@@ -7,12 +7,16 @@
 
 namespace ForWP\Drive\Import;
 
+use ForWP\Drive\Api\GitHub_Client;
 use ForWP\Drive\Api\Google_Drive_Client;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
+use ForWP\Drive\Import\Featured_Image_Chooser;
+use ForWP\Drive\Import\Package_Image_Importer;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Source_Registry;
+use ForWP\Drive\Sources\GitHub_Source;
 use ForWP\Drive\Parse\Template_Config;
 use WP_Error;
 
@@ -63,6 +67,12 @@ final class Import_Runner {
 		);
 
 		$metadata = $this->repository->decode_metadata( $row );
+		if ( isset( $options['featured_image_file_id'] ) ) {
+			$metadata = Featured_Image_Chooser::apply_override(
+				$metadata,
+				(string) $options['featured_image_file_id']
+			);
+		}
 		$creator  = new Post_Creator();
 		$config   = new Template_Config();
 		$mode     = isset( $options['mode'] ) ? sanitize_key( (string) $options['mode'] ) : 'create';
@@ -123,7 +133,7 @@ final class Import_Runner {
 		}
 
 		if ( is_wp_error( $post_id ) ) {
-			$this->fail( $document_id, (string) $row->file_id, $post_id->get_error_message(), $metadata );
+			$this->fail( $document_id, (string) $row->file_id, $post_id->get_error_message(), $metadata, (string) $row->source );
 
 			return $post_id;
 		}
@@ -132,7 +142,9 @@ final class Import_Runner {
 			Language_Provider_Registry::get_active()->assign_post_language( (int) $post_id, $lang );
 		}
 
-		$image_warning    = $this->maybe_attach_featured_image( $metadata, (int) $post_id );
+		$downloader    = $this->make_file_downloader( (string) $row->source );
+		$image_warning = $this->maybe_attach_featured_image( $metadata, (int) $post_id, $downloader );
+		$body_warning  = $this->maybe_apply_package_images( $metadata, (int) $post_id, $downloader );
 		$metadata['slug'] = (string) get_post_field( 'post_name', $post_id );
 
 		$source = Source_Registry::get( (string) $row->source );
@@ -155,7 +167,7 @@ final class Import_Runner {
 					'edit_url' => get_edit_post_link( $post_id, 'raw' ),
 					'mode'     => $mode,
 					'updated'  => $updated,
-					'warning'  => trim( $moved->get_error_message() . ( $image_warning ? ' ' . $image_warning : '' ) ),
+					'warning'  => trim( $moved->get_error_message() . ( $image_warning ? ' ' . $image_warning : '' ) . ( $body_warning ? ' ' . $body_warning : '' ) ),
 				);
 			}
 		}
@@ -186,8 +198,9 @@ final class Import_Runner {
 			'updated'  => $updated,
 		);
 
-		if ( $image_warning ) {
-			$response['warning'] = $image_warning;
+		$combined_warning = trim( ( $image_warning ? $image_warning . ' ' : '' ) . $body_warning );
+		if ( $combined_warning ) {
+			$response['warning'] = $combined_warning;
 		}
 
 		return $response;
@@ -196,20 +209,30 @@ final class Import_Runner {
 	/**
 	 * @param array<string, mixed> $metadata Parsed document metadata.
 	 * @param int                  $post_id  Created post id.
+	 * @param callable             $download File downloader.
 	 */
-	private function maybe_attach_featured_image( array $metadata, int $post_id ): string {
+	private function maybe_apply_package_images( array $metadata, int $post_id, callable $download ): string {
+		return ( new Package_Image_Importer( $download ) )->apply_to_post( $post_id, $metadata );
+	}
+
+	/**
+	 * @param array<string, mixed> $metadata Parsed document metadata.
+	 * @param int                  $post_id  Created post id.
+	 * @param callable             $download File downloader.
+	 */
+	private function maybe_attach_featured_image( array $metadata, int $post_id, callable $download ): string {
 		$image_id = (string) ( $metadata['image_file_id'] ?? '' );
 		if ( '' === $image_id ) {
 			return '';
 		}
 
 		$slug   = (string) get_post_field( 'post_name', $post_id );
-		$client = new Google_Drive_Client( Google_OAuth::instance() );
-		$result = ( new Featured_Image_Importer( $client ) )->attach_from_drive(
-			$image_id,
+		$result = Featured_Image_Importer::sideload_from_bytes(
+			$download( $image_id ),
 			(string) ( $metadata['image_file_name'] ?? '' ),
 			$post_id,
-			$slug
+			$slug,
+			true
 		);
 
 		if ( is_wp_error( $result ) ) {
@@ -220,12 +243,39 @@ final class Import_Runner {
 	}
 
 	/**
+	 * Download bytes for a source file id (Drive id or `gh:owner/repo:path`).
+	 *
+	 * @return callable(string): (string|WP_Error)
+	 */
+	private function make_file_downloader( string $source_slug ): callable {
+		if ( GitHub_Source::SLUG === $source_slug ) {
+			$client = new GitHub_Client();
+
+			return static function ( string $file_id ) use ( $client ) {
+				$path = GitHub_Source::path_from_file_id( $file_id );
+				if ( '' === $path ) {
+					return new WP_Error( 'forwp_drive_github_path', __( 'Could not resolve GitHub file path.', '4wp-drive' ) );
+				}
+
+				return $client->get_file_contents( $path );
+			};
+		}
+
+		$drive = new Google_Drive_Client( Google_OAuth::instance() );
+
+		return static function ( string $file_id ) use ( $drive ) {
+			return $drive->download_file( $file_id );
+		};
+	}
+
+	/**
 	 * @param int                  $document_id Row id.
 	 * @param string               $file_id     Drive file id.
 	 * @param string               $message     Error message.
 	 * @param array<string, mixed> $metadata    Scan metadata for package moves.
+	 * @param string               $source_slug Storage source slug.
 	 */
-	private function fail( int $document_id, string $file_id, string $message, array $metadata = array() ): void {
+	private function fail( int $document_id, string $file_id, string $message, array $metadata = array(), string $source_slug = '' ): void {
 		$this->repository->update(
 			$document_id,
 			array(
@@ -235,7 +285,10 @@ final class Import_Runner {
 			)
 		);
 
-		$source = Source_Registry::get_default();
+		$source = Source_Registry::get( $source_slug );
+		if ( ! $source ) {
+			$source = Source_Registry::get_default();
+		}
 		if ( $source ) {
 			$source->move_after_import( $file_id, 'failed', $metadata );
 		}

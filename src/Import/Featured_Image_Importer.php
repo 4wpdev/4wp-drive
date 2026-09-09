@@ -43,7 +43,43 @@ final class Featured_Image_Importer {
 	 * @return int|WP_Error Attachment id.
 	 */
 	public function attach_from_drive( string $file_id, string $file_name, int $post_id, string $slug ) {
-		if ( '' === $file_id || $post_id <= 0 ) {
+		return $this->sideload_from_drive( $file_id, $file_name, $post_id, $slug, true );
+	}
+
+	/**
+	 * Download a Drive image into the media library (optionally set featured).
+	 *
+	 * @param string $file_id      Drive file id.
+	 * @param string $file_name    Original Drive filename.
+	 * @param int    $post_id      Parent post id.
+	 * @param string $slug         Post slug (used when setting featured filename).
+	 * @param bool   $set_featured Whether to call set_post_thumbnail().
+	 * @return int|WP_Error Attachment id.
+	 */
+	public function sideload_from_drive( string $file_id, string $file_name, int $post_id, string $slug, bool $set_featured = false ) {
+		if ( '' === $file_id ) {
+			return new WP_Error( 'forwp_drive_no_image', __( 'Featured image file is missing.', '4wp-drive' ) );
+		}
+
+		return self::sideload_from_bytes( $this->client->download_file( $file_id ), $file_name, $post_id, $slug, $set_featured );
+	}
+
+	/**
+	 * Sideload already-downloaded image bytes into the media library.
+	 *
+	 * @param string|WP_Error $binary       File bytes or a download error.
+	 * @param string          $file_name    Original filename.
+	 * @param int             $post_id      Parent post id.
+	 * @param string          $slug         Post slug.
+	 * @param bool            $set_featured Whether to call set_post_thumbnail().
+	 * @return int|WP_Error Attachment id.
+	 */
+	public static function sideload_from_bytes( $binary, string $file_name, int $post_id, string $slug, bool $set_featured = false ) {
+		if ( is_wp_error( $binary ) ) {
+			return $binary;
+		}
+
+		if ( ! is_string( $binary ) || '' === $binary || $post_id <= 0 ) {
 			return new WP_Error( 'forwp_drive_no_image', __( 'Featured image file is missing.', '4wp-drive' ) );
 		}
 
@@ -52,20 +88,17 @@ final class Featured_Image_Importer {
 			$slug = 'imported';
 		}
 
-		$binary = $this->client->download_file( $file_id );
-		if ( is_wp_error( $binary ) ) {
-			return $binary;
-		}
-
-		$filename = self::build_filename( $slug, $file_name );
+		$filename = $set_featured
+			? self::build_filename( $slug, $file_name )
+			: self::build_content_filename( $slug, $file_name );
 
 		$upload = wp_upload_bits( $filename, null, $binary );
 		if ( ! empty( $upload['error'] ) ) {
 			return new WP_Error( 'forwp_drive_upload_failed', (string) $upload['error'] );
 		}
 
-		$filetype   = wp_check_filetype( $filename, null );
-		$mime_type  = ! empty( $filetype['type'] ) ? $filetype['type'] : 'image/jpeg';
+		$filetype  = wp_check_filetype( $filename, null );
+		$mime_type = ! empty( $filetype['type'] ) ? $filetype['type'] : 'image/jpeg';
 		$attachment = array(
 			'post_mime_type' => $mime_type,
 			'post_title'     => preg_replace( '/\.[^.]+$/', '', $filename ),
@@ -87,7 +120,9 @@ final class Featured_Image_Importer {
 			wp_update_attachment_metadata( (int) $attachment_id, $metadata );
 		}
 
-		set_post_thumbnail( $post_id, (int) $attachment_id );
+		if ( $set_featured ) {
+			set_post_thumbnail( $post_id, (int) $attachment_id );
+		}
 
 		return (int) $attachment_id;
 	}
@@ -110,5 +145,20 @@ final class Featured_Image_Importer {
 		}
 
 		return 'image-' . $slug . '.' . $ext;
+	}
+
+	/**
+	 * Build content image filename preserving the Drive basename.
+	 *
+	 * @param string $slug      Post slug (fallback prefix).
+	 * @param string $file_name Original Drive filename.
+	 */
+	public static function build_content_filename( string $slug, string $file_name ): string {
+		$base = sanitize_file_name( $file_name );
+		if ( '' !== $base ) {
+			return $base;
+		}
+
+		return self::build_filename( $slug, $file_name );
 	}
 }

@@ -47,6 +47,11 @@ interface Language_Provider_Interface {
 	public function requires_manual_selection(): bool;
 
 	/**
+	 * Default language code for import when the UI is hidden or pre-filled.
+	 */
+	public function get_default_language(): string;
+
+	/**
 	 * Validate a language code from the import request.
 	 *
 	 * @param string $lang_code Language slug.

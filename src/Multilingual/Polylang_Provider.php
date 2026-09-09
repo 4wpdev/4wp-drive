@@ -85,6 +85,24 @@ final class Polylang_Provider implements Language_Provider_Interface {
 	/**
 	 * @inheritDoc
 	 */
+	public function get_default_language(): string {
+		$languages = $this->get_languages();
+		if ( count( $languages ) === 1 ) {
+			return (string) ( $languages[0]['code'] ?? '' );
+		}
+
+		if ( ! $this->is_available() || ! function_exists( 'pll_default_language' ) ) {
+			return isset( $languages[0]['code'] ) ? (string) $languages[0]['code'] : '';
+		}
+
+		$default = pll_default_language( 'slug' );
+
+		return is_string( $default ) ? sanitize_key( $default ) : '';
+	}
+
+	/**
+	 * @inheritDoc
+	 */
 	public function is_valid_language( string $lang_code ): bool {
 		$lang_code = sanitize_key( $lang_code );
 		if ( '' === $lang_code ) {

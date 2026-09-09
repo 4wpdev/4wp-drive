@@ -10,8 +10,10 @@ namespace ForWP\Drive;
 use ForWP\Drive\Admin\Admin_Menu;
 use ForWP\Drive\Admin\Setup_Dashboard_Widget;
 use ForWP\Drive\Auth\Google_OAuth;
+use ForWP\Drive\Patterns\Pattern_Post_Type;
 use ForWP\Drive\Rest\Rest_Documents;
 use ForWP\Drive\Rest\Rest_Oauth;
+use ForWP\Drive\Rest\Rest_Patterns;
 use ForWP\Drive\Rest\Rest_Settings;
 use ForWP\Drive\Notifications\Admin_Notifier;
 use ForWP\Drive\Sync\Sync_Scheduler;
@@ -57,7 +59,9 @@ final class Plugin {
 		Admin_Notifier::boot();
 		Google_OAuth::instance()->boot();
 		Sync_Scheduler::boot();
+		Pattern_Post_Type::boot();
 		Rest_Settings::register();
+		Rest_Patterns::register();
 		Rest_Documents::register();
 		Rest_Oauth::register();
 

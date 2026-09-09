@@ -70,6 +70,15 @@ final class Single_Site_Provider implements Language_Provider_Interface {
 	/**
 	 * @inheritDoc
 	 */
+	public function get_default_language(): string {
+		$languages = $this->get_languages();
+
+		return (string) ( $languages[0]['code'] ?? 'en' );
+	}
+
+	/**
+	 * @inheritDoc
+	 */
 	public function is_valid_language( string $lang_code ): bool {
 		$lang_code = sanitize_key( $lang_code );
 		if ( '' === $lang_code ) {
