@@ -318,7 +318,9 @@ final class GitHub_Source implements Storage_Source_Interface {
 			'selected_file_id' => $file_id,
 		);
 		if ( '' !== $package_folder_id ) {
-			$meta_extra['package_folder_id'] = $package_folder_id;
+			$meta_extra['package_folder_id']   = $package_folder_id;
+			$parts                             = explode( '/', trim( str_replace( '\\', '/', $package_folder_id ), '/' ) );
+			$meta_extra['package_folder_name'] = (string) end( $parts );
 		}
 		if ( ! empty( $package_files ) ) {
 			$meta_extra['package_files'] = $package_files;

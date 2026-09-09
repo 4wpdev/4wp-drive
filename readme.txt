@@ -12,7 +12,7 @@ Import Google Docs and Markdown from Drive or GitHub into WordPress drafts—or 
 
 == Description ==
 
-**4WP Drive** connects Drive and GitHub folder workflows to WordPress: writers drop documents in `incoming/`, editors review them on the admin **Incoming** screen, and approved content becomes **draft posts** or updates **existing posts and pages**—without copy-paste.
+**4WP Drive** connects Drive and GitHub folder workflows to WordPress: writers drop documents in `incoming/`, editors review them on the admin **Incoming** screen, and approved content becomes **draft posts** or updates **existing posts and pages**—without copy-paste. **Analytics** stores import history (folder alias, site slug, incoming → published) and can restore a package back to incoming.
 
 A plugin by [4wp.dev](https://4wp.dev/).
 
@@ -22,24 +22,26 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 = Perfect for =
 
 * **Editorial teams** that draft in Google Docs but publish in WordPress
-* **Agencies** with a shared Drive `incoming/` folder and a review step before publish
+* **Agencies** with a shared Drive or GitHub `incoming/` folder and a review step before publish
 * **Content pipelines** that need structured front-matter (title, slug, categories, SEO fields) parsed from the doc header
 * Sites that want **API credentials stored encrypted** and **OAuth handled server-side**
 
 = How it works =
 
 1. Install and activate **4WP Drive**.
-2. Create Google OAuth credentials and connect Drive in **Storage sources**.
-3. Set your Drive **root folder ID**; the plugin uses `incoming/` and `published/` subfolders.
-4. Drop a Google Doc (with optional image) into `incoming/` or run **Sync**.
-5. Open **Inbox** — pick a storage source tab (Google Drive today; GitHub and others on the roadmap), sync, select a document in the queue, then preview and **Create new draft**, **Update existing post**, or Reject in the workspace.
-6. On import, files move to `published/` in Drive.
+2. Connect a storage source in **Settings → Storage sources**: Google Drive (OAuth) and/or GitHub (PAT + owner/repo).
+3. Drive: set the **root folder ID**; the plugin uses `incoming/` and `published/` subfolders. GitHub: set the repo and incoming path (default `incoming/`).
+4. Drop a package into `incoming/` (Google Doc, Markdown, or Word on Drive; Markdown on GitHub) or run **Sync**.
+5. Open **Incoming** — pick a source tab (Google Drive or GitHub live; OneDrive and Dropbox on the roadmap), sync, select a document, then preview and **Create new draft**, **Update existing post**, or Reject.
+6. On import, files move to `published/`. Open **Analytics** to see history; **Restore to incoming** if you need the package back in the queue.
 
 = Key features =
 
 * **Google Drive OAuth** — connect an admin Google account; tokens stored encrypted
-* **Folder sync** — scan `incoming/` for new Google Docs and images
-* **Editorial Inbox** — status bar, source tabs, document queue + side workspace for preview and import
+* **Folder sync** — scan `incoming/` for Google Docs, Markdown, Word, and images (Drive) or Markdown packages (GitHub)
+* **GitHub** — live Markdown source: PAT, owner/repo, move to published/failed after import
+* **Editorial Incoming** — status bar, source tabs, document queue + side workspace for preview and import
+* **Analytics** — import history (source, post, folder alias, site slug, incoming → published) and Restore to incoming
 * **Document template** — front-matter lines before a separator (`---` or `=====`) map to post fields; body becomes post content (headings, lists, bold preserved)
 * **Body → block templates** — map FAQ-style sections to **4WP FAQ** or core Accordion; **Core Image** (default on) replaces `[image:filename.jpeg]` with `core/image` from the package folder
 * **Configurable field map** — title, slug, categories, tags, author, dates, SEO meta (when supported)
@@ -47,7 +49,7 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 * **Update existing content** — search and pick a post or page, then replace its content from the Drive document
 * **Polylang multilingual import** — pick content language in the Inbox when the site has multiple languages; assign language on create; filter update targets by language (WPML planned)
 * **REST API** + **WP-CLI** `wp forwp-drive sync` for manual sync
-* **Roadmap sources** — GitHub Markdown/MDX, OneDrive, and Dropbox registered for future releases
+* **Roadmap sources** — OneDrive and Dropbox
 
 = Privacy =
 
@@ -91,6 +93,18 @@ Used to list folders, download Google Docs (export as HTML/DOCX), and move files
 Requests are made **server-side** only when an administrator runs sync, preview, or import. Document metadata and file content are processed on your server to create WordPress posts.
 
 Google Drive API terms follow Google Cloud / Google API Services terms linked from the Google Cloud Console.
+
+= GitHub REST API =
+
+Used when an administrator saves a personal access token and syncs or imports from a GitHub repository.
+
+* API hostname: `https://api.github.com/`
+* Typical calls: repository metadata, Contents API (list, read, create, delete) to move files after import or restore
+
+Requests are made **server-side** only. 4WP Drive uses the configured owner/repository. A classic token with `repo` scope can access other repositories the GitHub account can reach; a fine-grained token can be limited to one repository (Contents: Read and write).
+
+GitHub terms: https://docs.github.com/en/site-policy/github-terms/github-terms-of-service  
+GitHub privacy: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
 
 == Installation ==
 
@@ -153,6 +167,18 @@ It works with whichever post type you set as the import type in **Document templ
 
 Single-language sites (no Polylang) behave as before — no language picker in the Inbox.
 
+= Does GitHub import use a folder named incoming/? =
+
+Yes in this release. Set **Incoming path** in GitHub settings (default `incoming`). Each article is a subfolder with a `.md` file plus images. After import the same tree is moved to `published/`.
+
+= Does the GitHub token access every repository? =
+
+4WP Drive only reads and writes the owner/repo you configured. A **classic PAT** with `repo` can still access other repositories on that GitHub account. Use a **fine-grained token** limited to this repository (Contents: Read and write) if you want a narrow token.
+
+= Where is import history? =
+
+**4WP Drive → Analytics.** Each import stores source, date, post, folder alias, site slug, and incoming/published paths. **Restore to incoming** moves the published package back; then Sync Incoming. History starts after upgrading to 1.5.0 (older imports are not backfilled). You do not need to reactivate the plugin.
+
 = Where do I see which multilingual plugin is active? =
 
 **4WP Drive → Settings → Storage sources** — scroll to **Multilingual integration**. Cards show Polylang (live), WPML (planned), and single-language fallback, with status badges (Active, Inactive, Not installed, Planned).
@@ -177,6 +203,7 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 * **Gutenberg** — import serializes headings, paragraphs, lists, quotes, code, and inline strong/em/u to core blocks. Image markers support left / right / center alignment.
 * **Image pin** — package images can be placed in the preview before import (click image, click paragraph). Markdown `![](file.png)` in the same folder becomes `[image:file.png]`.
 * **GitHub** — live source: PAT + owner/repo, scan `incoming/`, import Markdown packages, move to published/failed, sideload package images.
+* **Analytics** — import history table (source, post ID/type, date, folder alias, site slug, incoming/published paths). **Restore to incoming** moves the published package back to the queue. No plugin reactivation required.
 
 = 1.4.0 =
 * **Inbox** — editorial dashboard: connection/sync status, storage **source tabs** (Google Drive live; GitHub, OneDrive, Dropbox marked Soon), document **queue** + side **workspace** for preview and import.
@@ -219,6 +246,9 @@ Single-language sites (no Polylang) behave as before — no language picker in t
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.5.0 =
+GitHub Markdown is live. Incoming accepts Markdown packages. Analytics records imports and can restore a package to incoming.
 
 = 1.4.0 =
 Editorial Inbox: source tabs, status bar, queue + workspace preview. Tested up to WordPress 7.1.

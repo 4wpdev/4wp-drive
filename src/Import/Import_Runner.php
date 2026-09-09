@@ -11,6 +11,7 @@ use ForWP\Drive\Api\GitHub_Client;
 use ForWP\Drive\Api\Google_Drive_Client;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Database\Document_Repository;
+use ForWP\Drive\Database\Import_History_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Featured_Image_Chooser;
 use ForWP\Drive\Import\Package_Image_Importer;
@@ -151,16 +152,19 @@ final class Import_Runner {
 		if ( $source ) {
 			$moved = $source->move_after_import( (string) $row->file_id, 'published', $metadata );
 			if ( is_wp_error( $moved ) ) {
+				$imported_at = current_time( 'mysql', true );
 				$this->repository->update(
 					$document_id,
 					array(
 						'status'        => Document_Status::IMPORTED,
 						'wp_post_id'    => $post_id,
-						'imported_at'   => current_time( 'mysql', true ),
-						'updated_at'    => current_time( 'mysql', true ),
+						'imported_at'   => $imported_at,
+						'updated_at'    => $imported_at,
 						'error_message' => $moved->get_error_message(),
 					)
 				);
+
+				$this->record_history( $row, $document_id, (int) $post_id, $mode, $metadata, $imported_at );
 
 				return array(
 					'post_id'  => $post_id,
@@ -182,6 +186,8 @@ final class Import_Runner {
 				'updated_at'  => $now,
 			)
 		);
+
+		$this->record_history( $row, $document_id, (int) $post_id, $mode, $metadata, $now );
 
 		/**
 		 * Fires after a document is imported.
@@ -240,6 +246,30 @@ final class Import_Runner {
 		}
 
 		return '';
+	}
+
+	/**
+	 * Append one import-history row (source, post, aliases, incoming → published).
+	 *
+	 * @param object               $row         Inbox document row.
+	 * @param array<string, mixed> $metadata    Scan metadata.
+	 */
+	private function record_history( $row, int $document_id, int $post_id, string $mode, array $metadata, string $imported_at ): void {
+		( new Import_History_Repository() )->insert(
+			Import_History_Recorder::build(
+				array(
+					'source'      => (string) ( $row->source ?? '' ),
+					'post_id'     => $post_id,
+					'post_type'   => (string) ( get_post_type( $post_id ) ?: 'post' ),
+					'site_alias'  => (string) get_post_field( 'post_name', $post_id ),
+					'document_id' => $document_id,
+					'file_id'     => (string) ( $row->file_id ?? '' ),
+					'mode'        => $mode,
+					'metadata'    => $metadata,
+					'imported_at' => $imported_at,
+				)
+			)
+		);
 	}
 
 	/**

@@ -10,6 +10,7 @@ namespace ForWP\Drive;
 use ForWP\Drive\Admin\Admin_Menu;
 use ForWP\Drive\Admin\Setup_Dashboard_Widget;
 use ForWP\Drive\Auth\Google_OAuth;
+use ForWP\Drive\Database\Schema;
 use ForWP\Drive\Patterns\Pattern_Post_Type;
 use ForWP\Drive\Rest\Rest_Documents;
 use ForWP\Drive\Rest\Rest_Oauth;
@@ -54,6 +55,7 @@ final class Plugin {
 	 * @return void
 	 */
 	public function boot(): void {
+		Schema::maybe_upgrade();
 		Admin_Menu::instance()->boot();
 		Setup_Dashboard_Widget::boot();
 		Admin_Notifier::boot();

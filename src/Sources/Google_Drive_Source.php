@@ -286,7 +286,8 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 			$folder_id,
 			$image,
 			(string) ( $doc['mimeType'] ?? '' ),
-			$package_files
+			$package_files,
+			$folder_name
 		);
 	}
 
@@ -301,6 +302,7 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 	 * @param array<string, mixed>|null $image             Drive image file row.
 	 * @param string                    $mime_type         Document mime type.
 	 * @param array<int, array<string, string>> $package_files Sibling files in the package folder.
+	 * @param string                            $package_folder_name Package folder label.
 	 * @return array<string, mixed>|null
 	 */
 	private function scan_document_file(
@@ -311,7 +313,8 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 		string $package_folder_id,
 		?array $image,
 		string $mime_type = '',
-		array $package_files = array()
+		array $package_files = array(),
+		string $package_folder_name = ''
 	): ?array {
 		$raw = $client->fetch_document_content( $file_id, $mime_type, $file_name );
 
@@ -322,6 +325,9 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 		);
 		if ( '' !== $package_folder_id ) {
 			$meta_extra['package_folder_id'] = $package_folder_id;
+		}
+		if ( '' !== $package_folder_name ) {
+			$meta_extra['package_folder_name'] = $package_folder_name;
 		}
 		if ( ! empty( $package_files ) ) {
 			$meta_extra['package_files'] = $package_files;
@@ -435,7 +441,8 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 			(string) ( $meta['package_folder_id'] ?? '' ),
 			$image,
 			(string) ( $found['mime'] ?? '' ),
-			$files
+			$files,
+			(string) ( $meta['package_folder_name'] ?? '' )
 		);
 	}
 }
