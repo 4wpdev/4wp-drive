@@ -1742,6 +1742,95 @@
 	}
 
 	/**
+	 * Match browse-tree file ids to queue file ids (gh:owner/repo:path vs path).
+	 *
+	 * @param {string} a First id.
+	 * @param {string} b Second id.
+	 * @return {boolean}
+	 */
+	function sameStorageId( a, b ) {
+		const left = String( a || '' ).trim();
+		const right = String( b || '' ).trim();
+		if ( ! left || ! right ) {
+			return false;
+		}
+		if ( left === right ) {
+			return true;
+		}
+		const stripGh = ( id ) => {
+			if ( 0 !== id.indexOf( 'gh:' ) ) {
+				return id;
+			}
+			const parts = id.split( ':' );
+			return parts.length >= 3 ? parts.slice( 2 ).join( ':' ) : id;
+		};
+		return stripGh( left ) === stripGh( right );
+	}
+
+	/**
+	 * Resolve a queue document for a browse-tree file (nested packages).
+	 *
+	 * @param {{fileId?:string,name?:string,kind?:string}} file File node.
+	 * @param {string} folderPath Parent folder path.
+	 * @return {Object|null}
+	 */
+	function resolveDocForBrowseFile( file, folderPath ) {
+		const docs = documentsForActiveSource();
+		const fileId = String( ( file && file.fileId ) || '' ).trim();
+		const name = String( ( file && file.name ) || '' ).trim();
+		const path = String( folderPath || '' ).trim();
+		if ( ! docs.length || ( ! fileId && ! name ) ) {
+			return null;
+		}
+
+		const isDocFile =
+			( file && file.kind === 'document' ) ||
+			/\.(md|mdx|markdown|docx?)$/i.test( name );
+
+		for ( let i = 0; i < docs.length; i++ ) {
+			const doc = docs[ i ];
+			if (
+				sameStorageId( doc.file_id, fileId ) ||
+				sameStorageId( doc.selected_file_id, fileId )
+			) {
+				return doc;
+			}
+		}
+
+		if ( path ) {
+			for ( let i = 0; i < docs.length; i++ ) {
+				const doc = docs[ i ];
+				if ( String( doc.package_folder_id || '' ).trim() === path && isDocFile ) {
+					return doc;
+				}
+			}
+		}
+
+		for ( let i = 0; i < docs.length; i++ ) {
+			const doc = docs[ i ];
+			const packageFiles = Array.isArray( doc.package_files )
+				? doc.package_files
+				: [];
+			const hit = packageFiles.find(
+				( pf ) =>
+					pf &&
+					( sameStorageId( pf.id, fileId ) ||
+						( pf.name === name &&
+							( pf.kind === 'document' || ! pf.kind ) ) )
+			);
+			if ( ! hit ) {
+				continue;
+			}
+			const docPath = String( doc.package_folder_id || '' ).trim();
+			if ( ! path || ! docPath || docPath === path ) {
+				return doc;
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Build a nested folder tree from queue documents (fallback when browse is empty).
 	 *
 	 * @param {Array<Object>} documents Documents.
@@ -1873,33 +1962,6 @@
 			return found;
 		};
 
-		/**
-		 * Match browse-tree file ids to queue file ids.
-		 * GitHub browse used bare paths; documents use gh:owner/repo:path.
-		 *
-		 * @param {string} a First id.
-		 * @param {string} b Second id.
-		 * @return {boolean}
-		 */
-		const sameStorageId = ( a, b ) => {
-			const left = String( a || '' ).trim();
-			const right = String( b || '' ).trim();
-			if ( ! left || ! right ) {
-				return false;
-			}
-			if ( left === right ) {
-				return true;
-			}
-			const stripGh = ( id ) => {
-				if ( 0 !== id.indexOf( 'gh:' ) ) {
-					return id;
-				}
-				const parts = id.split( ':' );
-				return parts.length >= 3 ? parts.slice( 2 ).join( ':' ) : id;
-			};
-			return stripGh( left ) === stripGh( right );
-		};
-
 		const attachFileDoc = ( node, fileId, doc ) => {
 			if ( ! fileId ) {
 				return false;
@@ -1938,19 +2000,17 @@
 						);
 						if ( existing && ( pf.kind === 'document' || ! pf.kind ) ) {
 							existing.doc = doc;
-							if ( id && ! existing.fileId ) {
-								existing.fileId = id;
-							} else if ( id ) {
+							if ( id ) {
 								existing.fileId = id;
 							}
 						}
 					} );
 					attachFileDoc( folder, fileId, doc );
-					// Any remaining markdown/doc files in the package folder share this queue doc.
 					( folder.files || [] ).forEach( ( f ) => {
 						if (
 							! f.doc &&
-							( f.kind === 'document' || /\.(md|mdx|markdown)$/i.test( f.name || '' ) )
+							( f.kind === 'document' ||
+								/\.(md|mdx|markdown)$/i.test( f.name || '' ) )
 						) {
 							f.doc = doc;
 						}
@@ -1974,6 +2034,21 @@
 				} );
 			}
 		} );
+
+		const attachOrphans = ( node ) => {
+			( node.files || [] ).forEach( ( file ) => {
+				if ( ! file.doc ) {
+					const doc = resolveDocForBrowseFile( file, node.path || '' );
+					if ( doc ) {
+						file.doc = doc;
+					}
+				}
+			} );
+			Object.keys( node.folders || {} ).forEach( ( key ) => {
+				attachOrphans( node.folders[ key ] );
+			} );
+		};
+		attachOrphans( root );
 
 		return root;
 	}
@@ -2010,11 +2085,12 @@
 		walk( root );
 		const folderCount = paths.length;
 		const docCount = ( documents || [] ).length;
-		// Expand shallow trees; keep deep published/failed collapsed by default past depth 1.
+		// Expand shallow trees; keep deep published/failed collapsed by default past depth 2
+		// so third-level packages (e.g. Hooks/Articles/slug) are one click away.
 		if ( folderCount <= 40 || docCount <= 20 ) {
 			paths.forEach( ( path ) => {
 				const depth = String( path ).split( '/' ).filter( Boolean ).length;
-				if ( depth <= 1 ) {
+				if ( depth <= 2 ) {
 					treeExpandedPaths.add( path );
 				}
 			} );
@@ -3494,6 +3570,22 @@
 			);
 			return;
 		}
+
+		const readonlyFile = target.closest(
+			'.forwp-drive-tree__row.is-file.is-readonly'
+		);
+		if ( readonlyFile ) {
+			const status = document.getElementById( 'forwp-drive-inbox-status' );
+			const strings = forwpDriveAdmin.strings || {};
+			setStatus(
+				status,
+				strings.nestedPackageSyncHint ||
+					'This nested file is not in the import queue yet. Click Sync to load packages under folders like Hooks/Articles/…',
+				true
+			);
+			return;
+		}
+
 		if ( action && id ) {
 			if ( action === 'preview' || action === 'select' ) {
 				const fileId = actionEl

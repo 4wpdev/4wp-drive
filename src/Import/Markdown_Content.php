@@ -12,7 +12,7 @@ use ForWP\Drive\Parse\Template_Separator;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Lightweight Markdown → HTML (headings, lists, emphasis, links, code, quotes).
+ * Lightweight Markdown → HTML (headings, lists, tables, emphasis, links, code, quotes).
  */
 final class Markdown_Content {
 
@@ -46,7 +46,7 @@ final class Markdown_Content {
 
 		$parts[] = self::convert_body( '' !== $body ? $body : ( '' === $header ? $text : '' ) );
 
-		return '<html><body>' . implode( "\n", array_filter( $parts ) ) . '</body></html>';
+		return '<html><body data-forwp-md="1">' . implode( "\n", array_filter( $parts ) ) . '</body></html>';
 	}
 
 	/**
@@ -85,6 +85,8 @@ final class Markdown_Content {
 		$in_code = false;
 		$code    = array();
 		$quote   = array();
+		$i       = 0;
+		$count   = count( $lines );
 
 		$flush_para = static function () use ( &$para, &$html ): void {
 			if ( empty( $para ) ) {
@@ -111,15 +113,19 @@ final class Markdown_Content {
 			$quote  = array();
 		};
 
-		foreach ( $lines as $line ) {
+		while ( $i < $count ) {
+			$line = $lines[ $i ];
+
 			if ( $in_code ) {
 				if ( preg_match( '/^```/', $line ) ) {
 					$html[]  = '<pre><code>' . esc_html( implode( "\n", $code ) ) . '</code></pre>';
 					$in_code = false;
 					$code    = array();
+					++$i;
 					continue;
 				}
 				$code[] = $line;
+				++$i;
 				continue;
 			}
 
@@ -129,16 +135,40 @@ final class Markdown_Content {
 				$flush_quote();
 				$in_code = true;
 				$code    = array();
+				++$i;
 				continue;
 			}
 
 			$trim = rtrim( $line );
+
+			// GFM pipe tables (must run before generic paragraph / hr handling).
+			if ( self::is_table_row_line( $trim ) ) {
+				$flush_para();
+				$flush_list();
+				$flush_quote();
+				$table_lines = array( $trim );
+				++$i;
+				while ( $i < $count && self::is_table_row_line( rtrim( $lines[ $i ] ) ) ) {
+					$table_lines[] = rtrim( $lines[ $i ] );
+					++$i;
+				}
+				$built = self::build_table_html( $table_lines );
+				if ( '' !== $built ) {
+					$html[] = $built;
+				} else {
+					foreach ( $table_lines as $table_line ) {
+						$html[] = '<p>' . self::inline( $table_line ) . '</p>';
+					}
+				}
+				continue;
+			}
 
 			if ( Template_Separator::is_mark_line( $trim ) || preg_match( '/^(\*\s*){3,}$|^(-\s*){3,}$|^(_\s*){3,}$/', $trim ) ) {
 				$flush_para();
 				$flush_list();
 				$flush_quote();
 				$html[] = '<hr />';
+				++$i;
 				continue;
 			}
 
@@ -148,6 +178,7 @@ final class Markdown_Content {
 				$flush_quote();
 				$level  = strlen( $m[1] );
 				$html[] = '<h' . $level . '>' . self::inline( $m[2] ) . '</h' . $level . '>';
+				++$i;
 				continue;
 			}
 
@@ -155,6 +186,7 @@ final class Markdown_Content {
 				$flush_para();
 				$flush_list();
 				$quote[] = $m[1];
+				++$i;
 				continue;
 			}
 
@@ -170,6 +202,7 @@ final class Markdown_Content {
 					);
 				}
 				$list['items'][] = '<li>' . self::inline( $m[1] ) . '</li>';
+				++$i;
 				continue;
 			}
 
@@ -183,17 +216,20 @@ final class Markdown_Content {
 					);
 				}
 				$list['items'][] = '<li>' . self::inline( $m[1] ) . '</li>';
+				++$i;
 				continue;
 			}
 
 			if ( '' === trim( $trim ) ) {
 				$flush_para();
 				$flush_list();
+				++$i;
 				continue;
 			}
 
 			$flush_list();
 			$para[] = $trim;
+			++$i;
 		}
 
 		if ( $in_code ) {
@@ -205,6 +241,129 @@ final class Markdown_Content {
 		$flush_list();
 
 		return implode( "\n", $html );
+	}
+
+	/**
+	 * Whether a line looks like a Markdown pipe-table row.
+	 */
+	private static function is_table_row_line( string $line ): bool {
+		$line = trim( $line );
+		if ( '' === $line ) {
+			return false;
+		}
+
+		if ( self::is_table_separator_line( $line ) ) {
+			return true;
+		}
+
+		// Require pipe-bounded rows — avoid treating prose with a lone "|" as a table.
+		return (bool) preg_match( '/^\|.+\|\s*$/', $line );
+	}
+
+	/**
+	 * GFM table separator: | --- | :---: | ---: |
+	 */
+	private static function is_table_separator_line( string $line ): bool {
+		$line = trim( $line );
+
+		return (bool) preg_match( '/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/', $line );
+	}
+
+	/**
+	 * @param array<int, string> $lines Consecutive table lines.
+	 */
+	private static function build_table_html( array $lines ): string {
+		$rows = array();
+		foreach ( $lines as $line ) {
+			$line = trim( $line );
+			if ( self::is_table_separator_line( $line ) ) {
+				$rows[] = array(
+					'type'  => 'sep',
+					'cells' => array(),
+				);
+				continue;
+			}
+			$cells = self::split_table_cells( $line );
+			if ( empty( $cells ) ) {
+				continue;
+			}
+			$rows[] = array(
+				'type'  => 'row',
+				'cells' => $cells,
+			);
+		}
+
+		if ( count( $rows ) < 2 ) {
+			return '';
+		}
+
+		$header = null;
+		$body   = array();
+		$saw_sep = false;
+
+		foreach ( $rows as $row ) {
+			if ( 'sep' === $row['type'] ) {
+				$saw_sep = true;
+				continue;
+			}
+			if ( ! $saw_sep && null === $header ) {
+				$header = $row['cells'];
+				continue;
+			}
+			$body[] = $row['cells'];
+		}
+
+		if ( null === $header ) {
+			return '';
+		}
+
+		if ( ! $saw_sep && empty( $body ) ) {
+			// Single header-looking row without separator — not a table.
+			return '';
+		}
+
+		$html = '<table class="forwp-drive-md-table"><thead><tr>';
+		foreach ( $header as $cell ) {
+			$html .= '<th>' . self::inline( $cell ) . '</th>';
+		}
+		$html .= '</tr></thead>';
+
+		if ( ! empty( $body ) ) {
+			$html .= '<tbody>';
+			foreach ( $body as $cells ) {
+				$html .= '<tr>';
+				foreach ( $cells as $cell ) {
+					$html .= '<td>' . self::inline( $cell ) . '</td>';
+				}
+				$html .= '</tr>';
+			}
+			$html .= '</tbody>';
+		}
+
+		$html .= '</table>';
+
+		return $html;
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	private static function split_table_cells( string $line ): array {
+		$line = trim( $line );
+		if ( '' !== $line && '|' === $line[0] ) {
+			$line = substr( $line, 1 );
+		}
+		if ( '' !== $line && '|' === substr( $line, -1 ) ) {
+			$line = substr( $line, 0, -1 );
+		}
+
+		$parts = explode( '|', $line );
+		$cells = array();
+		foreach ( $parts as $part ) {
+			$cells[] = trim( $part );
+		}
+
+		return $cells;
 	}
 
 	/**

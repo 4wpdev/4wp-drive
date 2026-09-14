@@ -493,3 +493,48 @@
 .forwp-drive-preview-single .wp-block-post-content {
 	box-sizing: border-box;
 }
+
+#forwp-drive-preview-post-content .forwp-drive-md-table,
+#forwp-drive-preview-post-content table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 1em 0;
+	font-size: 13px;
+	line-height: 1.4;
+	overflow-x: auto;
+	display: block;
+	max-width: 100%;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-md-table thead,
+#forwp-drive-preview-post-content table thead {
+	display: table-header-group;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-md-table tbody,
+#forwp-drive-preview-post-content table tbody {
+	display: table-row-group;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-md-table tr,
+#forwp-drive-preview-post-content table tr {
+	display: table-row;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-md-table th,
+#forwp-drive-preview-post-content .forwp-drive-md-table td,
+#forwp-drive-preview-post-content table th,
+#forwp-drive-preview-post-content table td {
+	display: table-cell;
+	border: 1px solid #c3c4c7;
+	padding: 8px 10px;
+	text-align: left;
+	vertical-align: top;
+	word-break: break-word;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-md-table th,
+#forwp-drive-preview-post-content table th {
+	background: #f6f7f7;
+	font-weight: 600;
+}

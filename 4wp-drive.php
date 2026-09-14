@@ -3,7 +3,7 @@
  * Plugin Name:       4WP Drive
  * Plugin URI:        https://4wp.dev/plugin/4wp-drive/
  * Import Google Docs and Markdown from Drive or GitHub into WordPress drafts—or update existing posts from Incoming.
- * Version:           1.5.8
+ * Version:           1.5.12
  * Requires at least: 6.4
  * Tested up to:      7.1
  * Requires PHP:      7.4
@@ -18,7 +18,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FORWP_DRIVE_VERSION', '1.5.8' );
+define( 'FORWP_DRIVE_VERSION', '1.5.12' );
 define( 'FORWP_DRIVE_FILE', __FILE__ );
 define( 'FORWP_DRIVE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'FORWP_DRIVE_URL', plugin_dir_url( __FILE__ ) );

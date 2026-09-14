@@ -244,9 +244,10 @@ final class GitHub_Source implements Storage_Source_Interface {
 	}
 
 	/**
-	 * Discover packages at this path or nested under it (e.g. LMS4WP/articles, LMS4WP/courses/…).
+	 * Discover packages at this path or nested under it (e.g. LMS4WP/articles, Hooks/Articles/slug).
 	 *
-	 * A directory with article files is one package. A container with only subfolders is walked.
+	 * A directory with article files is a package. Subfolders are always walked too, so a parent
+	 * that already has .md files (e.g. Hooks/) does not hide nested packages at depth 2–3+.
 	 *
 	 * @return array<int, array<string, mixed>>
 	 */
@@ -255,17 +256,17 @@ final class GitHub_Source implements Storage_Source_Interface {
 			return array();
 		}
 
+		$results = array();
 		$package = $this->scan_package_dir( $client, $parser, $path, $name );
 		if ( null !== $package ) {
-			return array( $package );
+			$results[] = $package;
 		}
 
 		$listing = $client->list_path( $path );
 		if ( is_wp_error( $listing ) || empty( $listing ) ) {
-			return array();
+			return $results;
 		}
 
-		$results = array();
 		foreach ( $listing as $entry ) {
 			if ( ! is_array( $entry ) || 'dir' !== ( $entry['type'] ?? '' ) ) {
 				continue;

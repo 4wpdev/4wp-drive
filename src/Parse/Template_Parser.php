@@ -42,6 +42,12 @@ final class Template_Parser {
 	 */
 	public function parse( string $raw ): array {
 		if ( $this->is_html( $raw ) ) {
+			// Markdown_Content marks its output — never run Google Docs prepare on it
+			// (that path collapses headings/fences into a broken <pre>).
+			if ( $this->is_markdown_html_document( $raw ) ) {
+				return $this->parse_markdown_html_document( $raw );
+			}
+
 			$html_split = Google_Doc_Content::split_export_at_separator( $raw );
 			if ( null !== $html_split ) {
 				$header_plain = $this->html_to_plain_text(
@@ -83,6 +89,58 @@ final class Template_Parser {
 		}
 
 		return $this->assemble_parse_result( $meta, $body, $body_html );
+	}
+
+	/**
+	 * HTML produced by Markdown_Content::to_html_document().
+	 */
+	private function is_markdown_html_document( string $html ): bool {
+		return (bool) preg_match( '/\bdata-forwp-md\s*=\s*[\'"]?1[\'"]?/', $html );
+	}
+
+	/**
+	 * Keep semantic Markdown HTML intact (headings, fenced code, tables).
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function parse_markdown_html_document( string $html ): array {
+		$body_html = $this->extract_markdown_body_inner_html( $html );
+		$body      = $this->html_to_plain_text( '<html><body>' . $body_html . '</body></html>' );
+
+		$header_plain = '';
+		$html_split   = Google_Doc_Content::split_export_at_separator( $html );
+		if ( null !== $html_split ) {
+			$header_plain = $this->html_to_plain_text(
+				'<html><body>' . $html_split['header_html'] . '</body></html>'
+			);
+			$body_html = trim( $html_split['body_html'] );
+			$body      = $this->html_to_plain_text(
+				'<html><body>' . $body_html . '</body></html>'
+			);
+		}
+
+		$meta = $this->parse_header( $header_plain );
+
+		if ( '' === $meta['title'] && preg_match( '/<h1\b[^>]*>(.*?)<\/h1>/is', $body_html, $m ) ) {
+			$meta['title'] = trim(
+				html_entity_decode( wp_strip_all_tags( $m[1] ), ENT_QUOTES | ENT_HTML5, 'UTF-8' )
+			);
+		}
+
+		list( $meta, $body ) = $this->apply_first_line_title_fallback( $meta, $body );
+
+		return $this->assemble_parse_result( $meta, $body, trim( $body_html ) );
+	}
+
+	/**
+	 * Inner HTML of <body> from a full Markdown HTML document.
+	 */
+	private function extract_markdown_body_inner_html( string $html ): string {
+		if ( preg_match( '/<body\b[^>]*>(.*)<\/body>/is', $html, $m ) ) {
+			return trim( $m[1] );
+		}
+
+		return trim( $html );
 	}
 
 	/**

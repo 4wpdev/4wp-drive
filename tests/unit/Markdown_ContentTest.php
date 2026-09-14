@@ -26,6 +26,7 @@ class Markdown_ContentTest extends TestCase {
 
 		$html = Markdown_Content::to_html_document( $md );
 
+		$this->assertStringContainsString( 'data-forwp-md="1"', $html );
 		$this->assertStringContainsString( '<p>Title: Hello</p>', $html );
 		$this->assertStringContainsString( '<hr', $html );
 		$this->assertStringContainsString( '<h1>Heading one</h1>', $html );
@@ -51,5 +52,20 @@ class Markdown_ContentTest extends TestCase {
 		$this->assertStringContainsString( '<img', $html );
 		$this->assertStringContainsString( 'https://example.com/hero.png', $html );
 		$this->assertStringNotContainsString( '[image:', $html );
+	}
+
+	public function test_pipe_tables_become_html_tables(): void {
+		$md = "| Day | Path |\n"
+			. "| --- | --- |\n"
+			. "| Mon | /ai/mcp/ |\n"
+			. "| Tue | /services/ |\n";
+
+		$html = Markdown_Content::to_html_document( $md );
+
+		$this->assertStringContainsString( '<table class="forwp-drive-md-table">', $html );
+		$this->assertStringContainsString( '<th>Day</th>', $html );
+		$this->assertStringContainsString( '<td>Mon</td>', $html );
+		$this->assertStringContainsString( '/ai/mcp/', $html );
+		$this->assertStringNotContainsString( '|---|', $html );
 	}
 }
