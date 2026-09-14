@@ -12,6 +12,7 @@ use ForWP\Drive\Database\Import_History_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Restore_To_Incoming;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
+use ForWP\Drive\Parse\Template_Config;
 use ForWP\Drive\Source_Registry;
 
 defined( 'ABSPATH' ) || exit;
@@ -188,6 +189,8 @@ final class Admin_Menu {
 				'multilingual' => Language_Provider_Registry::get_rest_payload(),
 				'sources'      => Source_Registry::get_admin_status_rows(),
 				'activeSource' => 'google_drive',
+				'importPostType' => ( new Template_Config() )->get_import_post_type(),
+				'postTypes'      => Template_Config::get_importable_post_types(),
 				'strings'      => array(
 					'importConfirm'           => __( 'Import this document as a draft?', '4wp-drive' ),
 					'updateConfirm'           => __( 'Update the selected post with this document content?', '4wp-drive' ),
@@ -223,6 +226,7 @@ final class Admin_Menu {
 					'editInGoogleDocs'        => __( 'Edit in Google Docs', '4wp-drive' ),
 					'reject'                  => __( 'Reject', '4wp-drive' ),
 					'openFolder'              => __( 'Open folder', '4wp-drive' ),
+					'openOnGitHub'            => __( 'Open on GitHub', '4wp-drive' ),
 					'packageFolder'           => __( 'Folder', '4wp-drive' ),
 					'packageDocOne'           => __( '1 doc', '4wp-drive' ),
 					'packageDocsMany'         => __( '%d docs', '4wp-drive' ),

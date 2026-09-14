@@ -51,11 +51,16 @@ final class Package_Image_Importer {
 	 *
 	 * @param int                  $post_id  WordPress post id.
 	 * @param array<string, mixed> $metadata Document metadata (body_html, package_files).
-	 * @return string Warning message (empty on full success).
+	 * @return array{warning: string, used_file_ids: array<int, string>}
 	 */
-	public function apply_to_post( int $post_id, array $metadata ): string {
+	public function apply_to_post( int $post_id, array $metadata ): array {
+		$empty = array(
+			'warning'       => '',
+			'used_file_ids' => array(),
+		);
+
 		if ( $post_id <= 0 || ! $this->is_core_image_enabled() ) {
-			return '';
+			return $empty;
 		}
 
 		$body = (string) get_post_field( 'post_content', $post_id );
@@ -65,12 +70,13 @@ final class Package_Image_Importer {
 
 		$tokens = Core_Image_Recipe::extract_tokens( $body );
 		if ( empty( $tokens ) ) {
-			return '';
+			return $empty;
 		}
 
-		$package = $this->index_package_files( $metadata );
-		$warnings = array();
+		$package     = $this->index_package_files( $metadata );
+		$warnings    = array();
 		$attachments = array();
+		$used_ids    = array();
 
 		foreach ( $tokens as $token ) {
 			$file = $this->resolve_package_file( $token, $package );
@@ -80,8 +86,13 @@ final class Package_Image_Importer {
 				continue;
 			}
 
+			$file_id = (string) $file['id'];
+			if ( '' !== $file_id ) {
+				$used_ids[ $file_id ] = $file_id;
+			}
+
 			$result = Featured_Image_Importer::sideload_from_bytes(
-				( $this->downloader )( (string) $file['id'] ),
+				( $this->downloader )( $file_id ),
 				(string) $file['name'],
 				$post_id,
 				(string) get_post_field( 'post_name', $post_id ),
@@ -108,7 +119,10 @@ final class Package_Image_Importer {
 		}
 
 		if ( empty( $attachments ) ) {
-			return implode( ' ', $warnings );
+			return array(
+				'warning'       => implode( ' ', $warnings ),
+				'used_file_ids' => array_values( $used_ids ),
+			);
 		}
 
 		$config = array(
@@ -129,7 +143,10 @@ final class Package_Image_Importer {
 			);
 		}
 
-		return implode( ' ', $warnings );
+		return array(
+			'warning'       => implode( ' ', $warnings ),
+			'used_file_ids' => array_values( $used_ids ),
+		);
 	}
 
 	/**

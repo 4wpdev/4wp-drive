@@ -86,7 +86,7 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 							<?php esc_html_e( 'Import documents from cloud storage into WordPress drafts. Live: Google Drive and GitHub Markdown. Planned: OneDrive, Dropbox.', '4wp-drive' ); ?>
 						</p>
 						<p class="forwp-drive-intro-card__text">
-							<?php esc_html_e( 'Open a card below to configure Google Drive or view roadmap status.', '4wp-drive' ); ?>
+							<?php esc_html_e( 'Open a card below to configure Google Drive or GitHub, or view roadmap status for other providers.', '4wp-drive' ); ?>
 						</p>
 						<p class="forwp-drive-intro-card__cta">
 							<?php esc_html_e( 'Pick a provider below, then open Documentation for the shared document template.', '4wp-drive' ); ?>
@@ -111,29 +111,87 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 					<div id="forwp-drive-github-split" class="forwp-drive-panel forwp-drive-panel--nested" hidden>
 						<h2><?php esc_html_e( 'GitHub repository', '4wp-drive' ); ?></h2>
 						<p class="description">
-							<?php esc_html_e( 'Classic PAT with repo scope. Same incoming/ folder contract as Drive: Markdown articles, png/jpg images, subfolders as packages.', '4wp-drive' ); ?>
+							<?php esc_html_e( 'Classic PAT with repo scope. Markdown packages live at the repo root by default (or a custom Incoming path). After import they move to published/; reject → failed/.', '4wp-drive' ); ?>
 						</p>
+
+						<div id="forwp-drive-github-setup-hint" class="forwp-drive-setup-hint notice notice-info inline">
+							<?php
+							$setup_steps_show_title = true;
+							require FORWP_DRIVE_PATH . 'views/partials/github-setup-steps.php';
+							?>
+						</div>
+
+						<p id="forwp-drive-github-connected" class="forwp-drive-github-connected" hidden>
+							<?php esc_html_e( 'Connected repository:', '4wp-drive' ); ?>
+							<a id="forwp-drive-github-connected-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+						</p>
+
 						<table class="form-table" role="presentation">
 							<tr>
 								<th scope="row"><label for="forwp-drive-github-owner"><?php esc_html_e( 'Owner', '4wp-drive' ); ?></label></th>
-								<td><input type="text" class="regular-text" id="forwp-drive-github-owner" autocomplete="off" /></td>
+								<td>
+									<input type="text" class="regular-text" id="forwp-drive-github-owner" autocomplete="off" />
+									<p class="forwp-drive-field__help">
+										<?php esc_html_e( 'GitHub user or organization that owns the repository (the segment after github.com/).', '4wp-drive' ); ?>
+									</p>
+								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="forwp-drive-github-repo"><?php esc_html_e( 'Repository', '4wp-drive' ); ?></label></th>
-								<td><input type="text" class="regular-text" id="forwp-drive-github-repo" autocomplete="off" /></td>
+								<td>
+									<input type="text" class="regular-text" id="forwp-drive-github-repo" autocomplete="off" />
+									<p class="forwp-drive-field__help">
+										<?php
+										printf(
+											wp_kses(
+												/* translators: %s: example repo name */
+												__( 'Repository name only (e.g. <code>%s</code>). You can also paste an HTTPS or SSH clone URL — it will be normalized on save.', '4wp-drive' ),
+												array( 'code' => array() )
+											),
+											'my-content-repo'
+										);
+										?>
+									</p>
+								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="forwp-drive-github-branch"><?php esc_html_e( 'Branch', '4wp-drive' ); ?></label></th>
-								<td><input type="text" class="regular-text" id="forwp-drive-github-branch" value="main" /></td>
+								<td>
+									<input type="text" class="regular-text" id="forwp-drive-github-branch" value="main" />
+									<p class="forwp-drive-field__help"><?php esc_html_e( 'Usually main or master — must exist in the repo.', '4wp-drive' ); ?></p>
+								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="forwp-drive-github-incoming"><?php esc_html_e( 'Incoming path', '4wp-drive' ); ?></label></th>
-								<td><input type="text" class="regular-text" id="forwp-drive-github-incoming" value="incoming" /></td>
+								<td>
+									<input type="text" class="regular-text" id="forwp-drive-github-incoming" value="" placeholder="<?php esc_attr_e( 'leave empty = repo root', '4wp-drive' ); ?>" />
+									<p class="forwp-drive-field__help"><?php esc_html_e( 'Leave empty to use the repository root as Incoming. Or set a subfolder (e.g. drafts).', '4wp-drive' ); ?></p>
+								</td>
 							</tr>
 							<tr>
 								<th scope="row"><label for="forwp-drive-github-token"><?php esc_html_e( 'Personal access token', '4wp-drive' ); ?></label></th>
 								<td>
 									<input type="password" class="regular-text" id="forwp-drive-github-token" autocomplete="new-password" />
+									<p class="forwp-drive-field__help">
+										<?php
+										printf(
+											wp_kses(
+												/* translators: 1: tokens settings URL, 2: console label */
+												__( 'Get your token from <a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s</a>. Classic token needs the <code>repo</code> scope.', '4wp-drive' ),
+												array(
+													'a'    => array(
+														'href'   => array(),
+														'target' => array(),
+														'rel'    => array(),
+													),
+													'code' => array(),
+												)
+											),
+											esc_url( 'https://github.com/settings/tokens' ),
+											esc_html__( 'GitHub Developer Settings → Tokens', '4wp-drive' )
+										);
+										?>
+									</p>
 									<p class="description" id="forwp-drive-github-token-status"></p>
 								</td>
 							</tr>
@@ -182,7 +240,28 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 									<table class="form-table" role="presentation">
 										<tr>
 											<th scope="row"><label for="forwp-drive-client-id"><?php esc_html_e( 'Client ID', '4wp-drive' ); ?></label></th>
-											<td><input type="text" class="large-text code" id="forwp-drive-client-id" autocomplete="off" /></td>
+											<td>
+												<input type="text" class="large-text code" id="forwp-drive-client-id" autocomplete="off" />
+												<p class="forwp-drive-field__help">
+													<?php
+													printf(
+														wp_kses(
+															/* translators: 1: credentials URL, 2: console label */
+															__( 'Get your Client ID from <a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s</a>.', '4wp-drive' ),
+															array(
+																'a' => array(
+																	'href'   => array(),
+																	'target' => array(),
+																	'rel'    => array(),
+																),
+															)
+														),
+														esc_url( $setup_links['credentials'] ?? 'https://console.cloud.google.com/apis/credentials' ),
+														esc_html__( 'Google Cloud Console → Credentials', '4wp-drive' )
+													);
+													?>
+												</p>
+											</td>
 										</tr>
 										<tr>
 											<th scope="row"><label for="forwp-drive-client-secret"><?php esc_html_e( 'Client Secret', '4wp-drive' ); ?></label></th>
@@ -305,6 +384,18 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 											?>
 										</div>
 									</details>
+
+									<details class="forwp-drive-accordion__item forwp-drive-accordion__item--nested">
+										<summary class="forwp-drive-accordion__summary">
+											<span class="forwp-drive-accordion__title"><?php esc_html_e( 'GitHub — create a personal access token', '4wp-drive' ); ?></span>
+										</summary>
+										<div class="forwp-drive-accordion__panel">
+											<?php
+											$setup_steps_show_title = false;
+											require FORWP_DRIVE_PATH . 'views/partials/github-setup-steps.php';
+											?>
+										</div>
+									</details>
 								</div>
 							</details>
 
@@ -316,10 +407,10 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 								<div class="forwp-drive-accordion__panel">
 									<table class="form-table" role="presentation">
 										<tr>
-											<th scope="row"><label for="forwp-drive-import-post-type"><?php esc_html_e( 'Import into post type', '4wp-drive' ); ?></label></th>
+											<th scope="row"><label for="forwp-drive-import-post-type"><?php esc_html_e( 'Default import post type', '4wp-drive' ); ?></label></th>
 											<td>
 												<select id="forwp-drive-import-post-type"></select>
-												<p class="description"><?php esc_html_e( 'Draft posts are created in this post type. Taxonomy fields below depend on the selected type.', '4wp-drive' ); ?></p>
+												<p class="description"><?php esc_html_e( 'Default destination on this site (Post, Page, Hook, FAQ, …). You can still pick another type for each document in Incoming → Workspace. Taxonomy mapping below follows this default.', '4wp-drive' ); ?></p>
 											</td>
 										</tr>
 									</table>

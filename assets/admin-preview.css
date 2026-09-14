@@ -110,6 +110,16 @@
 	box-sizing: border-box;
 }
 
+#forwp-drive-preview .forwp-drive-import-source-file {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+	text-align: left;
+	text-align-last: left;
+	direction: ltr;
+}
+
 #forwp-drive-preview .forwp-drive-import-media-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
@@ -141,6 +151,27 @@
 	margin: 0 0 12px;
 	text-transform: uppercase;
 	letter-spacing: 0.02em;
+}
+
+#forwp-drive-preview .forwp-drive-import-post-type-wrap {
+	margin: 0 0 14px;
+}
+
+#forwp-drive-preview .forwp-drive-import-post-type-wrap__label {
+	display: block;
+	font-size: 12px;
+	font-weight: 600;
+	margin: 0 0 6px;
+}
+
+#forwp-drive-preview .forwp-drive-inbox-import-post-type {
+	max-width: 100%;
+	min-width: 220px;
+	width: min(100%, 320px);
+}
+
+#forwp-drive-preview .forwp-drive-import-post-type-wrap__hint {
+	margin: 6px 0 0;
 }
 
 #forwp-drive-preview .forwp-drive-import-options__choices {

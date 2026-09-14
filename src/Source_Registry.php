@@ -82,7 +82,7 @@ final class Source_Registry {
 					: __( 'Add OAuth credentials, connect Google, set folder IDs.', '4wp-drive' );
 			} elseif ( GitHub_Source::SLUG === $slug ) {
 				$status = $ready
-					? __( 'Live — Markdown from a GitHub repo incoming/ folder.', '4wp-drive' )
+					? __( 'Live — Markdown from a GitHub repo (Incoming = repo root by default).', '4wp-drive' )
 					: __( 'Add a PAT, owner, and repo under this card.', '4wp-drive' );
 			} else {
 				$status = $ready
@@ -154,33 +154,42 @@ final class Source_Registry {
 			$ready       = $source ? $source->is_ready() : false;
 
 			if ( Google_Drive_Source::SLUG === $slug ) {
-				$folders = Settings::instance()->get_folder_ids();
+				$folders     = Settings::instance()->get_folder_ids();
+				$incoming_id = isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '';
 				$out[ $slug ] = array(
 					'ready'        => $ready,
 					'implemented'  => $implemented,
 					'connection'   => Google_OAuth::instance()->get_connection_payload(),
 					'last_sync'    => isset( $by[ $slug ] ) && is_array( $by[ $slug ] ) ? $by[ $slug ] : null,
-					'incoming_id'  => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',
-					'incoming_url' => '',
+					'incoming_id'  => $incoming_id,
+					'incoming_url' => '' !== $incoming_id
+						? 'https://drive.google.com/drive/folders/' . rawurlencode( $incoming_id )
+						: '',
 				);
 				continue;
 			}
 
 			if ( GitHub_Source::SLUG === $slug ) {
+				$gh = GitHub_Settings::get_public();
 				$out[ $slug ] = array(
 					'ready'        => $ready,
 					'implemented'  => $implemented,
 					'connection'   => array(
 						'state'           => $ready ? 'ok' : 'not_configured',
 						'message'         => $ready
-							? ''
+							? sprintf(
+								/* translators: %s: owner/repo */
+								__( 'Connected to %s', '4wp-drive' ),
+								$gh['owner'] . '/' . $gh['repo']
+							)
 							: __( 'GitHub is not connected. Add a PAT, owner, and repo in Settings.', '4wp-drive' ),
 						'needs_reconnect' => false,
 						'settings_url'    => admin_url( 'admin.php?page=forwp-drive-settings' ),
 					),
 					'last_sync'    => isset( $by[ $slug ] ) && is_array( $by[ $slug ] ) ? $by[ $slug ] : null,
 					'incoming_id'  => '',
-					'incoming_url' => GitHub_Settings::incoming_web_url(),
+					'incoming_url' => (string) ( $gh['incoming_url'] ?? '' ),
+					'repo_url'     => (string) ( $gh['repo_url'] ?? '' ),
 				);
 				continue;
 			}

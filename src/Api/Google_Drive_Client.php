@@ -37,6 +37,76 @@ final class Google_Drive_Client {
 	public const SYSTEM_FOLDER_NAMES = array( 'incoming', 'published', 'failed' );
 
 	/**
+	 * List folders and files directly under a parent (browse / tree UI).
+	 *
+	 * @param string $parent_id Parent folder id.
+	 * @return array{folders: array<int, array{id: string, name: string}>, files: array<int, array{id: string, name: string, kind: string}>}|WP_Error
+	 */
+	public function list_folder_entries( string $parent_id ) {
+		$q = sprintf( "'%s' in parents and trashed = false", $parent_id );
+
+		$response = $this->request(
+			'GET',
+			'/files',
+			array(
+				'q'        => $q,
+				'fields'   => 'files(id,name,mimeType)',
+				'pageSize' => 200,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+
+		$folders = array();
+		$files   = array();
+
+		foreach ( (array) ( $response['files'] ?? array() ) as $file ) {
+			if ( ! is_array( $file ) ) {
+				continue;
+			}
+
+			$id   = (string) ( $file['id'] ?? '' );
+			$name = (string) ( $file['name'] ?? '' );
+			$mime = (string) ( $file['mimeType'] ?? '' );
+			if ( '' === $id || '' === $name ) {
+				continue;
+			}
+
+			if ( 'application/vnd.google-apps.folder' === $mime ) {
+				$folders[] = array(
+					'id'   => $id,
+					'name' => $name,
+				);
+				continue;
+			}
+
+			if ( 'application/vnd.google-apps.shortcut' === $mime ) {
+				continue;
+			}
+
+			$kind = 'file';
+			if ( 0 === strpos( $mime, 'image/' ) ) {
+				$kind = 'image';
+			} elseif ( Importable_Document::is_article( Importable_Document::kind( $mime, $name ) ) ) {
+				$kind = 'document';
+			}
+
+			$files[] = array(
+				'id'   => $id,
+				'name' => $name,
+				'kind' => $kind,
+			);
+		}
+
+		return array(
+			'folders' => $folders,
+			'files'   => $files,
+		);
+	}
+
+	/**
 	 * List child folders in a parent folder.
 	 *
 	 * @param string        $parent_id     Parent folder id.

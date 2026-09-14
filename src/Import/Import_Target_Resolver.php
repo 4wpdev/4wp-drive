@@ -266,12 +266,16 @@ final class Import_Target_Resolver {
 	 * REST payload for one import target post.
 	 *
 	 * @param WP_Post $post Post object.
-	 * @return array{id: int, title: string, slug: string, status: string, edit_url: string, modified: string}
+	 * @return array{id: int, title: string, slug: string, post_type: string, post_type_label: string, status: string, edit_url: string, modified: string}
 	 */
 	private static function serialize_post( WP_Post $post ): array {
-		$provider = Language_Provider_Registry::get_active();
-		$lang     = $provider->get_post_language( (int) $post->ID );
+		$provider  = Language_Provider_Registry::get_active();
+		$lang      = $provider->get_post_language( (int) $post->ID );
 		$lang_name = $lang;
+		$pto       = get_post_type_object( $post->post_type );
+		$type_label = $pto && isset( $pto->labels->singular_name )
+			? (string) $pto->labels->singular_name
+			: (string) $post->post_type;
 
 		foreach ( $provider->get_languages() as $language ) {
 			if ( $language['code'] === $lang ) {
@@ -281,14 +285,16 @@ final class Import_Target_Resolver {
 		}
 
 		return array(
-			'id'            => (int) $post->ID,
-			'title'         => (string) $post->post_title,
-			'slug'          => (string) $post->post_name,
-			'status'        => (string) $post->post_status,
-			'language'      => $lang,
-			'language_name' => (string) $lang_name,
-			'edit_url'      => (string) get_edit_post_link( $post, 'raw' ),
-			'modified'      => (string) $post->post_modified,
+			'id'              => (int) $post->ID,
+			'title'           => (string) $post->post_title,
+			'slug'            => (string) $post->post_name,
+			'post_type'       => (string) $post->post_type,
+			'post_type_label' => $type_label,
+			'status'          => (string) $post->post_status,
+			'language'        => $lang,
+			'language_name'   => (string) $lang_name,
+			'edit_url'        => (string) get_edit_post_link( $post, 'raw' ),
+			'modified'        => (string) $post->post_modified,
 		);
 	}
 

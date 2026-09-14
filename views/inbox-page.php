@@ -156,6 +156,15 @@ defined( 'ABSPATH' ) || exit;
 					<p id="forwp-drive-import-options-label" class="forwp-drive-import-options__label">
 						<?php esc_html_e( 'Import destination', '4wp-drive' ); ?>
 					</p>
+					<div id="forwp-drive-import-post-type-wrap" class="forwp-drive-import-post-type-wrap">
+						<label class="forwp-drive-import-post-type-wrap__label" for="forwp-drive-inbox-import-post-type">
+							<?php esc_html_e( 'Post type', '4wp-drive' ); ?>
+						</label>
+						<select id="forwp-drive-inbox-import-post-type" class="forwp-drive-inbox-import-post-type"></select>
+						<p class="description forwp-drive-import-post-type-wrap__hint">
+							<?php esc_html_e( 'Choose where this document goes: Post, Page, Hook, or another type registered on this site.', '4wp-drive' ); ?>
+						</p>
+					</div>
 					<div class="forwp-drive-import-options__choices" role="radiogroup" aria-labelledby="forwp-drive-import-options-label">
 						<label class="forwp-drive-import-options__choice">
 							<input type="radio" name="forwp-drive-import-mode" value="create" checked />
@@ -180,7 +189,7 @@ defined( 'ABSPATH' ) || exit;
 						<select id="forwp-drive-import-target" class="forwp-drive-import-target" aria-describedby="forwp-drive-import-target-error forwp-drive-import-target-hint"></select>
 						<p id="forwp-drive-import-target-error" class="forwp-drive-field-error" hidden></p>
 						<p id="forwp-drive-import-target-hint" class="description forwp-drive-import-target-wrap__hint">
-							<?php esc_html_e( 'Matches by slug or title when possible. Only posts in the selected language are listed.', '4wp-drive' ); ?>
+							<?php esc_html_e( 'Each option: post type · slug · title. Best match by slug (then title) is selected first. Only posts in the selected language are listed.', '4wp-drive' ); ?>
 						</p>
 					</div>
 				</div>
@@ -197,18 +206,6 @@ defined( 'ABSPATH' ) || exit;
 				</div>
 			</div>
 		</section>
-	</div>
-	<div id="forwp-drive-package-dock" hidden>
-		<aside id="forwp-drive-image-pin" class="forwp-drive-image-pin forwp-drive-admin-chrome" hidden>
-			<p class="forwp-drive-image-pin__label"><?php esc_html_e( 'Package assets', '4wp-drive' ); ?></p>
-			<p class="description forwp-drive-image-pin__hint"><?php esc_html_e( 'Pick an image, set alignment, then click a paragraph.', '4wp-drive' ); ?></p>
-			<div id="forwp-drive-image-pin-align" class="forwp-drive-image-pin__align" role="radiogroup">
-				<label><input type="radio" name="forwp-drive-image-align" value="left" /> <?php esc_html_e( 'Left', '4wp-drive' ); ?></label>
-				<label><input type="radio" name="forwp-drive-image-align" value="center" checked /> <?php esc_html_e( 'Center', '4wp-drive' ); ?></label>
-				<label><input type="radio" name="forwp-drive-image-align" value="right" /> <?php esc_html_e( 'Right', '4wp-drive' ); ?></label>
-			</div>
-			<div id="forwp-drive-image-pin-list" class="forwp-drive-image-pin__list"></div>
-		</aside>
 	</div>
 	<div id="forwp-drive-busy" class="forwp-drive-busy" hidden>
 		<div class="forwp-drive-busy__panel" role="alertdialog" aria-modal="true" aria-labelledby="forwp-drive-busy-message" tabindex="-1">

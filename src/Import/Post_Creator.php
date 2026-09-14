@@ -33,21 +33,24 @@ final class Post_Creator {
 	/**
 	 * Update an existing post with parsed document content.
 	 *
-	 * @param int                  $post_id  Target post id.
-	 * @param array<string, mixed> $metadata Parsed template fields.
+	 * @param int                  $post_id   Target post id.
+	 * @param array<string, mixed> $metadata  Parsed template fields.
+	 * @param string               $post_type Expected post type (empty = settings default).
 	 * @return int|WP_Error Post id.
 	 */
-	public function update_existing( int $post_id, array $metadata ) {
+	public function update_existing( int $post_id, array $metadata, string $post_type = '' ) {
 		$post = get_post( $post_id );
 		if ( ! $post instanceof \WP_Post ) {
 			return new WP_Error( 'forwp_drive_target_not_found', __( 'Target post was not found.', '4wp-drive' ) );
 		}
 
-		$post_type = $this->config->get_import_post_type();
+		$post_type = '' !== $post_type
+			? $this->config->resolve_import_post_type( $post_type )
+			: $this->config->get_import_post_type();
 		if ( $post->post_type !== $post_type ) {
 			return new WP_Error(
 				'forwp_drive_target_wrong_type',
-				__( 'Target post type does not match the configured import post type.', '4wp-drive' )
+				__( 'Target post type does not match the selected import post type.', '4wp-drive' )
 			);
 		}
 
@@ -96,16 +99,19 @@ final class Post_Creator {
 	/**
 	 * Create a new draft post from parsed metadata.
 	 *
-	 * @param array<string, mixed> $metadata Parsed template fields.
+	 * @param array<string, mixed> $metadata  Parsed template fields.
+	 * @param string               $post_type Post type override (empty = settings default).
 	 * @return int|WP_Error Post id.
 	 */
-	public function create_draft( array $metadata ) {
+	public function create_draft( array $metadata, string $post_type = '' ) {
 		$title = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
 		if ( '' === $title ) {
 			return new WP_Error( 'forwp_drive_no_title', __( 'Document is missing a Title.', '4wp-drive' ) );
 		}
 
-		$post_type = $this->config->get_import_post_type();
+		$post_type = '' !== $post_type
+			? $this->config->resolve_import_post_type( $post_type )
+			: $this->config->get_import_post_type();
 
 		$slug = isset( $metadata['slug'] ) ? (string) $metadata['slug'] : '';
 		if ( '' === $slug ) {

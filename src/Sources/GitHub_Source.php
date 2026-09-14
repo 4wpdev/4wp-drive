@@ -19,7 +19,7 @@ use WP_Error;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Scans repo `incoming/` for Markdown articles and images.
+ * Scans the configured Incoming path (repo root by default) for Markdown packages.
  */
 final class GitHub_Source implements Storage_Source_Interface {
 
@@ -54,18 +54,144 @@ final class GitHub_Source implements Storage_Source_Interface {
 		);
 	}
 
-	public function scan_incoming() {
+	/**
+	 * Browse Incoming + published + failed for the inbox tree (includes empty role folders).
+	 *
+	 * @return array{folders: array<string, array<string, mixed>>, files: array<int, array<string, mixed>>}|WP_Error
+	 */
+	public function browse_tree() {
 		if ( ! $this->is_ready() ) {
 			return new WP_Error( 'forwp_drive_github_not_ready', __( 'GitHub is not configured.', '4wp-drive' ) );
 		}
 
 		$cfg    = GitHub_Settings::get_public();
 		$client = new GitHub_Client();
-		$parser = new Template_Parser();
+
+		$incoming  = trim( (string) $cfg['incoming'], '/' );
+		$published = trim( (string) $cfg['published'], '/' );
+		$failed    = trim( (string) $cfg['failed'], '/' );
+		if ( '' === $published ) {
+			$published = 'published';
+		}
+		if ( '' === $failed ) {
+			$failed = 'failed';
+		}
+
+		$skip = array_filter( array( $published, $failed ) );
+		$root = array(
+			'folders' => array(),
+			'files'   => array(),
+		);
+
+		if ( '' === $incoming ) {
+			$this->fill_browse_level( $client, $root, '', $skip, 0 );
+		} else {
+			$root['folders'][ $incoming ] = $this->browse_role_node( $client, $incoming, $incoming, 'incoming', 0 );
+		}
+
+		$root['folders'][ $published ] = $this->browse_role_node( $client, $published, $published, 'published', 0 );
+		$root['folders'][ $failed ]    = $this->browse_role_node( $client, $failed, $failed, 'failed', 0 );
+
+		return $root;
+	}
+
+	/**
+	 * @param array<string, mixed> $node   Tree node (folders/files).
+	 * @param array<int, string>   $skip   Top-level dir names to omit (role folders added separately).
+	 * @param int                  $depth  Nesting depth (0 = role / root listing).
+	 */
+	private function fill_browse_level( GitHub_Client $client, array &$node, string $path, array $skip, int $depth ): void {
+		$entries = $client->list_path( $path );
+		if ( is_wp_error( $entries ) ) {
+			return;
+		}
+
+		foreach ( $entries as $entry ) {
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+
+			$type = (string) ( $entry['type'] ?? '' );
+			$name = (string) ( $entry['name'] ?? '' );
+			$full = (string) ( $entry['path'] ?? '' );
+			if ( '' === $name || '' === $full ) {
+				continue;
+			}
+
+			if ( 'dir' === $type ) {
+				if ( 0 === $depth && in_array( $name, $skip, true ) ) {
+					continue;
+				}
+				$child = array(
+					'name'    => $name,
+					'path'    => $full,
+					'role'    => '',
+					'folders' => array(),
+					'files'   => array(),
+				);
+				// Recurse into nested folders (packages, published/failed trees).
+				if ( $depth < 5 ) {
+					$this->fill_browse_level( $client, $child, $full, array(), $depth + 1 );
+				}
+				$node['folders'][ $name ] = $child;
+				continue;
+			}
+
+			if ( 'file' !== $type ) {
+				continue;
+			}
+
+			$kind  = 'file';
+			$lower = strtolower( $name );
+			if ( preg_match( '/\.(png|jpe?g|gif|webp|svg)$/', $lower ) ) {
+				$kind = 'image';
+			} elseif ( preg_match( '/\.(md|mdx|markdown)$/', $lower ) ) {
+				$kind = 'document';
+			}
+
+			$node['files'][] = array(
+				'id'   => $this->file_id_for_path( $full ),
+				'name' => $name,
+				'kind' => $kind,
+			);
+		}
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function browse_role_node( GitHub_Client $client, string $path, string $name, string $role, int $depth ): array {
+		$node = array(
+			'name'    => $name,
+			'path'    => $path,
+			'role'    => $role,
+			'folders' => array(),
+			'files'   => array(),
+		);
+		$this->fill_browse_level( $client, $node, $path, array(), $depth );
+
+		return $node;
+	}
+
+	public function scan_incoming() {
+		if ( ! $this->is_ready() ) {
+			return new WP_Error( 'forwp_drive_github_not_ready', __( 'GitHub is not configured.', '4wp-drive' ) );
+		}
+
+		$cfg     = GitHub_Settings::get_public();
+		$client  = new GitHub_Client();
+		$parser  = new Template_Parser();
 		$entries = $client->list_path( $cfg['incoming'] );
 		if ( is_wp_error( $entries ) ) {
 			return $entries;
 		}
+
+		$skip = array_filter(
+			array(
+				trim( (string) $cfg['published'], '/' ),
+				trim( (string) $cfg['failed'], '/' ),
+			)
+		);
 
 		$results = array();
 		$seen    = array();
@@ -82,12 +208,25 @@ final class GitHub_Source implements Storage_Source_Interface {
 				continue;
 			}
 
-			if ( 'dir' === $type ) {
-				$item = $this->scan_package_dir( $client, $parser, $path, $name );
-			} else {
-				$item = $this->scan_flat_file( $client, $parser, $entry );
+			// When Incoming is repo root, never re-scan published/failed trees.
+			if ( 'dir' === $type && in_array( $name, $skip, true ) ) {
+				continue;
 			}
 
+			if ( 'dir' === $type ) {
+				$found = $this->scan_dir_for_packages( $client, $parser, $path, $name, 0 );
+				foreach ( $found as $item ) {
+					$file_id = (string) ( $item['file_id'] ?? '' );
+					if ( '' === $file_id || isset( $seen[ $file_id ] ) ) {
+						continue;
+					}
+					$seen[ $file_id ] = true;
+					$results[]        = $item;
+				}
+				continue;
+			}
+
+			$item = $this->scan_flat_file( $client, $parser, $entry );
 			if ( null === $item ) {
 				continue;
 			}
@@ -105,6 +244,48 @@ final class GitHub_Source implements Storage_Source_Interface {
 	}
 
 	/**
+	 * Discover packages at this path or nested under it (e.g. LMS4WP/articles, LMS4WP/courses/…).
+	 *
+	 * A directory with article files is one package. A container with only subfolders is walked.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function scan_dir_for_packages( GitHub_Client $client, Template_Parser $parser, string $path, string $name, int $depth ): array {
+		if ( $depth > 5 ) {
+			return array();
+		}
+
+		$package = $this->scan_package_dir( $client, $parser, $path, $name );
+		if ( null !== $package ) {
+			return array( $package );
+		}
+
+		$listing = $client->list_path( $path );
+		if ( is_wp_error( $listing ) || empty( $listing ) ) {
+			return array();
+		}
+
+		$results = array();
+		foreach ( $listing as $entry ) {
+			if ( ! is_array( $entry ) || 'dir' !== ( $entry['type'] ?? '' ) ) {
+				continue;
+			}
+			$child_path = (string) ( $entry['path'] ?? '' );
+			$child_name = (string) ( $entry['name'] ?? '' );
+			if ( '' === $child_path || '' === $child_name ) {
+				continue;
+			}
+			foreach ( $this->scan_dir_for_packages( $client, $parser, $child_path, $child_name, $depth + 1 ) as $item ) {
+				$results[] = $item;
+			}
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Move the imported article; if it was alone in its package folder, move the whole folder.
+	 *
 	 * @param array<string, mixed> $metadata Scan metadata.
 	 * @return true|WP_Error
 	 */
@@ -115,47 +296,136 @@ final class GitHub_Source implements Storage_Source_Interface {
 			return new WP_Error( 'forwp_drive_github_folders', __( 'GitHub folder mapping is incomplete.', '4wp-drive' ) );
 		}
 
-		$path = self::path_from_file_id( $file_id );
-		if ( '' === $path ) {
-			$path = (string) ( $metadata['github_path'] ?? '' );
-		}
-
-		$package = (string) ( $metadata['package_folder_id'] ?? '' );
-		$client  = new GitHub_Client();
-
-		if ( '' !== $package ) {
-			$listing = $client->list_path( $package );
-			if ( is_wp_error( $listing ) ) {
-				return $listing;
-			}
-
-			$ok = true;
-			foreach ( $listing as $entry ) {
-				if ( ! is_array( $entry ) || 'file' !== ( $entry['type'] ?? '' ) ) {
-					continue;
-				}
-				$from = (string) ( $entry['path'] ?? '' );
-				if ( '' === $from ) {
-					continue;
-				}
-				$rel = substr( $from, strlen( $cfg['incoming'] ) );
-				$to  = trim( $dest . $rel, '/' );
-				$moved = $client->move_file( $from, $to );
-				if ( is_wp_error( $moved ) ) {
-					$ok = $moved;
-				}
-			}
-
-			return true === $ok ? true : $ok;
-		}
-
-		if ( '' === $path ) {
+		$paths = $this->paths_to_move_after_import( $file_id, $metadata, $target_role );
+		if ( empty( $paths ) ) {
 			return new WP_Error( 'forwp_drive_github_path', __( 'Could not resolve GitHub file path.', '4wp-drive' ) );
 		}
 
-		$base = basename( $path );
+		$client = new GitHub_Client();
+		$ok     = true;
+		foreach ( $paths as $from ) {
+			$to    = self::remap_under_role( $from, (string) $cfg['incoming'], $dest );
+			$moved = $client->move_file( $from, $to );
+			if ( is_wp_error( $moved ) ) {
+				$ok = $moved;
+			}
+		}
 
-		return $client->move_file( $path, $dest . '/' . $base );
+		return true === $ok ? true : $ok;
+	}
+
+	/**
+	 * Paths to move after import or reject.
+	 *
+	 * published: MD + used images; whole folder only if every file there was used.
+	 * failed (reject): only the rejected article MD — never sibling files / whole package.
+	 *
+	 * @param array<string, mixed> $metadata    Scan metadata.
+	 * @param string               $target_role published|failed.
+	 * @return array<int, string>
+	 */
+	private function paths_to_move_after_import( string $file_id, array $metadata, string $target_role = 'published' ): array {
+		$article = self::path_from_file_id( $file_id );
+		if ( '' === $article ) {
+			$article = trim( str_replace( '\\', '/', (string) ( $metadata['github_path'] ?? '' ) ), '/' );
+		}
+		$selected = (string) ( $metadata['selected_file_id'] ?? '' );
+		if ( '' !== $selected ) {
+			$selected_path = self::path_from_file_id( $selected );
+			if ( '' !== $selected_path ) {
+				$article = $selected_path;
+			}
+		}
+
+		// Reject / fail: only the article, leave the rest of the package in Incoming.
+		if ( 'failed' === $target_role ) {
+			return '' !== $article ? array( $article ) : array();
+		}
+
+		$used_ids = isset( $metadata['used_source_file_ids'] ) && is_array( $metadata['used_source_file_ids'] )
+			? $metadata['used_source_file_ids']
+			: array();
+
+		$used_paths = array();
+		foreach ( $used_ids as $id ) {
+			$path = self::path_from_file_id( (string) $id );
+			if ( '' !== $path ) {
+				$used_paths[ $path ] = $path;
+			}
+		}
+
+		if ( '' !== $article ) {
+			$used_paths[ $article ] = $article;
+		}
+
+		$featured = (string) ( $metadata['image_file_id'] ?? '' );
+		if ( '' !== $featured ) {
+			$featured_path = self::path_from_file_id( $featured );
+			if ( '' !== $featured_path ) {
+				$used_paths[ $featured_path ] = $featured_path;
+			}
+		}
+
+		$package = trim( str_replace( '\\', '/', (string) ( $metadata['package_folder_id'] ?? '' ) ), '/' );
+		if ( '' === $package ) {
+			return array_values( $used_paths );
+		}
+
+		$client  = new GitHub_Client();
+		$listing = $client->list_path( $package );
+		if ( is_wp_error( $listing ) || empty( $listing ) ) {
+			return array_values( $used_paths );
+		}
+
+		$folder_files = array();
+		foreach ( $listing as $entry ) {
+			if ( ! is_array( $entry ) || 'file' !== ( $entry['type'] ?? '' ) ) {
+				continue;
+			}
+			$from = trim( (string) ( $entry['path'] ?? '' ), '/' );
+			if ( '' !== $from ) {
+				$folder_files[ $from ] = $from;
+			}
+		}
+
+		if ( empty( $folder_files ) ) {
+			return array_values( $used_paths );
+		}
+
+		// Whole folder only when every file there was used in this import.
+		$unused = array_diff_key( $folder_files, $used_paths );
+		if ( empty( $unused ) ) {
+			return array_values( $folder_files );
+		}
+
+		$move = array();
+		foreach ( $used_paths as $path ) {
+			if ( isset( $folder_files[ $path ] ) || 0 === strpos( $path, $package . '/' ) || $path === $package ) {
+				$move[ $path ] = $path;
+			}
+		}
+		if ( '' !== $article ) {
+			$move[ $article ] = $article;
+		}
+
+		return array_values( $move );
+	}
+
+	/**
+	 * Map a path under Incoming into published/failed (Incoming may be repo root).
+	 */
+	private static function remap_under_role( string $from_path, string $incoming, string $dest ): string {
+		$from     = trim( str_replace( '\\', '/', $from_path ), '/' );
+		$incoming = trim( str_replace( '\\', '/', $incoming ), '/' );
+		$dest     = trim( str_replace( '\\', '/', $dest ), '/' );
+
+		if ( '' !== $incoming && ( $from === $incoming || 0 === strpos( $from, $incoming . '/' ) ) ) {
+			$rel = trim( substr( $from, strlen( $incoming ) ), '/' );
+		} else {
+			$rel = $from;
+		}
+
+		return trim( $dest . '/' . $rel, '/' );
 	}
 
 	/**
@@ -183,14 +453,26 @@ final class GitHub_Source implements Storage_Source_Interface {
 			);
 		}
 
-		$package_files = isset( $meta['package_files'] ) && is_array( $meta['package_files'] ) ? $meta['package_files'] : array();
+		$package_folder = (string) ( $meta['package_folder_id'] ?? '' );
+		$package_files  = isset( $meta['package_files'] ) && is_array( $meta['package_files'] ) ? $meta['package_files'] : array();
+
+		// Refresh sibling list from GitHub so the UI matches the live tree (not a stale sync snapshot).
+		if ( '' !== $package_folder ) {
+			$listing = $client->list_path( $package_folder );
+			if ( ! is_wp_error( $listing ) && is_array( $listing ) ) {
+				$refreshed = $this->package_files_from_listing( $listing );
+				if ( ! empty( $refreshed ) ) {
+					$package_files = $refreshed;
+				}
+			}
+		}
 
 		return $this->parse_markdown_file(
 			$client,
 			$parser,
 			$path,
 			$name,
-			(string) ( $meta['package_folder_id'] ?? '' ),
+			$package_folder,
 			$image,
 			$package_files,
 			$file_id
@@ -221,9 +503,9 @@ final class GitHub_Source implements Storage_Source_Interface {
 			return null;
 		}
 
-		$article_rows = array();
-		$image_rows   = array();
-		$package_files = array();
+		$article_rows  = array();
+		$image_rows    = array();
+		$package_files = $this->package_files_from_listing( $listing );
 
 		foreach ( $listing as $entry ) {
 			if ( ! is_array( $entry ) || 'file' !== ( $entry['type'] ?? '' ) ) {
@@ -242,26 +524,15 @@ final class GitHub_Source implements Storage_Source_Interface {
 			);
 
 			if ( Importable_Document::KIND_IMAGE === $kind ) {
-				$image_rows[]    = array(
+				$image_rows[] = array(
 					'id'   => $id,
 					'name' => $name,
-				);
-				$package_files[] = array(
-					'id'   => $id,
-					'name' => $name,
-					'kind' => 'image',
 				);
 				continue;
 			}
 
 			if ( Importable_Document::is_article( $kind ) ) {
-				$article_rows[]  = $row;
-				$package_files[] = array(
-					'id'   => $id,
-					'name' => $name,
-					'kind' => 'document',
-					'mime' => '',
-				);
+				$article_rows[] = $row;
 			}
 		}
 
@@ -289,6 +560,51 @@ final class GitHub_Source implements Storage_Source_Interface {
 			$package_files,
 			(string) ( $picked['id'] ?? '' )
 		);
+	}
+
+	/**
+	 * Build package_files entries from a GitHub contents listing.
+	 *
+	 * @param array<int, mixed> $listing Contents API rows.
+	 * @return array<int, array<string, string>>
+	 */
+	private function package_files_from_listing( array $listing ): array {
+		$package_files = array();
+
+		foreach ( $listing as $entry ) {
+			if ( ! is_array( $entry ) || 'file' !== ( $entry['type'] ?? '' ) ) {
+				continue;
+			}
+
+			$name = (string) ( $entry['name'] ?? '' );
+			$path = (string) ( $entry['path'] ?? '' );
+			if ( '' === $name || '' === $path ) {
+				continue;
+			}
+
+			$id   = $this->file_id_for_path( $path );
+			$kind = Importable_Document::kind( '', $name );
+
+			if ( Importable_Document::KIND_IMAGE === $kind ) {
+				$package_files[] = array(
+					'id'   => $id,
+					'name' => $name,
+					'kind' => 'image',
+				);
+				continue;
+			}
+
+			if ( Importable_Document::is_article( $kind ) ) {
+				$package_files[] = array(
+					'id'   => $id,
+					'name' => $name,
+					'kind' => 'document',
+					'mime' => '',
+				);
+			}
+		}
+
+		return $package_files;
 	}
 
 	/**

@@ -74,14 +74,17 @@ final class Import_Runner {
 				(string) $options['featured_image_file_id']
 			);
 		}
-		$creator  = new Post_Creator();
-		$config   = new Template_Config();
-		$mode     = isset( $options['mode'] ) ? sanitize_key( (string) $options['mode'] ) : 'create';
-		$updated  = false;
+		$creator   = new Post_Creator();
+		$config    = new Template_Config();
+		$post_type = $config->resolve_import_post_type(
+			isset( $options['post_type'] ) ? (string) $options['post_type'] : ''
+		);
+		$mode      = isset( $options['mode'] ) ? sanitize_key( (string) $options['mode'] ) : 'create';
+		$updated   = false;
 
 		if ( 'update' === $mode ) {
 			$target_id = isset( $options['target_post_id'] ) ? (int) $options['target_post_id'] : 0;
-			$target_id = Import_Target_Resolver::resolve_for_import( $target_id, $config->get_import_post_type(), $lang );
+			$target_id = Import_Target_Resolver::resolve_for_import( $target_id, $post_type, $lang );
 			if ( is_wp_error( $target_id ) ) {
 				$this->repository->update(
 					$document_id,
@@ -110,10 +113,10 @@ final class Import_Runner {
 				);
 			}
 
-			$post_id = $creator->update_existing( $target_id, $metadata );
+			$post_id = $creator->update_existing( $target_id, $metadata, $post_type );
 			$updated = true;
 		} else {
-			$pto = get_post_type_object( $config->get_import_post_type() );
+			$pto = get_post_type_object( $post_type );
 			if ( $pto && ! current_user_can( $pto->cap->create_posts ) ) {
 				$this->repository->update(
 					$document_id,
@@ -130,7 +133,7 @@ final class Import_Runner {
 				);
 			}
 
-			$post_id = $creator->create_draft( $metadata );
+			$post_id = $creator->create_draft( $metadata, $post_type );
 		}
 
 		if ( is_wp_error( $post_id ) ) {
@@ -145,8 +148,16 @@ final class Import_Runner {
 
 		$downloader    = $this->make_file_downloader( (string) $row->source );
 		$image_warning = $this->maybe_attach_featured_image( $metadata, (int) $post_id, $downloader );
-		$body_warning  = $this->maybe_apply_package_images( $metadata, (int) $post_id, $downloader );
+		$image_result  = $this->maybe_apply_package_images( $metadata, (int) $post_id, $downloader );
+		$body_warning  = (string) ( $image_result['warning'] ?? '' );
 		$metadata['slug'] = (string) get_post_field( 'post_name', $post_id );
+		$metadata['used_source_file_ids'] = $this->collect_used_source_file_ids(
+			(string) $row->file_id,
+			$metadata,
+			isset( $image_result['used_file_ids'] ) && is_array( $image_result['used_file_ids'] )
+				? $image_result['used_file_ids']
+				: array()
+		);
 
 		$source = Source_Registry::get( (string) $row->source );
 		if ( $source ) {
@@ -216,9 +227,44 @@ final class Import_Runner {
 	 * @param array<string, mixed> $metadata Parsed document metadata.
 	 * @param int                  $post_id  Created post id.
 	 * @param callable             $download File downloader.
+	 * @return array{warning: string, used_file_ids: array<int, string>}
 	 */
-	private function maybe_apply_package_images( array $metadata, int $post_id, callable $download ): string {
+	private function maybe_apply_package_images( array $metadata, int $post_id, callable $download ): array {
 		return ( new Package_Image_Importer( $download ) )->apply_to_post( $post_id, $metadata );
+	}
+
+	/**
+	 * Source file ids consumed by this import (article + featured + inline images).
+	 *
+	 * @param array<string, mixed> $metadata      Scan metadata.
+	 * @param array<int, string>   $inline_images File ids used from [image:] markers.
+	 * @return array<int, string>
+	 */
+	private function collect_used_source_file_ids( string $file_id, array $metadata, array $inline_images ): array {
+		$used = array();
+
+		if ( '' !== $file_id ) {
+			$used[ $file_id ] = $file_id;
+		}
+
+		$selected = (string) ( $metadata['selected_file_id'] ?? '' );
+		if ( '' !== $selected ) {
+			$used[ $selected ] = $selected;
+		}
+
+		$featured = (string) ( $metadata['image_file_id'] ?? '' );
+		if ( '' !== $featured ) {
+			$used[ $featured ] = $featured;
+		}
+
+		foreach ( $inline_images as $id ) {
+			$id = (string) $id;
+			if ( '' !== $id ) {
+				$used[ $id ] = $id;
+			}
+		}
+
+		return array_values( $used );
 	}
 
 	/**

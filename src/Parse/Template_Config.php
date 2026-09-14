@@ -332,7 +332,7 @@ final class Template_Config {
 	}
 
 	/**
-	 * Post types available for import target.
+	 * Post types available for import target (content CPTs on this site).
 	 *
 	 * @return array<int, array{slug: string, label: string}>
 	 */
@@ -344,9 +344,44 @@ final class Template_Config {
 			'objects'
 		);
 
+		$exclude = array(
+			'attachment',
+			'revision',
+			'nav_menu_item',
+			'custom_css',
+			'customize_changeset',
+			'oembed_cache',
+			'user_request',
+			'wp_block',
+			'wp_template',
+			'wp_template_part',
+			'wp_global_styles',
+			'wp_navigation',
+			'wp_font_family',
+			'wp_font_face',
+			'shop_order',
+			'shop_order_refund',
+			'shop_coupon',
+			'product_variation',
+		);
+
+		/**
+		 * Filter post types excluded from the import destination list.
+		 *
+		 * @param array<int, string> $exclude Slugs to skip.
+		 */
+		$exclude = apply_filters( 'forwp_drive_importable_post_type_exclude', $exclude );
+		if ( ! is_array( $exclude ) ) {
+			$exclude = array();
+		}
+
 		$list = array();
 		foreach ( $types as $object ) {
-			if ( 'attachment' === $object->name ) {
+			if ( in_array( $object->name, $exclude, true ) ) {
+				continue;
+			}
+			// Prefer real content types (posts, pages, hooks, courses…).
+			if ( ! $object->public && ! $object->publicly_queryable && ! $object->show_in_menu ) {
 				continue;
 			}
 			$list[] = array(
@@ -362,7 +397,33 @@ final class Template_Config {
 			}
 		);
 
-		return $list;
+		/**
+		 * Filter importable post types shown in Settings and Inbox.
+		 *
+		 * @param array<int, array{slug: string, label: string}> $list Types.
+		 */
+		$filtered = apply_filters( 'forwp_drive_importable_post_types', $list );
+
+		return is_array( $filtered ) ? $filtered : $list;
+	}
+
+	/**
+	 * Resolve post type for one import (override or saved default).
+	 */
+	public function resolve_import_post_type( string $override = '' ): string {
+		$override = sanitize_key( $override );
+		$allowed  = array_column( self::get_importable_post_types(), 'slug' );
+
+		if ( '' !== $override && post_type_exists( $override ) && in_array( $override, $allowed, true ) ) {
+			return $override;
+		}
+
+		$default = $this->get_import_post_type();
+		if ( in_array( $default, $allowed, true ) ) {
+			return $default;
+		}
+
+		return in_array( 'post', $allowed, true ) ? 'post' : ( $allowed[0] ?? 'post' );
 	}
 
 	/**

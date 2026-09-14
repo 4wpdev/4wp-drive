@@ -124,9 +124,12 @@ final class GitHub_Client {
 		$cfg   = GitHub_Settings::get_public();
 		$owner = rawurlencode( $cfg['owner'] );
 		$repo  = rawurlencode( $cfg['repo'] );
-		$path  = ltrim( $path, '/' );
-		$enc   = str_replace( '%2F', '/', rawurlencode( $path ) );
-		$base  = '/repos/' . $owner . '/' . $repo . '/contents/' . $enc;
+		$path  = trim( str_replace( '\\', '/', $path ), '/' );
+		$base  = '/repos/' . $owner . '/' . $repo . '/contents';
+		if ( '' !== $path ) {
+			$enc   = str_replace( '%2F', '/', rawurlencode( $path ) );
+			$base .= '/' . $enc;
+		}
 
 		if ( ! $with_ref ) {
 			return $base;
@@ -174,6 +177,16 @@ final class GitHub_Client {
 			$message = is_array( $data ) && isset( $data['message'] )
 				? (string) $data['message']
 				: __( 'GitHub API error.', '4wp-drive' );
+
+			if ( 404 === (int) $code ) {
+				$cfg = GitHub_Settings::get_public();
+				$message = sprintf(
+					/* translators: 1: owner/repo, 2: branch */
+					__( 'GitHub repository not found or this token cannot access it: %1$s (branch %2$s). Check Owner/Repository in Settings → Storage sources → GitHub.', '4wp-drive' ),
+					$cfg['owner'] . '/' . $cfg['repo'],
+					$cfg['branch']
+				);
+			}
 
 			return new WP_Error( 'forwp_drive_github_api', $message, array( 'status' => $code ) );
 		}

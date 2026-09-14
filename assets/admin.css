@@ -360,11 +360,15 @@
 }
 
 .forwp-drive-inbox-queue {
+	display: flex;
+	flex-direction: column;
+	max-height: min(75vh, 780px);
 	overflow: hidden;
 }
 
 .forwp-drive-inbox-pane__header {
 	display: flex;
+	flex: 0 0 auto;
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
@@ -388,12 +392,211 @@
 }
 
 .forwp-drive-inbox-list {
-	display: grid;
-	gap: 0;
+	display: block;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	max-width: 100%;
+	padding: 4px 0 8px;
+	box-sizing: border-box;
+	overflow: auto;
+	overscroll-behavior: contain;
+}
+
+.forwp-drive-tree {
+	font-size: 13px;
+	line-height: 1.35;
+	color: #1f2328;
+	user-select: none;
+	min-width: 0;
+	overflow: hidden;
+}
+
+/* High-specificity row layout — beats WP admin flex/svg resets and stale caches. */
+#forwp-drive-inbox-list .forwp-drive-tree__row {
+	display: grid !important;
+	align-items: center;
+	min-height: 28px;
+	margin: 0;
+	padding-top: 2px;
+	padding-right: 10px;
+	padding-bottom: 2px;
+	padding-left: calc(6px + (var(--forwp-drive-tree-depth, 0) * 12px));
+	cursor: pointer;
+	border-radius: 0;
+	box-sizing: border-box;
+	border-left: 2px solid transparent;
+	column-gap: 6px;
+	row-gap: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-folder {
+	grid-template-columns: 14px 16px minmax(0, 1fr) !important;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file {
+	/* Indent past the folder toggle column so file icons align with folder icons. */
+	grid-template-columns: 16px minmax(0, 1fr) !important;
+	padding-left: calc(6px + 14px + 6px + (var(--forwp-drive-tree-depth, 0) * 12px));
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row:hover {
+	background: #f6f8fa;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-selected {
+	background: #ddf4ff;
+	border-left-color: #0969da;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row:focus-visible {
+	outline: 2px solid #0969da;
+	outline-offset: -2px;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-warning .forwp-drive-tree__label {
+	color: #9a6700;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-role .forwp-drive-tree__label {
+	font-weight: 600;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-readonly {
+	cursor: default;
+	opacity: 0.85;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-readonly:hover {
+	background: transparent;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__empty {
+	padding: 2px 8px 6px calc(46px + (var(--forwp-drive-tree-depth, 0) * 14px));
+	color: #656d76;
+	font-size: 12px;
+	font-style: italic;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__error {
+	margin: 0 0 8px;
+	padding: 8px 10px;
+	color: #9a6700;
+	background: #fff8c5;
+	border-left: 3px solid #d4a72c;
+}
+
+/* Folder toggle: SVG chevron (text glyphs inherit dashicons in WP admin and disappear). */
+#forwp-drive-inbox-list .forwp-drive-tree__toggle {
+	grid-column: 1;
+	box-sizing: border-box;
+	width: 14px;
+	height: 14px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: #24292f;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+	font-size: 0 !important;
+	line-height: 0;
+	display: inline-flex !important;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	flex: none;
+	overflow: hidden;
+	position: relative;
+	z-index: 1;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__toggle svg {
+	display: block !important;
+	width: 12px !important;
+	height: 12px !important;
+	max-width: 12px !important;
+	max-height: 12px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	flex: none;
+	transform: rotate(0deg);
+	transform-origin: 50% 50%;
+	transition: transform 0.12s ease;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__toggle.is-expanded svg {
+	transform: rotate(90deg);
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__toggle:hover,
+#forwp-drive-inbox-list .forwp-drive-tree__toggle:focus {
+	color: #1f2328;
+	background: transparent;
+	box-shadow: none;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__icon-wrap {
+	width: 16px;
+	height: 16px;
+	display: block;
+	line-height: 0;
+	overflow: hidden;
+	flex: none;
+	position: relative;
+	z-index: 0;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-folder .forwp-drive-tree__icon-wrap {
+	grid-column: 2;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file .forwp-drive-tree__icon-wrap {
+	grid-column: 1;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__icon-wrap svg,
+#forwp-drive-inbox-list .forwp-drive-tree__icon {
+	display: block !important;
+	width: 16px !important;
+	height: 16px !important;
+	max-width: 16px !important;
+	max-height: 16px !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	vertical-align: top;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__label {
 	min-width: 0;
 	max-width: 100%;
-	padding: 8px;
-	box-sizing: border-box;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-folder .forwp-drive-tree__label {
+	grid-column: 3;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file .forwp-drive-tree__label {
+	grid-column: 2;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__tools {
+	padding: 4px 8px 8px calc(46px + (var(--forwp-drive-tree-depth, 0) * 14px));
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__tools:empty {
+	display: none;
 }
 
 .forwp-drive-card {

@@ -79,6 +79,100 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 	}
 
 	/**
+	 * Browse incoming / published / failed for the inbox tree (includes empty role folders).
+	 *
+	 * @return array{folders: array<string, array<string, mixed>>, files: array<int, array<string, mixed>>}|WP_Error
+	 */
+	public function browse_tree() {
+		if ( ! $this->is_ready() ) {
+			return new WP_Error( 'forwp_drive_not_ready', __( 'Google Drive is not configured.', '4wp-drive' ) );
+		}
+
+		$settings = Settings::instance();
+		$client   = new Google_Drive_Client( Google_OAuth::instance() );
+		$root     = array(
+			'folders' => array(),
+			'files'   => array(),
+		);
+
+		foreach ( array( 'incoming', 'published', 'failed' ) as $role ) {
+			$id = $settings->get_folder_id( $role );
+			$root['folders'][ $role ] = $this->browse_role_node( $client, $id, $role, $role, 0 );
+		}
+
+		return $root;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function browse_role_node( Google_Drive_Client $client, string $folder_id, string $name, string $role, int $depth, string $path = '' ): array {
+		$path = '' !== $path ? $path : $name;
+		$node = array(
+			'name'    => $name,
+			'path'    => $path,
+			'role'    => $role,
+			'id'      => $folder_id,
+			'folders' => array(),
+			'files'   => array(),
+		);
+
+		if ( '' === $folder_id ) {
+			return $node;
+		}
+
+		$entries = $client->list_folder_entries( $folder_id );
+		if ( is_wp_error( $entries ) ) {
+			return $node;
+		}
+
+		foreach ( (array) ( $entries['folders'] ?? array() ) as $folder ) {
+			if ( ! is_array( $folder ) ) {
+				continue;
+			}
+			$child_id   = (string) ( $folder['id'] ?? '' );
+			$child_name = (string) ( $folder['name'] ?? '' );
+			if ( '' === $child_id || '' === $child_name ) {
+				continue;
+			}
+
+			$child_path = $path . '/' . $child_name;
+			if ( $depth < 5 ) {
+				$node['folders'][ $child_name ] = $this->browse_role_node(
+					$client,
+					$child_id,
+					$child_name,
+					'',
+					$depth + 1,
+					$child_path
+				);
+			} else {
+				$node['folders'][ $child_name ] = array(
+					'name'    => $child_name,
+					'path'    => $child_path,
+					'role'    => '',
+					'id'      => $child_id,
+					'folders' => array(),
+					'files'   => array(),
+				);
+			}
+		}
+
+		foreach ( (array) ( $entries['files'] ?? array() ) as $file ) {
+			if ( ! is_array( $file ) ) {
+				continue;
+			}
+			$node['files'][] = array(
+				'id'   => (string) ( $file['id'] ?? '' ),
+				'name' => (string) ( $file['name'] ?? '' ),
+				'kind' => (string) ( $file['kind'] ?? 'file' ),
+			);
+		}
+
+		return $node;
+	}
+
+	/**
 	 * @inheritDoc
 	 */
 	public function scan_incoming() {
@@ -163,7 +257,7 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 		$image_file_id     = (string) ( $metadata['image_file_id'] ?? '' );
 		$slug              = (string) ( $metadata['slug'] ?? '' );
 
-		if ( '' !== $image_file_id && '' !== $slug ) {
+		if ( '' !== $image_file_id && '' !== $slug && 'published' === $target_role ) {
 			$image_name = (string) ( $metadata['image_file_name'] ?? '' );
 			$drive_name = Featured_Image_Importer::build_filename( $slug, $image_name );
 			$renamed    = $client->update_file_name( $image_file_id, $drive_name );
@@ -172,17 +266,22 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 			}
 		}
 
-		if ( '' !== $package_folder_id && $package_folder_id !== ( $folders['incoming'] ?? '' ) ) {
-			$from = $this->resolve_remove_parent( $client, $package_folder_id, $folders );
-
-			return is_wp_error( $from )
-				? $from
-				: $client->move_file( $package_folder_id, $to, $from );
-		}
-
 		$from = $folders['incoming'] ?? '';
 		if ( '' === $from ) {
 			return new WP_Error( 'forwp_drive_folders', __( 'Folder mapping is incomplete.', '4wp-drive' ) );
+		}
+
+		// Reject/fail: move only the rejected document, never the whole package folder.
+		if ( 'failed' === $target_role ) {
+			return $client->move_file( $file_id, $to, $from );
+		}
+
+		if ( '' !== $package_folder_id && $package_folder_id !== ( $folders['incoming'] ?? '' ) ) {
+			$remove_from = $this->resolve_remove_parent( $client, $package_folder_id, $folders );
+
+			return is_wp_error( $remove_from )
+				? $remove_from
+				: $client->move_file( $package_folder_id, $to, $remove_from );
 		}
 
 		$moved = $client->move_file( $file_id, $to, $from );

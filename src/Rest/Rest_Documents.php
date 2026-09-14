@@ -106,6 +106,10 @@ final class Rest_Documents {
 							'type'              => 'string',
 							'sanitize_callback' => 'sanitize_key',
 						),
+						'post_type' => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_key',
+						),
 					),
 				),
 			)
@@ -236,12 +240,38 @@ final class Rest_Documents {
 		$last_sync = Settings::instance()->get_last_sync();
 		$folders   = Settings::instance()->get_folder_ids();
 
+		$browse_trees = array();
+		foreach ( Source_Registry::all() as $slug => $source ) {
+			$slug = (string) $slug;
+			if ( '' !== $filter_source && $slug !== $filter_source ) {
+				continue;
+			}
+			if ( ! $source->is_ready() || ! method_exists( $source, 'browse_tree' ) ) {
+				continue;
+			}
+			$tree = $source->browse_tree();
+			if ( is_wp_error( $tree ) ) {
+				$browse_trees[ $slug ] = array(
+					'folders' => array(),
+					'files'   => array(),
+					'error'   => $tree->get_error_message(),
+				);
+				continue;
+			}
+			$browse_trees[ $slug ] = is_array( $tree ) ? $tree : array(
+				'folders' => array(),
+				'files'   => array(),
+			);
+		}
+
 		return new WP_REST_Response(
 			array(
 				'documents'        => $items,
+				'browse_trees'     => $browse_trees,
 				'last_sync'        => $last_sync,
 				'incoming_id'      => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',
 				'drive_connection' => Google_OAuth::instance()->get_connection_payload(),
+				'source_status'    => Source_Registry::get_inbox_status(),
 				'multilingual'     => Language_Provider_Registry::get_rest_payload(),
 			),
 			200
@@ -297,6 +327,9 @@ final class Rest_Documents {
 		if ( isset( $params['featured_image_file_id'] ) ) {
 			$options['featured_image_file_id'] = sanitize_text_field( (string) $params['featured_image_file_id'] );
 		}
+		if ( isset( $params['post_type'] ) ) {
+			$options['post_type'] = sanitize_key( (string) $params['post_type'] );
+		}
 
 		$result = ( new Import_Runner() )->import( $id, $options );
 
@@ -322,9 +355,10 @@ final class Rest_Documents {
 	 * @param WP_REST_Request $request Request.
 	 */
 	public static function list_import_targets( WP_REST_Request $request ): WP_REST_Response {
-		$config = new Template_Config();
-		$result = Import_Target_Resolver::suggest(
-			$config->get_import_post_type(),
+		$config    = new Template_Config();
+		$post_type = $config->resolve_import_post_type( (string) $request->get_param( 'post_type' ) );
+		$result    = Import_Target_Resolver::suggest(
+			$post_type,
 			(string) $request->get_param( 'slug' ),
 			(string) $request->get_param( 'title' ),
 			(string) $request->get_param( 'search' ),
@@ -334,7 +368,7 @@ final class Rest_Documents {
 
 		return new WP_REST_Response(
 			array(
-				'post_type'    => $config->get_import_post_type(),
+				'post_type'    => $post_type,
 				'targets'      => $result['targets'],
 				'suggested_id' => $result['suggested_id'],
 				'multilingual' => Language_Provider_Registry::get_rest_payload(),
@@ -357,15 +391,32 @@ final class Rest_Documents {
 			return new WP_REST_Response( array( 'message' => __( 'Not found.', '4wp-drive' ) ), 404 );
 		}
 
-		$repo->update(
-			$id,
-			array(
-				'status'     => Document_Status::REJECTED,
-				'updated_at' => current_time( 'mysql', true ),
-			)
-		);
+		$metadata = $repo->decode_metadata( $row );
+		$source   = Source_Registry::get( (string) $row->source );
+		$warning  = '';
 
-		return new WP_REST_Response( array( 'message' => __( 'Document rejected.', '4wp-drive' ) ), 200 );
+		if ( $source ) {
+			$moved = $source->move_after_import( (string) $row->file_id, 'failed', $metadata );
+			if ( is_wp_error( $moved ) ) {
+				$warning = $moved->get_error_message();
+			}
+		}
+
+		$update = array(
+			'status'     => Document_Status::REJECTED,
+			'updated_at' => current_time( 'mysql', true ),
+		);
+		if ( '' !== $warning ) {
+			$update['error_message'] = $warning;
+		}
+		$repo->update( $id, $update );
+
+		$response = array( 'message' => __( 'Document rejected.', '4wp-drive' ) );
+		if ( '' !== $warning ) {
+			$response['warning'] = $warning;
+		}
+
+		return new WP_REST_Response( $response, 200 );
 	}
 
 	/**
@@ -528,6 +579,7 @@ final class Rest_Documents {
 			'image_file_id'         => $image_file_id,
 			'selected_file_id'      => (string) ( $meta['selected_file_id'] ?? $row->file_id ),
 			'package_folder_id'     => (string) ( $meta['package_folder_id'] ?? '' ),
+			'package_folder_name'   => (string) ( $meta['package_folder_name'] ?? '' ),
 			'package_files'         => $package_files,
 			'package_docs'          => $docs_count,
 			'package_images'        => $images_count,
