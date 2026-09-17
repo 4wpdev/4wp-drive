@@ -48,7 +48,7 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 * **Configurable field map** — title, slug, categories, tags, author, dates, SEO meta (when supported)
 * **Featured image** — import image from the same Drive subfolder
 * **Update existing content** — search and pick a post or page, then replace its content from the Drive document
-* **Polylang multilingual import** — pick content language in the Inbox when the site has multiple languages; assign language on create; filter update targets by language (WPML planned)
+* **Polylang multilingual import** — pick content language in Incoming when the site has multiple languages; assign language on create; filter update targets by language (WPML planned)
 * **REST API** + **WP-CLI** `wp forwp-drive sync` for manual sync
 * **Roadmap sources** — OneDrive and Dropbox
 
@@ -114,7 +114,7 @@ GitHub privacy: https://docs.github.com/en/site-policy/privacy-policies/github-g
 3. Open **4WP Drive → Storage sources** (or **Documentation** for the setup guide).
 4. Paste **Client ID** and **Client Secret** from Google Cloud Console → **Save credentials**.
 5. Click **Connect Google Drive**, then enter your Drive **root folder ID** and save subfolders.
-6. Use **Inbox** to preview and import documents.
+6. Use **Incoming** to preview and import documents.
 
 Optional: define `FORWP_DRIVE_GOOGLE_CLIENT_ID`, `FORWP_DRIVE_GOOGLE_CLIENT_SECRET`, or `FORWP_DRIVE_OAUTH_REDIRECT_URI` in `wp-config.php`.
 
@@ -146,7 +146,7 @@ Yes. Use the **OAuth redirect (local)** field when Google rejects your site host
 
 = Can I update an existing post or page instead of creating a draft? =
 
-Yes. In **Inbox → Preview**, choose **Update existing post**, search or pick a target, and confirm. The document content is imported into that post. Use **Import as Draft** when you want a new post instead.
+Yes. In **Incoming → Preview**, choose **Update existing post**, search or pick a target, and confirm. The document content is imported into that post. Use **Import as Draft** when you want a new post instead.
 
 = What changes when I update an existing post? =
 
@@ -166,11 +166,11 @@ It works with whichever post type you set as the import type in **Document templ
 
 = Does 4WP Drive work with multilingual sites? =
 
-**Polylang (1.2.0):** When more than one language is configured, open **Inbox → Preview & import** and select **Content language** before import (no default). New drafts receive that language; **Update existing post** lists and validates targets in the selected language only. Language is not read from Drive folder names.
+**Polylang (1.2.0):** When more than one language is configured, open **Incoming → Preview & import** and select **Content language** before import (no default). New drafts receive that language; **Update existing post** lists and validates targets in the selected language only. Language is not read from Drive folder names.
 
 **WPML:** Shown as **Planned** under **Settings → Multilingual integration**; not used for import in this release.
 
-Single-language sites (no Polylang) behave as before — no language picker in the Inbox.
+Single-language sites (no Polylang) behave as before — no language picker in Incoming.
 
 = Does GitHub import use a folder named incoming/? =
 
@@ -209,6 +209,9 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 * **Package images** — jpg/png/gif/webp/avif in the tree use an image icon. Click to preview in the workspace **without Import/Reject**. Open-outside icon opens the file in Drive or GitHub.
 * **Sync wait** — “Sync already ran recently” is a yellow wait notice (HTTP 429), not a red error.
 * **Export errors chip** — count of documents Google could not export as HTML on the last sync. Click the chip for file names and the Drive message. Failed packages are highlighted in the tree.
+
+= 1.5.8 =
+* **Incoming** — live storage tree for Drive/GitHub (including published/failed and empty folders); nested package discovery under Incoming.
 
 = 1.5.0 =
 * **Incoming** — queue, preview, and import (same `forwp-drive-inbox` slug).
