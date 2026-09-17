@@ -180,6 +180,7 @@
 
 	let previewId = null;
 	let previewDoc = null;
+	let previewMediaKey = null;
 	let pinSelectedName = '';
 	let multilingualConfig = forwpDriveAdmin.multilingual || null;
 	const INBOX_SOURCE_STORAGE_KEY = 'forwp_drive_inbox_active_source';
@@ -322,6 +323,90 @@
 			chip.classList.add( 'forwp-drive-chip--' + tone );
 		}
 		chip.hidden = false;
+		if ( name === 'errors' ) {
+			chip.classList.add( 'forwp-drive-chip--action' );
+			chip.setAttribute( 'role', 'button' );
+			chip.setAttribute( 'tabindex', '0' );
+			chip.setAttribute( 'data-action', 'show-export-errors' );
+		} else {
+			chip.removeAttribute( 'role' );
+			chip.removeAttribute( 'tabindex' );
+			if ( chip.getAttribute( 'data-action' ) === 'show-export-errors' ) {
+				chip.removeAttribute( 'data-action' );
+			}
+			chip.removeAttribute( 'title' );
+		}
+	}
+
+	function collectExportIssues( documents, lastSync ) {
+		const out = [];
+		const seen = {};
+		const push = ( fileId, fileName, message ) => {
+			const text = String( message || '' ).trim();
+			if ( ! text ) {
+				return;
+			}
+			const key = String( fileId || fileName || text );
+			if ( seen[ key ] ) {
+				return;
+			}
+			seen[ key ] = true;
+			out.push( {
+				file_id: String( fileId || '' ),
+				file_name: String( fileName || 'Document' ),
+				message: text,
+			} );
+		};
+		( documents || [] ).forEach( ( doc ) => {
+			if ( ! doc ) {
+				return;
+			}
+			push( doc.file_id, doc.file_name || doc.title, doc.scan_error );
+		} );
+		const stored = lastSync && Array.isArray( lastSync.export_error_items )
+			? lastSync.export_error_items
+			: [];
+		stored.forEach( ( item ) => {
+			if ( ! item ) {
+				return;
+			}
+			push( item.file_id, item.file_name, item.message );
+		} );
+		if ( ! out.length && lastSync && lastSync.export_errors ) {
+			push(
+				'',
+				'',
+				String( lastSync.export_errors ) +
+					' document(s) could not be exported from Google Drive as HTML.'
+			);
+		}
+		return out;
+	}
+
+	function showExportErrors() {
+		const issues = collectExportIssues(
+			documentsForActiveSource(),
+			inboxCache.lastSync
+		);
+		const status = document.getElementById( 'forwp-drive-inbox-status' );
+		if ( ! issues.length ) {
+			setStatus( status, '' );
+			return;
+		}
+		const detail = issues
+			.map(
+				( item ) =>
+					( item.file_name && item.file_name !== 'Document'
+						? item.file_name + ' — '
+						: '' ) + item.message
+			)
+			.join( ' · ' );
+		setStatus(
+			status,
+			'Export errors: Google Drive could not convert these files to HTML (Docs export, Word conversion, or unsupported type). ' +
+				detail,
+			'error'
+		);
 	}
 
 	function renderInboxSourceTabs() {
@@ -1274,6 +1359,11 @@
 			payload.featured_image_file_id = featuredId;
 		}
 
+		const keepFonts = document.getElementById( 'forwp-drive-import-keep-fonts' );
+		if ( keepFonts instanceof HTMLInputElement && keepFonts.checked ) {
+			payload.keep_document_fonts = true;
+		}
+
 		return payload;
 	}
 
@@ -1287,10 +1377,20 @@
 
 		let stateClass = '';
 		if ( hasMessage ) {
-			if ( isError ) {
+			const tone =
+				typeof isError === 'string'
+					? isError
+					: isError
+						? 'error'
+						: isPending
+							? 'pending'
+							: 'success';
+			if ( tone === 'error' ) {
 				stateClass = ' forwp-drive-status--error';
-			} else if ( isPending ) {
+			} else if ( tone === 'pending' ) {
 				stateClass = ' forwp-drive-status--pending';
+			} else if ( tone === 'wait' || tone === 'warning' ) {
+				stateClass = ' forwp-drive-status--wait';
 			} else {
 				stateClass = ' forwp-drive-status--success';
 			}
@@ -1450,15 +1550,24 @@
 		const errorsChip = document.querySelector(
 			'#forwp-drive-inbox-chips [data-chip="errors"]'
 		);
-		const exportErrors =
-			effectiveLastSync && typeof effectiveLastSync.export_errors === 'number'
-				? effectiveLastSync.export_errors
-				: 0;
+		const issues = collectExportIssues( documentsForActiveSource(), effectiveLastSync );
 		if ( errorsChip ) {
-			if ( exportErrors > 0 ) {
-				setChip( 'errors', 'Export errors: ' + exportErrors, 'error' );
+			if ( issues.length > 0 ) {
+				setChip( 'errors', 'Export errors: ' + issues.length, 'error' );
+				errorsChip.title =
+					issues
+						.map(
+							( item ) =>
+								( item.file_name || 'Document' ) +
+								': ' +
+								( item.message || 'Could not export.' )
+						)
+						.join( '\n' ) ||
+					'Google Drive could not export these documents as HTML.';
 			} else {
 				errorsChip.hidden = true;
+				errorsChip.removeAttribute( 'data-action' );
+				errorsChip.removeAttribute( 'title' );
 			}
 		}
 
@@ -1497,7 +1606,7 @@
 		}
 	}
 
-	function setSelectedQueueCard( id ) {
+	function setSelectedQueueCard( id, fileId ) {
 		document
 			.querySelectorAll(
 				'.forwp-drive-tree__row.is-selected, .forwp-drive-card.is-selected'
@@ -1506,6 +1615,23 @@
 				row.classList.remove( 'is-selected' );
 				row.setAttribute( 'aria-selected', 'false' );
 			} );
+		const storageId = String( fileId || '' ).trim();
+		if ( storageId ) {
+			const escaped =
+				window.CSS && typeof CSS.escape === 'function'
+					? CSS.escape( storageId )
+					: storageId.replace( /\\/g, '\\\\' ).replace( /"/g, '\\"' );
+			document
+				.querySelectorAll(
+					`.forwp-drive-tree__row[data-file-id="${ escaped }"]`
+				)
+				.forEach( ( row ) => {
+					row.classList.add( 'is-selected' );
+					row.setAttribute( 'aria-selected', 'true' );
+				} );
+			dockPackageTools();
+			return;
+		}
 		if ( ! id ) {
 			dockPackageTools();
 			return;
@@ -1534,6 +1660,8 @@
 		}
 		previewId = null;
 		previewDoc = null;
+		previewMediaKey = null;
+		setWorkspaceMediaMode( false );
 		const featuredWrap = document.getElementById(
 			'forwp-drive-import-featured-wrap'
 		);
@@ -1550,6 +1678,42 @@
 		setSelectedQueueCard( null );
 	}
 
+	function folderHasKids( folder ) {
+		return (
+			Object.keys( ( folder && folder.folders ) || {} ).length > 0 ||
+			( ( folder && folder.files ) || [] ).length > 0
+		);
+	}
+
+	function folderNeedsFetch( folder ) {
+		if ( ! folder || ! folder.id ) {
+			return false;
+		}
+		if ( folder.lazy && ! folder.loaded ) {
+			return true;
+		}
+		return ! folder.loaded && ! folderHasKids( folder );
+	}
+
+	function findTreeFolderNode( node, path ) {
+		const wanted = String( path || '' ).trim();
+		if ( ! node || ! wanted ) {
+			return null;
+		}
+		if ( node.path === wanted ) {
+			return node;
+		}
+		const folders = node.folders || {};
+		const names = Object.keys( folders );
+		for ( let i = 0; i < names.length; i++ ) {
+			const hit = findTreeFolderNode( folders[ names[ i ] ], wanted );
+			if ( hit ) {
+				return hit;
+			}
+		}
+		return null;
+	}
+
 	function toggleTreeFolder( path, docId ) {
 		const folderPath = String( path || '' ).trim();
 		if ( ! folderPath ) {
@@ -1557,30 +1721,26 @@
 		}
 
 		const wasExpanded = treeExpandedPaths.has( folderPath );
-		const nested =
-			! docId && lastInboxTree
-				? findFirstImportableUnder( lastInboxTree, folderPath )
-				: null;
+		const browseFolder =
+			findBrowseFolderNode( folderPath ) ||
+			findTreeFolderNode( lastInboxTree, folderPath );
+
+		if ( folderNeedsFetch( browseFolder ) ) {
+			loadTreeFolder( browseFolder ).then( () => {
+				if ( docId ) {
+					previewId = docId;
+					renderInbox( documentsForActiveSource(), inboxCache.lastSync );
+					openPreview( docId );
+				}
+			} );
+			return;
+		}
 
 		if ( docId ) {
-			// Package folder: stay expanded and open preview.
 			treeExpandedPaths.add( folderPath );
 			previewId = docId;
 			renderInbox( documentsForActiveSource(), inboxCache.lastSync );
 			openPreview( docId );
-			return;
-		}
-
-		if ( nested && nested.docId ) {
-			// Container (e.g. LMS4WP): expand and open the first nested material.
-			treeExpandedPaths.add( folderPath );
-			expandTreePath( nested.folderPath || folderPath );
-			previewId = nested.docId;
-			renderInbox( documentsForActiveSource(), inboxCache.lastSync );
-			openPreview(
-				nested.docId,
-				nested.fileId ? { fileId: nested.fileId } : {}
-			);
 			return;
 		}
 
@@ -1707,7 +1867,79 @@
 
 	let treeExpandedPaths = new Set();
 	let treeExpandInitialized = false;
+	let treeLoadingPaths = new Set();
 	let lastInboxTree = null;
+
+	function findBrowseFolderNode( path ) {
+		const wanted = String( path || '' ).trim();
+		const root = ( inboxCache.browseTrees || {} )[ activeSourceSlug ];
+		if ( ! wanted || ! root ) {
+			return null;
+		}
+		const walk = ( node ) => {
+			if ( ! node ) {
+				return null;
+			}
+			if ( node.path === wanted ) {
+				return node;
+			}
+			const folders = node.folders || {};
+			const names = Object.keys( folders );
+			for ( let i = 0; i < names.length; i++ ) {
+				const hit = walk( folders[ names[ i ] ] );
+				if ( hit ) {
+					return hit;
+				}
+			}
+			return null;
+		};
+		return walk( root );
+	}
+
+	function patchBrowseFolder( path, data ) {
+		const node = findBrowseFolderNode( path );
+		if ( ! node || ! data ) {
+			return;
+		}
+		node.lazy = false;
+		node.loaded = true;
+		node.folders = data.folders || {};
+		node.files = data.files || [];
+		if ( data.id ) {
+			node.id = data.id;
+		}
+	}
+
+	function loadTreeFolder( folder ) {
+		const path = String( folder && folder.path ? folder.path : '' ).trim();
+		if ( ! path || treeLoadingPaths.has( path ) ) {
+			return Promise.resolve();
+		}
+		treeLoadingPaths.add( path );
+		treeExpandedPaths.add( path );
+		renderInbox( documentsForActiveSource(), inboxCache.lastSync );
+		const params = new URLSearchParams( {
+			source: activeSourceSlug,
+			folder_id: folder.id || '',
+			path,
+			name: folder.name || '',
+		} );
+		return api( 'browse?' + params.toString() ).then( ( { ok, data } ) => {
+			treeLoadingPaths.delete( path );
+			if ( ! ok ) {
+				const status = document.getElementById( 'forwp-drive-inbox-status' );
+				setStatus(
+					status,
+					( data && data.message ) || 'Could not load folder.',
+					true
+				);
+				renderInbox( documentsForActiveSource(), inboxCache.lastSync );
+				return;
+			}
+			patchBrowseFolder( path, data );
+			renderInbox( documentsForActiveSource(), inboxCache.lastSync );
+		} );
+	}
 
 	function packageFolderLabel( doc ) {
 		if ( doc.package_folder_name ) {
@@ -1912,6 +2144,8 @@
 				path: node.path || '',
 				role: node.role || '',
 				id: node.id || '',
+				lazy: !! node.lazy,
+				loaded: !! node.loaded,
 				doc: null,
 				folders: {},
 				files: [],
@@ -2057,9 +2291,77 @@
 		return `<span class="forwp-drive-tree__icon-wrap" aria-hidden="true"><svg class="forwp-drive-tree__icon forwp-drive-tree__icon--folder" viewBox="0 0 16 16" width="16" height="16" focusable="false"><path fill="#54aeff" d="M1.75 2.5a.75.75 0 0 0 0 1.5h3.69l1.03 1.03a.75.75 0 0 0 .53.22h6.25a.75.75 0 0 1 .75.75v6.5a.75.75 0 0 1-.75.75H1.75a.75.75 0 0 1-.75-.75V3.25a.75.75 0 0 1 .75-.75Z"></path></svg></span>`;
 	}
 
+	function fileLooksLikeImage( file ) {
+		if ( file && file.kind === 'image' ) {
+			return true;
+		}
+		return /\.(png|jpe?g|gif|webp|avif)$/i.test(
+			String( ( file && file.name ) || '' )
+		);
+	}
+
 	function treeFileIcon( kind ) {
-		const fill = kind === 'image' ? '#3fb950' : '#8b949e';
+		if ( kind === 'image' ) {
+			return `<span class="forwp-drive-tree__icon-wrap" aria-hidden="true"><svg class="forwp-drive-tree__icon forwp-drive-tree__icon--image" viewBox="0 0 16 16" width="16" height="16" focusable="false"><path fill="#0969da" d="M12.5 7.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-7.684 5.5h8.637l-2.708-3.135a.748.748 0 0 0-1.087-.004L7.19 12.31l-1.375-1.58a.75.75 0 0 0-1.14.012L4.816 13ZM1.75 2.5h12.5a.25.25 0 0 1 .25.25v10.5a.25.25 0 0 1-.25.25H1.75a.25.25 0 0 1-.25-.25V2.75a.25.25 0 0 1 .25-.25ZM1.5 1A1.5 1.5 0 0 0 0 2.5v11A1.5 1.5 0 0 0 1.5 15h13a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 14.5 1h-13Z"></path></svg></span>`;
+		}
+		const fill = '#8b949e';
 		return `<span class="forwp-drive-tree__icon-wrap" aria-hidden="true"><svg class="forwp-drive-tree__icon forwp-drive-tree__icon--file" viewBox="0 0 16 16" width="16" height="16" focusable="false"><path fill="${ fill }" d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062L14.938 4.5H10.75a.25.25 0 0 1-.25-.25V1.562Z"></path></svg></span>`;
+	}
+
+	function githubBlobUrl( fileId ) {
+		const id = String( fileId || '' );
+		if ( 0 !== id.indexOf( 'gh:' ) ) {
+			return '';
+		}
+		const rest = id.slice( 3 );
+		const colon = rest.indexOf( ':' );
+		if ( colon < 1 ) {
+			return '';
+		}
+		const repo = rest.slice( 0, colon );
+		const path = rest
+			.slice( colon + 1 )
+			.split( '/' )
+			.filter( Boolean )
+			.map( encodeURIComponent )
+			.join( '/' );
+		if ( ! repo || ! path ) {
+			return '';
+		}
+		return 'https://github.com/' + repo + '/blob/HEAD/' + path;
+	}
+
+	function storageFileOpenUrl( fileId, isImage ) {
+		const id = String( fileId || '' ).trim();
+		if ( ! id ) {
+			return '';
+		}
+		if ( 0 === id.indexOf( 'gh:' ) || activeSourceSlug === 'github' ) {
+			return githubBlobUrl( id );
+		}
+		if ( isImage ) {
+			return (
+				'https://drive.google.com/file/d/' +
+				encodeURIComponent( id ) +
+				'/view'
+			);
+		}
+		return driveFileUrl( id );
+	}
+
+	function treeOpenOutsideLink( url ) {
+		if ( ! url ) {
+			return '';
+		}
+		const strings = forwpDriveAdmin.strings || {};
+		const label = escapeHtml(
+			strings.openFileOutside ||
+				strings.openInDrive ||
+				'Open outside'
+		);
+		return `<a class="forwp-drive-tree__open" data-action="open-external" href="${ escapeHtml(
+			url
+		) }" target="_blank" rel="noopener noreferrer" title="${ label }" aria-label="${ label }"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" focusable="false" aria-hidden="true"><path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z"></path></svg></a>`;
 	}
 
 	function treeToggle( expanded ) {
@@ -2069,48 +2371,23 @@
 		}" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" focusable="false"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"></path></svg></span>`;
 	}
 
-	function ensureTreeExpandedDefaults( root, documents ) {
+	function ensureTreeExpandedDefaults( root ) {
 		if ( treeExpandInitialized ) {
 			return;
 		}
 		treeExpandInitialized = true;
-		const paths = [];
-		const walk = ( node ) => {
-			Object.keys( node.folders || {} ).forEach( ( key ) => {
-				const child = node.folders[ key ];
-				paths.push( child.path );
-				walk( child );
-			} );
-		};
-		walk( root );
-		const folderCount = paths.length;
-		const docCount = ( documents || [] ).length;
-		// Expand shallow trees; keep deep published/failed collapsed by default past depth 2
-		// so third-level packages (e.g. Hooks/Articles/slug) are one click away.
-		if ( folderCount <= 40 || docCount <= 20 ) {
-			paths.forEach( ( path ) => {
-				const depth = String( path ).split( '/' ).filter( Boolean ).length;
-				if ( depth <= 2 ) {
-					treeExpandedPaths.add( path );
-				}
-			} );
-		} else if ( previewId ) {
-			const selected = ( documents || [] ).find(
-				( doc ) => String( doc.id ) === String( previewId )
-			);
-			if ( selected ) {
-				const segments = packageFolderSegments( selected );
-				let path = '';
-				segments.forEach( ( segment ) => {
-					path = path ? path + '/' + segment : segment;
-					treeExpandedPaths.add( path );
-				} );
-			}
-		}
-		// Always expand role roots so published/failed are visible.
 		Object.keys( root.folders || {} ).forEach( ( key ) => {
 			const folder = root.folders[ key ];
-			if ( folder.role || key === 'published' || key === 'failed' || key === 'incoming' ) {
+			if ( ! folder ) {
+				return;
+			}
+			const isRole =
+				!! folder.role ||
+				key === 'published' ||
+				key === 'failed' ||
+				key === 'incoming';
+			const hasNestedFolders = Object.keys( folder.folders || {} ).length > 0;
+			if ( isRole && hasNestedFolders ) {
 				treeExpandedPaths.add( folder.path );
 			}
 		} );
@@ -2157,8 +2434,9 @@
 				? ` is-role is-role--${ escapeHtml( folder.role ) }`
 				: '';
 			const emptyClass =
-				! Object.keys( folder.folders || {} ).length &&
-				! ( folder.files || [] ).length
+				! folderHasKids( folder ) &&
+				! folderNeedsFetch( folder ) &&
+				! treeLoadingPaths.has( folder.path )
 					? ' is-empty'
 					: '';
 			html += `<div class="forwp-drive-tree__group" data-path="${ escapeHtml(
@@ -2183,12 +2461,18 @@
 				</div>`;
 			if ( expanded ) {
 				html += `<div class="forwp-drive-tree__children" role="group">`;
-				const childHtml = renderQueueTreeNode( folder, depth + 1 );
-				html +=
-					childHtml ||
-					`<div class="forwp-drive-tree__empty" style="--forwp-drive-tree-depth: ${
+				if ( treeLoadingPaths.has( folder.path ) ) {
+					html += `<div class="forwp-drive-tree__empty" style="--forwp-drive-tree-depth: ${
 						depth + 1
-					}">(empty)</div>`;
+					}">Loading…</div>`;
+				} else {
+					const childHtml = renderQueueTreeNode( folder, depth + 1 );
+					html +=
+						childHtml ||
+						`<div class="forwp-drive-tree__empty" style="--forwp-drive-tree-depth: ${
+							depth + 1
+						}">(empty)</div>`;
+				}
 				html += `</div>`;
 			}
 			html += `</div>`;
@@ -2196,30 +2480,48 @@
 
 		( node.files || [] ).forEach( ( file ) => {
 			const fileDocId = file.doc ? file.doc.id : '';
-			const fileSelected =
-				fileDocId && previewId && String( fileDocId ) === String( previewId );
-			const selectable = !! fileDocId;
-			const storageFileId = file.fileId || '';
+			const storageFileId = String( file.fileId || '' );
+			const isImage = fileLooksLikeImage( file );
+			const kind = isImage ? 'image' : file.kind || 'document';
+			const fileSelected = isImage
+				? !!(
+						previewMediaKey &&
+						storageFileId &&
+						String( previewMediaKey ) === storageFileId
+				  )
+				: !!(
+						fileDocId &&
+						previewId &&
+						String( fileDocId ) === String( previewId )
+				  );
+			const selectable = isImage ? !! storageFileId : !! fileDocId;
+			const scanWarning =
+				file.doc && file.doc.scan_error ? ' is-warning' : '';
+			const openUrl = isImage
+				? storageFileOpenUrl( storageFileId, true )
+				: '';
+			const actionAttrs = isImage
+				? `data-action="preview-media" data-file-id="${ escapeHtml(
+						storageFileId
+				  ) }" data-name="${ escapeHtml( file.name || '' ) }"`
+				: selectable
+				? `data-action="select" data-id="${ escapeHtml(
+						String( fileDocId )
+				  ) }" data-file-id="${ escapeHtml( storageFileId ) }"`
+				: '';
 			html += `<div
-				class="forwp-drive-tree__row is-file is-file--${ escapeHtml(
-					file.kind || 'document'
-				) }${ fileSelected ? ' is-selected' : '' }${
-				selectable ? '' : ' is-readonly'
-			}"
+				class="forwp-drive-tree__row is-file is-file--${ escapeHtml( kind ) }${
+				fileSelected ? ' is-selected' : ''
+			}${ scanWarning }${ selectable || isImage ? '' : ' is-readonly' }"
 				style="--forwp-drive-tree-depth: ${ depth }"
-				${
-					selectable
-						? `data-action="select" data-id="${ escapeHtml(
-								String( fileDocId )
-						  ) }" data-file-id="${ escapeHtml( String( storageFileId ) ) }"`
-						: ''
-				}
+				${ actionAttrs }
 				tabindex="${ selectable ? '0' : '-1' }"
 				role="treeitem"
 				aria-selected="${ fileSelected ? 'true' : 'false' }"
 			>
-				${ treeFileIcon( file.kind ) }
+				${ treeFileIcon( kind ) }
 				<span class="forwp-drive-tree__label">${ escapeHtml( file.name ) }</span>
+				${ isImage ? treeOpenOutsideLink( openUrl ) : '' }
 			</div>`;
 		} );
 
@@ -2244,7 +2546,7 @@
 
 		const keepId = previewId;
 		dockPackageTools();
-		ensureTreeExpandedDefaults( tree, documents );
+		ensureTreeExpandedDefaults( tree );
 		const browseError =
 			browse && browse.error
 				? `<p class="forwp-drive-tree__error">${ escapeHtml( browse.error ) }</p>`
@@ -2443,9 +2745,14 @@
 	function runInboxSync() {
 		const status = document.getElementById( 'forwp-drive-inbox-status' );
 		setStatus( status, forwpDriveAdmin.strings.syncRunning, false, true );
-		return api( 'sync/run', { method: 'POST' } ).then( ( { ok, data } ) => {
+		return api( 'sync/run', { method: 'POST' } ).then(
+			( { ok, status: httpStatus, data } ) => {
 			if ( ! ok ) {
-				setStatus( status, data.message || 'Sync failed.', true );
+				setStatus(
+					status,
+					data.message || 'Sync failed.',
+					httpStatus === 429 ? 'wait' : 'error'
+				);
 				return;
 			}
 			let message = `Synced ${ data.scanned || 0 } file(s); ${ data.new_ready || 0 } new ready.`;
@@ -2453,16 +2760,111 @@
 				message += ` ${ data.removed } removed from inbox (no longer in incoming).`;
 			}
 			if ( data.export_errors ) {
-				message += ` ${ data.export_errors } could not be exported.`;
+				const items = Array.isArray( data.export_error_items )
+					? data.export_error_items
+					: [];
+				const detail = items
+					.map(
+						( item ) =>
+							( item && item.file_name ? item.file_name + ': ' : '' ) +
+							( ( item && item.message ) || '' )
+					)
+					.filter( Boolean )
+					.join( ' · ' );
+				message += ` ${ data.export_errors } could not be exported from Drive as HTML.`;
+				if ( detail ) {
+					message += ' ' + detail;
+				}
+				setStatus( status, message, 'error' );
+			} else {
+				setStatus( status, message, false );
 			}
-			setStatus( status, message, false );
 			return loadInbox();
 		} );
+	}
+
+	function setWorkspaceMediaMode( on ) {
+		const panel = document.getElementById( 'forwp-drive-preview' );
+		if ( panel ) {
+			panel.classList.toggle( 'is-media-preview', !! on );
+		}
+	}
+
+	function mediaPreviewUrl( fileId, name ) {
+		const params = new URLSearchParams( {
+			source: activeSourceSlug,
+			file_id: String( fileId || '' ),
+			name: String( name || '' ),
+			_wpnonce: forwpDriveAdmin.nonce || '',
+		} );
+		return (
+			getRestBase().replace( /\/$/, '' ) +
+			'/media?' +
+			params.toString()
+		);
+	}
+
+	function openImagePreview( fileId, name ) {
+		const id = String( fileId || '' ).trim();
+		const fileName = String( name || 'image' );
+		if ( ! id ) {
+			return;
+		}
+		previewId = null;
+		previewDoc = null;
+		previewMediaKey = id;
+		setSelectedQueueCard( null, id );
+		setWorkspaceMediaMode( true );
+		const panel = document.getElementById( 'forwp-drive-preview' );
+		const placeholder = document.getElementById(
+			'forwp-drive-workspace-placeholder'
+		);
+		const meta = document.getElementById( 'forwp-drive-preview-meta' );
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		if ( ! panel || ! body || ! meta ) {
+			return;
+		}
+		if ( placeholder ) {
+			placeholder.hidden = true;
+		}
+		panel.hidden = false;
+		meta.innerHTML =
+			`<p class="forwp-drive-preview__title">${ escapeHtml( fileName ) }</p>` +
+			'<p class="forwp-drive-preview__meta">Image preview — not an importable document.</p>';
+		const src = mediaPreviewUrl( id, fileName );
+		const openUrl = storageFileOpenUrl( id, true );
+		const strings = forwpDriveAdmin.strings || {};
+		const openLabel = escapeHtml(
+			strings.openFileOutside || strings.openInDrive || 'Open outside'
+		);
+		const openHtml = openUrl
+			? `<p class="forwp-drive-media-preview__open"><a href="${ escapeHtml(
+					openUrl
+			  ) }" target="_blank" rel="noopener noreferrer">${ openLabel }</a></p>`
+			: '';
+		body.innerHTML =
+			`<figure class="forwp-drive-media-preview">` +
+			`<img src="${ escapeHtml( src ) }" alt="${ escapeHtml( fileName ) }" />` +
+			openHtml +
+			`</figure>`;
+		const img = body.querySelector( 'img' );
+		if ( img ) {
+			img.addEventListener( 'error', () => {
+				if ( previewMediaKey !== id ) {
+					return;
+				}
+				body.innerHTML =
+					'<p class="forwp-drive-preview__meta">Could not load this image. Use Open outside to view it in Drive.</p>' +
+					openHtml;
+			} );
+		}
 	}
 
 	function openPreview( id, options = {} ) {
 		previewId = id;
 		previewDoc = null;
+		previewMediaKey = null;
+		setWorkspaceMediaMode( false );
 		setSelectedQueueCard( id );
 		const panel = document.getElementById( 'forwp-drive-preview' );
 		const placeholder = document.getElementById(
@@ -2491,13 +2893,8 @@
 			}
 			meta.innerHTML = `<p class="forwp-drive-preview__title">${ escapeHtml( data.title ) }</p>
 				<p class="forwp-drive-preview__meta">Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }${ data.has_image ? ' · Featured image: ' + escapeHtml( data.image_name || 'yes' ) : '' }</p>`;
-			body.innerHTML = data.body_html || escapeHtml( data.body || '' );
-			if ( data.body_html && data.body_html.includes( '<!-- wp:' ) ) {
-				body.insertAdjacentHTML(
-					'afterbegin',
-					'<p class="description forwp-drive-preview__blocks-note">Block markup preview — imported posts store Gutenberg blocks, not raw HTML.</p>'
-				);
-			}
+			setupKeepFontsUi( data );
+			renderPreviewPostContent( data );
 			const mode = options.mode === 'update' ? 'update' : 'create';
 			const modeInput = document.querySelector(
 				`input[name="forwp-drive-import-mode"][value="${ mode }"]`
@@ -2547,6 +2944,45 @@
 		}
 
 		loadDocument();
+	}
+
+	function setupKeepFontsUi( data ) {
+		const box = document.getElementById( 'forwp-drive-import-keep-fonts' );
+		if ( ! ( box instanceof HTMLInputElement ) ) {
+			return;
+		}
+		const available = !! ( data && data.keep_document_fonts_available );
+		box.checked = false;
+		box.disabled = ! available;
+	}
+
+	function previewBodyHtml( data ) {
+		const box = document.getElementById( 'forwp-drive-import-keep-fonts' );
+		if (
+			box instanceof HTMLInputElement &&
+			box.checked &&
+			data &&
+			data.body_html_with_fonts
+		) {
+			return String( data.body_html_with_fonts );
+		}
+
+		return data && data.body_html ? String( data.body_html ) : '';
+	}
+
+	function renderPreviewPostContent( data ) {
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		if ( ! body ) {
+			return;
+		}
+		const html = previewBodyHtml( data );
+		body.innerHTML = html || escapeHtml( ( data && data.body ) || '' );
+		if ( html && html.includes( '<!-- wp:' ) ) {
+			body.insertAdjacentHTML(
+				'afterbegin',
+				'<p class="description forwp-drive-preview__blocks-note">Block markup preview — imported posts store Gutenberg blocks, not raw HTML.</p>'
+			);
+		}
 	}
 
 	function importDoc( id, payloadOverride ) {
@@ -3508,6 +3944,11 @@
 		if ( target instanceof HTMLSelectElement && target.id === 'forwp-drive-import-target' ) {
 			syncImportButtonState();
 		}
+		if ( target instanceof HTMLInputElement && target.id === 'forwp-drive-import-keep-fonts' ) {
+			if ( previewDoc ) {
+				renderPreviewPostContent( previewDoc );
+			}
+		}
 	} );
 
 	document.addEventListener( 'keydown', ( event ) => {
@@ -3518,12 +3959,25 @@
 		if ( event.key !== 'Enter' && event.key !== ' ' ) {
 			return;
 		}
+		if ( target.closest( '[data-action="show-export-errors"]' ) ) {
+			event.preventDefault();
+			showExportErrors();
+			return;
+		}
 		if ( target.matches( '.forwp-drive-tree__row[data-action="select"]' ) ||
 			target.matches( '.forwp-drive-tree__row[data-action="tree-folder"]' ) ||
+			target.matches( '.forwp-drive-tree__row[data-action="preview-media"]' ) ||
 			target.matches( '.forwp-drive-card[data-action="select"]' ) ) {
 			event.preventDefault();
 			if ( target.getAttribute( 'data-action' ) === 'tree-folder' ) {
 				toggleTreeFolder( target.getAttribute( 'data-path' ), target.getAttribute( 'data-id' ) );
+				return;
+			}
+			if ( target.getAttribute( 'data-action' ) === 'preview-media' ) {
+				openImagePreview(
+					target.getAttribute( 'data-file-id' ),
+					target.getAttribute( 'data-name' )
+				);
 				return;
 			}
 			const id = target.getAttribute( 'data-id' );
@@ -3556,6 +4010,17 @@
 			event.stopPropagation();
 			return;
 		}
+		if ( action === 'show-export-errors' ) {
+			showExportErrors();
+			return;
+		}
+		if ( action === 'preview-media' && actionEl ) {
+			openImagePreview(
+				actionEl.getAttribute( 'data-file-id' ),
+				actionEl.getAttribute( 'data-name' )
+			);
+			return;
+		}
 		if ( action === 'source-tab' && actionEl ) {
 			const slug = actionEl.getAttribute( 'data-source' );
 			if ( slug ) {
@@ -3574,7 +4039,7 @@
 		const readonlyFile = target.closest(
 			'.forwp-drive-tree__row.is-file.is-readonly'
 		);
-		if ( readonlyFile ) {
+		if ( readonlyFile && ! readonlyFile.classList.contains( 'is-file--image' ) ) {
 			const status = document.getElementById( 'forwp-drive-inbox-status' );
 			const strings = forwpDriveAdmin.strings || {};
 			setStatus(
@@ -3786,7 +4251,8 @@
 		if ( target.id === 'forwp-drive-run-sync' ) {
 			const status = driveActionsStatus();
 			setStatus( status, forwpDriveAdmin.strings.syncRunning, false, true );
-			api( 'sync/run', { method: 'POST' } ).then( ( { ok, data } ) => {
+			api( 'sync/run', { method: 'POST' } ).then(
+				( { ok, status: httpStatus, data } ) => {
 				setStatus(
 					status,
 					ok
@@ -3798,9 +4264,10 @@
 								return msg;
 						  } )()
 						: data.message || 'Sync failed.',
-					! ok
+					ok ? false : httpStatus === 429 ? 'wait' : 'error'
 				);
-			} );
+			}
+			);
 		}
 		if ( target.id === 'forwp-drive-use-suggested-redirect' ) {
 			const input = document.getElementById( 'forwp-drive-oauth-redirect' );

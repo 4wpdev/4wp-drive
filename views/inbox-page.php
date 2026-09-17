@@ -192,6 +192,15 @@ defined( 'ABSPATH' ) || exit;
 							<?php esc_html_e( 'Each option: post type · slug · title. Best match by slug (then title) is selected first. Only posts in the selected language are listed.', '4wp-drive' ); ?>
 						</p>
 					</div>
+					<div id="forwp-drive-import-fonts-wrap" class="forwp-drive-import-fonts-wrap">
+						<label class="forwp-drive-import-fonts-wrap__label">
+							<input type="checkbox" id="forwp-drive-import-keep-fonts" value="1" />
+							<span class="forwp-drive-import-fonts-wrap__title"><?php esc_html_e( 'Keep fonts from the document', '4wp-drive' ); ?></span>
+						</label>
+						<p class="description forwp-drive-import-fonts-wrap__hint">
+							<?php esc_html_e( 'Off (default): use the site fonts. On: keep Google Docs typeface and size in the imported post.', '4wp-drive' ); ?>
+						</p>
+					</div>
 				</div>
 				<div class="forwp-drive-preview__actions forwp-drive-admin-chrome">
 					<button type="button" class="button button-primary" id="forwp-drive-preview-import">

@@ -77,4 +77,70 @@ class Gutenberg_ContentTest extends TestCase {
 			$out
 		);
 	}
+
+	public function test_from_html_maps_core_table(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<table class="forwp-drive-md-table"><thead><tr><th>Hook</th><th>Window open for</th></tr></thead>'
+			. '<tbody><tr><td><code>init</code></td><td>Register post types</td></tr></tbody></table>';
+
+		$out = Gutenberg_Content::from_html( $html );
+
+		$this->assertStringContainsString( '<!-- wp:table -->', $out );
+		$this->assertStringContainsString( '<figure class="wp-block-table">', $out );
+		$this->assertStringContainsString( '<table class="has-fixed-layout">', $out );
+		$this->assertStringContainsString( '<th>Hook</th>', $out );
+		$this->assertStringContainsString( '<code>init</code>', $out );
+		$this->assertStringNotContainsString( '<!-- wp:paragraph --><p><thead', $out );
+	}
+
+	public function test_from_html_maps_google_docs_classic_table(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<p>The draft framework contains five categories:</p>'
+			. '<table><tr>'
+			. '<td>Risk Zone</td><td>ATO Risk Classification</td>'
+			. '</tr></table>'
+			. '<table><tr><td>White</td><td>Further risk assessment not required</td></tr>'
+			. '<tr><td>Green</td><td>Low risk</td></tr>'
+			. '<tr><td>Yellow</td><td>Low to medium risk</td></tr>'
+			. '<tr><td>Amber</td><td>Medium to high risk</td></tr>'
+			. '<tr><td>Red</td><td>High risk</td></tr></table>';
+
+		$out = Gutenberg_Content::from_html( $html );
+
+		$this->assertStringContainsString( '<!-- wp:table -->', $out );
+		$this->assertEquals( 2, substr_count( $out, '<!-- wp:table -->' ) );
+		$this->assertStringContainsString( 'Risk Zone', $out );
+		$this->assertStringContainsString( 'Amber', $out );
+		$this->assertStringNotContainsString( '<!-- wp:paragraph --><p>Risk Zone</p>', $out );
+		$this->assertStringNotContainsString( '<!-- wp:paragraph --><p>White</p>', $out );
+	}
+
+	public function test_markdown_bootstrap_table_imports_as_core_table(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$md = "| Hook | Window open for | Too early (before this hook) | Too late (after this hook) |\n"
+			. "|---|---|---|---|\n"
+			. "| `muplugins_loaded` | Network-wide settings | No earlier hook exists | Plugins have already begun loading |\n"
+			. "| `init` | `register_post_type()` | Taxonomies aren't ready | Permalinks may have gone around it |\n";
+
+		$html = \ForWP\Drive\Import\Markdown_Content::to_html_document( $md );
+		if ( preg_match( '/<body\b[^>]*>(.*)<\/body>/is', $html, $m ) ) {
+			$html = $m[1];
+		}
+		$out = Gutenberg_Content::from_html( $html );
+
+		$this->assertStringContainsString( '<!-- wp:table -->', $out );
+		$this->assertStringContainsString( '<code>muplugins_loaded</code>', $out );
+		$this->assertStringContainsString( '<code>register_post_type()</code>', $out );
+		$this->assertStringContainsString( 'Too early (before this hook)', $out );
+		$this->assertStringNotContainsString( '|---|', $out );
+	}
 }

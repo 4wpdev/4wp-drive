@@ -122,18 +122,16 @@ final class GitHub_Source implements Storage_Source_Interface {
 				if ( 0 === $depth && in_array( $name, $skip, true ) ) {
 					continue;
 				}
-				$child = array(
+				$node['folders'][ $name ] = array(
 					'name'    => $name,
 					'path'    => $full,
 					'role'    => '',
+					'id'      => $full,
+					'lazy'    => true,
+					'loaded'  => false,
 					'folders' => array(),
 					'files'   => array(),
 				);
-				// Recurse into nested folders (packages, published/failed trees).
-				if ( $depth < 5 ) {
-					$this->fill_browse_level( $client, $child, $full, array(), $depth + 1 );
-				}
-				$node['folders'][ $name ] = $child;
 				continue;
 			}
 
@@ -165,12 +163,35 @@ final class GitHub_Source implements Storage_Source_Interface {
 			'name'    => $name,
 			'path'    => $path,
 			'role'    => $role,
+			'id'      => $path,
+			'lazy'    => false,
+			'loaded'  => true,
 			'folders' => array(),
 			'files'   => array(),
 		);
 		$this->fill_browse_level( $client, $node, $path, array(), $depth );
 
 		return $node;
+	}
+
+	/**
+	 * One path listing for lazy tree expand.
+	 *
+	 * @param string $folder_id Unused (GitHub uses path).
+	 * @param string $path      Repo path.
+	 * @param string $name      Display name.
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public function browse_folder( string $folder_id, string $path = '', string $name = '' ) {
+		if ( ! $this->is_ready() ) {
+			return new WP_Error( 'forwp_drive_github_not_ready', __( 'GitHub is not configured.', '4wp-drive' ) );
+		}
+
+		$client = new GitHub_Client();
+		$path   = trim( str_replace( '\\', '/', '' !== $path ? $path : $folder_id ), '/' );
+		$name   = '' !== $name ? $name : ( '' !== $path ? basename( $path ) : '/' );
+
+		return $this->browse_role_node( $client, $path, $name, '', 0 );
 	}
 
 	public function scan_incoming() {

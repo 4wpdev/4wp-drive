@@ -68,4 +68,26 @@ class Markdown_ContentTest extends TestCase {
 		$this->assertStringContainsString( '/ai/mcp/', $html );
 		$this->assertStringNotContainsString( '|---|', $html );
 	}
+
+	public function test_bootstrap_opportunity_table_keeps_code_cells(): void {
+		$md = "| Hook | Window open for | Too early (before this hook) | Too late (after this hook) |\n"
+			. "|---|---|---|---|\n"
+			. "| `muplugins_loaded` | Network-wide/security settings that can't be disabled from the admin | No earlier hook exists — this is the start | Plugins have already begun loading — too late for \"non-toggleable\" code |\n"
+			. "| `plugins_loaded` | Text domain loading, checking dependencies between plugins | No plugins exist yet — `class_exists()` is always false | The theme has already begun loading, some checks lose their point |\n"
+			. "| `after_setup_theme` | `add_theme_support()`, `register_nav_menus()` | The theme isn't hooked up yet | WordPress has already passed the point of registering theme features — silently ignored |\n"
+			. "| `init` | `register_post_type()`, `register_taxonomy()`, shortcodes | Taxonomies/dependencies aren't ready — fatal error | Still possible later, but some systems (permalinks) may have already gone around it |\n"
+			. "| `wp_loaded` | Logic that needs a fully ready environment, before the request is parsed | Plugins or the theme haven't finished loading everything | The request is already being parsed — too late for environment setup |\n";
+
+		$html = Markdown_Content::to_html_document( $md );
+
+		$this->assertStringContainsString( '<table class="forwp-drive-md-table">', $html );
+		$this->assertStringContainsString( '<th>Hook</th>', $html );
+		$this->assertStringContainsString( '<th>Window open for</th>', $html );
+		$this->assertStringContainsString( '<code>muplugins_loaded</code>', $html );
+		$this->assertStringContainsString( '<code>add_theme_support()</code>', $html );
+		$this->assertStringContainsString( '<code>class_exists()</code>', $html );
+		$this->assertSame( 1, substr_count( $html, '<thead>' ) );
+		$this->assertSame( 6, substr_count( $html, '<tr>' ) );
+		$this->assertStringNotContainsString( '| Hook |', $html );
+	}
 }

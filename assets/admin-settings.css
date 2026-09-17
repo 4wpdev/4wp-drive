@@ -725,6 +725,12 @@
 	color: #1d2327;
 }
 
+.forwp-drive-admin-shell .forwp-drive-status--wait.forwp-drive-status--visible {
+	border-left-color: #dba617;
+	background: #fcf9e8;
+	color: #614200;
+}
+
 .forwp-drive-patterns-page .forwp-drive-patterns__heading {
 	margin: 0 0 8px;
 	font-size: 15px;

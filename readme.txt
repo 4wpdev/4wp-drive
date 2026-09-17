@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -40,7 +40,8 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 * **Google Drive OAuth** — connect an admin Google account; tokens stored encrypted
 * **Folder sync** — scan `incoming/` for Google Docs, Markdown, Word, and images (Drive) or Markdown packages (GitHub)
 * **GitHub** — live Markdown source: PAT, owner/repo, move to published/failed after import
-* **Editorial Incoming** — status bar, source tabs, document queue + side workspace for preview and import
+* **Editorial Incoming** — status bar, source tabs, lazy folder tree, document queue + side workspace for preview and import
+* **Package images** — preview jpg/png in Incoming without importing; open the file in Drive or GitHub
 * **Analytics** — import history (source, post, folder alias, site slug, incoming → published) and Restore to incoming
 * **Document template** — front-matter lines before a separator (`---` or `=====`) map to post fields; body becomes post content (headings, lists, bold preserved)
 * **Body → block templates** — map FAQ-style sections to **4WP FAQ** or core Accordion; **Core Image** (default on) replaces `[image:filename.jpeg]` with `core/image` from the package folder
@@ -118,6 +119,10 @@ GitHub privacy: https://docs.github.com/en/site-policy/privacy-policies/github-g
 Optional: define `FORWP_DRIVE_GOOGLE_CLIENT_ID`, `FORWP_DRIVE_GOOGLE_CLIENT_SECRET`, or `FORWP_DRIVE_OAUTH_REDIRECT_URI` in `wp-config.php`.
 
 == Frequently Asked Questions ==
+
+= What does “Export errors” on Incoming mean? =
+
+During **Sync**, Drive downloads each article as HTML (Google Docs export, Word conversion, or Markdown download). **Export errors** is how many of those downloads failed on the last sync — not a WordPress import failure. Click the chip to see file names and Google’s message (quota, permissions, unsupported type, or a broken Doc). The package can still sit in the queue; yellow labels mark it. Fix the file in Drive and Sync again.
 
 = Do I need a Google Cloud project? =
 
@@ -197,6 +202,14 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 
 == Changelog ==
 
+= 1.6.0 =
+* **Incoming tree** — browse Drive/GitHub one folder at a time instead of loading the whole tree. Nested folders stay closed until you expand them; role folders (`incoming`, `published`, `failed`) open when they contain child folders. Shortcuts and shared-drive items are listed. Empty folders fetch children on expand.
+* **Google Docs tables** — classic Docs tables survive the `======` split and import as Gutenberg `core/table` (cells are no longer dumped as paragraphs like “Risk Zone”).
+* **Fonts** — Google Arial/11pt spans are stripped so the site theme fonts apply. Optional **Keep document fonts** on import.
+* **Package images** — jpg/png/gif/webp/avif in the tree use an image icon. Click to preview in the workspace **without Import/Reject**. Open-outside icon opens the file in Drive or GitHub.
+* **Sync wait** — “Sync already ran recently” is a yellow wait notice (HTTP 429), not a red error.
+* **Export errors chip** — count of documents Google could not export as HTML on the last sync. Click the chip for file names and the Drive message. Failed packages are highlighted in the tree.
+
 = 1.5.0 =
 * **Incoming** — queue, preview, and import (same `forwp-drive-inbox` slug).
 * **Markdown** — Drive `incoming/` packages accept `.md` / `.markdown` as the article (preferred over Google Doc / Word when several files sit in the folder). Pick which document to import.
@@ -246,6 +259,9 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.6.0 =
+Incoming tree is lazy, Google Docs tables import as tables, package images preview in the workspace, and Export errors explain failed Drive HTML exports.
 
 = 1.5.0 =
 GitHub Markdown is live. Incoming accepts Markdown packages. Analytics records imports and can restore a package to incoming.

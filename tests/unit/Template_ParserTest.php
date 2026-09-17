@@ -352,6 +352,32 @@ class Template_ParserTest extends TestCase {
 	/**
 	 * @return void
 	 */
+	public function test_preserves_classic_google_docs_tables_in_body_html(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<html><body><div>'
+			. '<p>Title: PCG</p>'
+			. '<p>=====</p>'
+			. '<p>The draft framework contains five categories:</p>'
+			. '<table><tr>'
+			. '<td><p>Risk Zone</p></td>'
+			. '<td><p>ATO Risk Classification</p></td>'
+			. '</tr></table>'
+			. '</div></body></html>';
+
+		$parser = new Template_Parser();
+		$result = $parser->parse( $html );
+
+		$this->assertStringContainsString( '<table', $result['body_html'] );
+		$this->assertStringContainsString( 'Risk Zone', $result['body_html'] );
+		$this->assertStringContainsString( 'ATO Risk Classification', $result['body_html'] );
+	}
+
+	/**
+	 * @return void
+	 */
 	public function test_parses_author_field(): void {
 		$mark   = Template_Separator::mark();
 		$parser = new Template_Parser();

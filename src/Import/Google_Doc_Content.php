@@ -192,6 +192,7 @@ final class Google_Doc_Content {
 		self::apply_inline_formatting( $root, $style_map );
 		self::convert_code_blocks( $root, $style_map );
 		self::convert_paragraph_headings( $root, $style_map );
+		self::unwrap_table_cell_paragraphs( $root );
 	}
 
 	/**
@@ -309,7 +310,8 @@ final class Google_Doc_Content {
 	 */
 	private static function export_content_blocks( \DOMDocument $dom ): array {
 		$xpath = new \DOMXPath( $dom );
-		$query = '//body//*[self::p or self::hr or self::ul or self::ol or self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]';
+		$query = '//body//*[self::p or self::hr or self::ul or self::ol or self::table or self::blockquote or self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]'
+			. '[not(ancestor::table)][not(ancestor::ul)][not(ancestor::ol)][not(ancestor::blockquote)]';
 		$nodes = $xpath->query( $query );
 		if ( ! $nodes || 0 === $nodes->length ) {
 			return array();
@@ -518,6 +520,11 @@ final class Google_Doc_Content {
 	 * @param array<string, array<string, mixed>> $style_map Styles.
 	 */
 	private static function convert_code_in_parent( \DOMElement $parent, array $style_map ): void {
+		$tag = strtolower( $parent->tagName );
+		if ( in_array( $tag, array( 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th' ), true ) ) {
+			return;
+		}
+
 		$doc = $parent->ownerDocument;
 		if ( ! $doc ) {
 			return;
@@ -650,6 +657,9 @@ final class Google_Doc_Content {
 		}
 
 		foreach ( $paragraphs as $p ) {
+			if ( self::element_is_inside_table( $p ) ) {
+				continue;
+			}
 			$styles = self::resolve_element_styles( $p, $style_map );
 			if ( self::is_monospace_family( (string) ( $styles['font_family'] ?? '' ) ) ) {
 				continue;
@@ -666,6 +676,57 @@ final class Google_Doc_Content {
 				$heading->appendChild( $p->firstChild );
 			}
 			$p->parentNode->replaceChild( $heading, $p );
+		}
+	}
+
+	private static function element_is_inside_table( \DOMElement $element ): bool {
+		$parent = $element->parentNode;
+		while ( $parent instanceof \DOMElement ) {
+			$tag = strtolower( $parent->tagName );
+			if ( in_array( $tag, array( 'table', 'td', 'th' ), true ) ) {
+				return true;
+			}
+			$parent = $parent->parentNode;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Google Docs wraps every cell in <p>; core/table cells prefer inline content.
+	 */
+	private static function unwrap_table_cell_paragraphs( \DOMElement $root ): void {
+		$cells = array();
+		foreach ( array( 'td', 'th' ) as $tag ) {
+			foreach ( $root->getElementsByTagName( $tag ) as $cell ) {
+				if ( $cell instanceof \DOMElement ) {
+					$cells[] = $cell;
+				}
+			}
+		}
+
+		foreach ( $cells as $cell ) {
+			$paras = array();
+			foreach ( $cell->childNodes as $child ) {
+				if ( $child instanceof \DOMText && '' === trim( (string) $child->textContent ) ) {
+					continue;
+				}
+				if ( $child instanceof \DOMElement && 'p' === strtolower( $child->tagName ) ) {
+					$paras[] = $child;
+					continue;
+				}
+				$paras = array();
+				break;
+			}
+			if ( count( $paras ) !== 1 ) {
+				continue;
+			}
+
+			$p = $paras[0];
+			while ( $p->firstChild ) {
+				$cell->insertBefore( $p->firstChild, $p );
+			}
+			$cell->removeChild( $p );
 		}
 	}
 
@@ -803,6 +864,193 @@ final class Google_Doc_Content {
 		$html = preg_replace( '/<\/i>/i', '</em>', $html );
 
 		return is_string( $html ) ? $html : '';
+	}
+
+	/**
+	 * Strip Google Docs typography (Arial, 11pt, color) and unwrap empty spans.
+	 *
+	 * Headings, lists, strong/em stay. Theme fonts apply. Safe on Gutenberg markup.
+	 *
+	 * @param string $html Body HTML or block markup.
+	 */
+	public static function strip_presentational_markup( string $html ): string {
+		$html = (string) $html;
+		if ( '' === trim( $html ) ) {
+			return $html;
+		}
+
+		if ( function_exists( 'has_blocks' ) && function_exists( 'parse_blocks' ) && function_exists( 'serialize_block' ) && has_blocks( $html ) ) {
+			$out = array();
+			foreach ( parse_blocks( $html ) as $block ) {
+				$out[] = serialize_block( self::strip_presentational_block( $block ) );
+			}
+
+			return implode( "\n\n", $out );
+		}
+
+		return self::strip_html_fragment( $html );
+	}
+
+	/**
+	 * @param array<string, mixed> $block Parsed block.
+	 * @return array<string, mixed>
+	 */
+	private static function strip_presentational_block( array $block ): array {
+		if ( isset( $block['innerHTML'] ) && is_string( $block['innerHTML'] ) && '' !== $block['innerHTML'] ) {
+			$block['innerHTML'] = self::strip_html_fragment( $block['innerHTML'] );
+		}
+
+		if ( isset( $block['innerContent'] ) && is_array( $block['innerContent'] ) ) {
+			foreach ( $block['innerContent'] as $i => $chunk ) {
+				if ( is_string( $chunk ) && '' !== $chunk ) {
+					$block['innerContent'][ $i ] = self::strip_html_fragment( $chunk );
+				}
+			}
+		}
+
+		if ( isset( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
+			foreach ( $block['innerBlocks'] as $i => $inner ) {
+				if ( is_array( $inner ) ) {
+					$block['innerBlocks'][ $i ] = self::strip_presentational_block( $inner );
+				}
+			}
+		}
+
+		return $block;
+	}
+
+	/**
+	 * @param string $html HTML fragment (no block comments required).
+	 */
+	private static function strip_html_fragment( string $html ): string {
+		if ( '' === trim( $html ) || ! class_exists( 'DOMDocument' ) ) {
+			return $html;
+		}
+
+		if ( ! preg_match( '/<(?:span|p|h[1-6]|li|td|th|div|table)\b/i', $html ) ) {
+			return $html;
+		}
+
+		if ( ! preg_match( '/\s(?:style|class|id)\s*=/i', $html ) && ! preg_match( '/<span\b/i', $html ) ) {
+			return $html;
+		}
+
+		$lead  = '';
+		$trail = '';
+		if ( preg_match( '/^(\s*)(.*?)(\s*)$/s', $html, $m ) ) {
+			$lead  = $m[1];
+			$html  = $m[2];
+			$trail = $m[3];
+		}
+
+		$comments = array();
+		$html     = preg_replace_callback(
+			'/<!--.*?-->/s',
+			static function ( $match ) use ( &$comments ) {
+				$token              = 'FORWPDRIVECMT' . count( $comments ) . 'Z';
+				$comments[ $token ] = $match[0];
+
+				return $token;
+			},
+			$html
+		);
+		if ( ! is_string( $html ) ) {
+			return $lead . $trail;
+		}
+
+		$wrapped = '<div data-forwp-drive-strip="1">' . $html . '</div>';
+		$dom     = self::load_html_dom( $wrapped );
+		if ( ! $dom ) {
+			if ( ! empty( $comments ) ) {
+				$html = str_replace( array_keys( $comments ), array_values( $comments ), $html );
+			}
+
+			return $lead . $html . $trail;
+		}
+
+		$xpath = new \DOMXPath( $dom );
+		$root  = $xpath->query( '//*[@data-forwp-drive-strip="1"]' );
+		$node  = ( $root && $root->length > 0 ) ? $root->item( 0 ) : null;
+		if ( ! $node instanceof \DOMElement ) {
+			if ( ! empty( $comments ) ) {
+				$html = str_replace( array_keys( $comments ), array_values( $comments ), $html );
+			}
+
+			return $lead . $html . $trail;
+		}
+
+		$elements = array();
+		foreach ( $xpath->query( './/*', $node ) as $el ) {
+			if ( $el instanceof \DOMElement ) {
+				$elements[] = $el;
+			}
+		}
+
+		foreach ( $elements as $el ) {
+			if ( $el->hasAttribute( 'style' ) ) {
+				$el->removeAttribute( 'style' );
+			}
+			if ( $el->hasAttribute( 'id' ) ) {
+				$el->removeAttribute( 'id' );
+			}
+			self::scrub_google_class( $el );
+		}
+
+		$spans = array();
+		foreach ( $node->getElementsByTagName( 'span' ) as $span ) {
+			if ( $span instanceof \DOMElement ) {
+				$spans[] = $span;
+			}
+		}
+		$spans = array_reverse( $spans );
+
+		foreach ( $spans as $span ) {
+			if ( ! $span->parentNode ) {
+				continue;
+			}
+			if ( $span->hasAttributes() ) {
+				continue;
+			}
+			while ( $span->firstChild ) {
+				$span->parentNode->insertBefore( $span->firstChild, $span );
+			}
+			$span->parentNode->removeChild( $span );
+		}
+
+		$inner = '';
+		foreach ( $node->childNodes as $child ) {
+			$inner .= $dom->saveHTML( $child );
+		}
+
+		if ( ! empty( $comments ) ) {
+			$inner = str_replace( array_keys( $comments ), array_values( $comments ), $inner );
+		}
+
+		return $lead . $inner . $trail;
+	}
+
+	/**
+	 * Drop Google Docs classes; keep WordPress block classes.
+	 */
+	private static function scrub_google_class( \DOMElement $el ): void {
+		$class = trim( $el->getAttribute( 'class' ) );
+		if ( '' === $class ) {
+			return;
+		}
+
+		$kept = array();
+		foreach ( preg_split( '/\s+/', $class ) as $name ) {
+			if ( 0 === strpos( $name, 'wp-' ) || 0 === strpos( $name, 'has-' ) ) {
+				$kept[] = $name;
+			}
+		}
+
+		if ( empty( $kept ) ) {
+			$el->removeAttribute( 'class' );
+			return;
+		}
+
+		$el->setAttribute( 'class', implode( ' ', $kept ) );
 	}
 
 	/**

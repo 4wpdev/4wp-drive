@@ -49,9 +49,11 @@ final class Google_Drive_Client {
 			'GET',
 			'/files',
 			array(
-				'q'        => $q,
-				'fields'   => 'files(id,name,mimeType)',
-				'pageSize' => 200,
+				'q'                          => $q,
+				'fields'                     => 'nextPageToken,files(id,name,mimeType,shortcutDetails(targetId,targetMimeType))',
+				'pageSize'                   => 200,
+				'supportsAllDrives'          => 'true',
+				'includeItemsFromAllDrives'  => 'true',
 			)
 		);
 
@@ -72,6 +74,19 @@ final class Google_Drive_Client {
 			$mime = (string) ( $file['mimeType'] ?? '' );
 			if ( '' === $id || '' === $name ) {
 				continue;
+			}
+
+			if ( 'application/vnd.google-apps.shortcut' === $mime ) {
+				$details = isset( $file['shortcutDetails'] ) && is_array( $file['shortcutDetails'] )
+					? $file['shortcutDetails']
+					: array();
+				$target_id   = (string) ( $details['targetId'] ?? '' );
+				$target_mime = (string) ( $details['targetMimeType'] ?? '' );
+				if ( '' === $target_id ) {
+					continue;
+				}
+				$id   = $target_id;
+				$mime = '' !== $target_mime ? $target_mime : $mime;
 			}
 
 			if ( 'application/vnd.google-apps.folder' === $mime ) {

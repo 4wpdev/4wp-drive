@@ -10,7 +10,7 @@ namespace ForWP\Drive\Blocks;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Maps headings, lists, quotes, code, and paragraphs to core blocks.
+ * Maps headings, lists, quotes, code, tables, and paragraphs to core blocks.
  */
 final class Gutenberg_Content {
 
@@ -169,6 +169,21 @@ final class Gutenberg_Content {
 
 		if ( 'hr' === $tag ) {
 			return array( self::separator_block() );
+		}
+
+		if ( 'table' === $tag ) {
+			$block = self::table_block( $element );
+			return empty( $block ) ? array() : array( $block );
+		}
+
+		if ( 'figure' === $tag ) {
+			$table = self::first_child_table( $element );
+			if ( $table ) {
+				$block = self::table_block( $table );
+				return empty( $block ) ? array() : array( $block );
+			}
+
+			return self::blocks_from_children( $element );
 		}
 
 		if ( self::is_empty_element( $element ) ) {
@@ -335,6 +350,143 @@ final class Gutenberg_Content {
 			array(),
 			'<hr class="wp-block-separator has-alpha-channel-opacity"/>'
 		);
+	}
+
+	/**
+	 * Markdown / HTML tables → core/table (figure + thead/tbody).
+	 *
+	 * @return array<string, mixed>
+	 */
+	private static function table_block( \DOMElement $table ): array {
+		$html = self::serialize_core_table_html( $table );
+		if ( '' === $html ) {
+			return array();
+		}
+
+		return self::make_block( 'core/table', array(), $html );
+	}
+
+	/**
+	 * @return \DOMElement|null
+	 */
+	private static function first_child_table( \DOMElement $parent ) {
+		foreach ( $parent->childNodes as $child ) {
+			if ( $child instanceof \DOMElement && 'table' === strtolower( $child->tagName ) ) {
+				return $child;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Markup Gutenberg expects for core/table save().
+	 */
+	private static function serialize_core_table_html( \DOMElement $table ): string {
+		$head  = '';
+		$body  = '';
+		$foot  = '';
+		$loose = array();
+
+		foreach ( $table->childNodes as $child ) {
+			if ( ! $child instanceof \DOMElement ) {
+				continue;
+			}
+
+			$tag = strtolower( $child->tagName );
+			if ( 'thead' === $tag ) {
+				$head .= self::serialize_table_section( $child, true );
+			} elseif ( 'tbody' === $tag ) {
+				$body .= self::serialize_table_section( $child, false );
+			} elseif ( 'tfoot' === $tag ) {
+				$foot .= self::serialize_table_section( $child, false );
+			} elseif ( 'tr' === $tag ) {
+				$loose[] = $child;
+			}
+		}
+
+		if ( '' === $head && '' === $body && ! empty( $loose ) ) {
+			$first = array_shift( $loose );
+			if ( $first instanceof \DOMElement && self::row_is_header( $first ) ) {
+				$head = '<thead>' . self::serialize_table_row( $first, true ) . '</thead>';
+			} elseif ( $first instanceof \DOMElement ) {
+				array_unshift( $loose, $first );
+			}
+
+			if ( ! empty( $loose ) ) {
+				$body = '<tbody>';
+				foreach ( $loose as $row ) {
+					if ( $row instanceof \DOMElement ) {
+						$body .= self::serialize_table_row( $row, false );
+					}
+				}
+				$body .= '</tbody>';
+			}
+		}
+
+		if ( '' === $head && '' === $body && '' === $foot ) {
+			return '';
+		}
+
+		return '<figure class="wp-block-table"><table class="has-fixed-layout">' . $head . $body . $foot . '</table></figure>';
+	}
+
+	private static function serialize_table_section( \DOMElement $section, bool $header ): string {
+		$tag  = strtolower( $section->tagName );
+		$rows = '';
+		foreach ( $section->childNodes as $child ) {
+			if ( $child instanceof \DOMElement && 'tr' === strtolower( $child->tagName ) ) {
+				$rows .= self::serialize_table_row( $child, $header );
+			}
+		}
+
+		if ( '' === $rows ) {
+			return '';
+		}
+
+		return '<' . $tag . '>' . $rows . '</' . $tag . '>';
+	}
+
+	private static function serialize_table_row( \DOMElement $row, bool $header ): string {
+		$cells = '';
+		foreach ( $row->childNodes as $child ) {
+			if ( ! $child instanceof \DOMElement ) {
+				continue;
+			}
+
+			$tag = strtolower( $child->tagName );
+			if ( ! in_array( $tag, array( 'td', 'th' ), true ) ) {
+				continue;
+			}
+
+			$out_tag = $header ? 'th' : $tag;
+			$inner   = wp_kses_post( self::inner_html( $child ) );
+			$cells  .= '<' . $out_tag . '>' . $inner . '</' . $out_tag . '>';
+		}
+
+		if ( '' === $cells ) {
+			return '';
+		}
+
+		return '<tr>' . $cells . '</tr>';
+	}
+
+	private static function row_is_header( \DOMElement $row ): bool {
+		$th = 0;
+		$td = 0;
+		foreach ( $row->childNodes as $child ) {
+			if ( ! $child instanceof \DOMElement ) {
+				continue;
+			}
+			$tag = strtolower( $child->tagName );
+			if ( 'th' === $tag ) {
+				++$th;
+			} elseif ( 'td' === $tag ) {
+				++$td;
+			}
+		}
+
+		return $th > 0 && 0 === $td;
 	}
 
 	/**

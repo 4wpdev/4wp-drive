@@ -223,6 +223,7 @@ final class Admin_Menu {
 					'clearCredentialsRunning' => __( 'Clearing…', '4wp-drive' ),
 					'reconnectDrive'          => __( 'Reconnect Google Drive', '4wp-drive' ),
 					'openInDrive'             => __( 'Open in Drive', '4wp-drive' ),
+					'openFileOutside'         => __( 'Open outside', '4wp-drive' ),
 					'editInGoogleDocs'        => __( 'Edit in Google Docs', '4wp-drive' ),
 					'reject'                  => __( 'Reject', '4wp-drive' ),
 					'openFolder'              => __( 'Open folder', '4wp-drive' ),

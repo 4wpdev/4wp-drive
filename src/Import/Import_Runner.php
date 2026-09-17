@@ -74,7 +74,7 @@ final class Import_Runner {
 				(string) $options['featured_image_file_id']
 			);
 		}
-		$creator   = new Post_Creator();
+		$creator   = new Post_Creator( null, ! empty( $options['keep_document_fonts'] ) );
 		$config    = new Template_Config();
 		$post_type = $config->resolve_import_post_type(
 			isset( $options['post_type'] ) ? (string) $options['post_type'] : ''

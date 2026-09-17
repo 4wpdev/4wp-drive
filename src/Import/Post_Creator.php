@@ -26,8 +26,14 @@ final class Post_Creator {
 	 */
 	private $config;
 
-	public function __construct( ?Template_Config $config = null ) {
-		$this->config = $config ?? new Template_Config();
+	/**
+	 * @var bool
+	 */
+	private $keep_document_fonts;
+
+	public function __construct( ?Template_Config $config = null, bool $keep_document_fonts = false ) {
+		$this->config               = $config ?? new Template_Config();
+		$this->keep_document_fonts = $keep_document_fonts;
 	}
 
 	/**
@@ -166,6 +172,9 @@ final class Post_Creator {
 	 */
 	private function build_post_content( array $metadata ): string {
 		$content = isset( $metadata['body_html'] ) ? (string) $metadata['body_html'] : '';
+		if ( ! $this->keep_document_fonts ) {
+			$content = Google_Doc_Content::strip_presentational_markup( $content );
+		}
 		$plain   = isset( $metadata['body'] ) ? trim( (string) $metadata['body'] ) : '';
 		if ( '' === trim( wp_strip_all_tags( $content ) ) && '' !== $plain ) {
 			return wpautop( esc_html( $plain ) );

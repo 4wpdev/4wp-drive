@@ -160,6 +160,65 @@ class Google_Doc_ContentTest extends TestCase {
 	}
 
 	/**
+	 * Classic Google Docs tables must survive the ====== split (cells are <p> inside <td>).
+	 *
+	 * @return void
+	 */
+	public function test_split_export_keeps_classic_google_docs_tables(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<html><body><div>'
+			. '<p>Title: PCG</p>'
+			. '<p>=====</p>'
+			. '<p>The draft framework contains five categories:</p>'
+			. '<table><tr>'
+			. '<td><p><span>Risk Zone</span></p></td>'
+			. '<td><p><span>ATO Risk Classification</span></p></td>'
+			. '</tr></table>'
+			. '<table><tr><td><p>White</p></td><td><p>Further risk assessment not required</p></td></tr>'
+			. '<tr><td><p>Green</p></td><td><p>Low risk</p></td></tr>'
+			. '<tr><td><p>Yellow</p></td><td><p>Low to medium risk</p></td></tr>'
+			. '<tr><td><p>Amber</p></td><td><p>Medium to high risk</p></td></tr>'
+			. '<tr><td><p>Red</p></td><td><p>High risk</p></td></tr></table>'
+			. '</div></body></html>';
+
+		$split = Google_Doc_Content::split_export_at_separator( $html );
+
+		$this->assertIsArray( $split );
+		$this->assertStringContainsString( '<table', $split['body_html'] );
+		$this->assertStringContainsString( 'Risk Zone', $split['body_html'] );
+		$this->assertStringContainsString( 'ATO Risk Classification', $split['body_html'] );
+		$this->assertStringContainsString( 'Amber', $split['body_html'] );
+		$this->assertStringNotContainsString( '<table', $split['header_html'] );
+	}
+
+	/**
+	 * @return void
+	 */
+	public function test_prepare_keeps_google_docs_table_cells_as_table_not_paragraphs(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<table><tr>'
+			. '<td><p style="font-weight:700;font-size:14pt"><span>Risk Zone</span></p></td>'
+			. '<td><p><span>ATO Risk Classification</span></p></td>'
+			. '</tr></table>';
+
+		$result = Google_Doc_Content::prepare( $html );
+
+		$this->assertStringContainsString( '<table', $result );
+		$this->assertStringContainsString( '<td', $result );
+		$this->assertStringContainsString( 'Risk Zone', $result );
+		$this->assertStringNotContainsString( '<h1', $result );
+		$this->assertStringNotContainsString( '<h2', $result );
+		$this->assertStringNotContainsString( '<h3', $result );
+		$this->assertDoesNotMatchRegularExpression( '/<td[^>]*>\s*<p>/', $result );
+	}
+
+	/**
 	 * @return void
 	 */
 	public function test_prepare_from_export_strips_header_inside_wrapper_div(): void {
@@ -202,5 +261,22 @@ class Google_Doc_ContentTest extends TestCase {
 		$this->assertStringContainsString( '<code>', $result );
 		$this->assertStringContainsString( 'echo 1;', $result );
 		$this->assertStringContainsString( 'echo 2;', $result );
+	}
+
+	public function test_strips_google_font_spans_by_default(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<!-- wp:paragraph --><p><span>The OECD</span><strong>GIR</strong><span style="color:#000000;font-weight:400;font-size:11pt;font-family:&quot;Arial&quot;;font-style:normal">.</span></p><!-- /wp:paragraph -->';
+
+		$result = Google_Doc_Content::strip_presentational_markup( $html );
+
+		$this->assertStringNotContainsString( 'font-family', $result );
+		$this->assertStringNotContainsString( '11pt', $result );
+		$this->assertStringNotContainsString( '<span', $result );
+		$this->assertStringContainsString( '<strong>GIR</strong>', $result );
+		$this->assertStringContainsString( 'The OECD', $result );
+		$this->assertStringContainsString( '<!-- wp:paragraph', $result );
 	}
 }

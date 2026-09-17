@@ -19,6 +19,7 @@ WordPress.org users see [readme.txt](../../readme.txt) (`== Changelog ==`). Keep
 | `1.2.0.md` | Release **1.2.0** — Polylang multilingual import; WPML planned |
 | `1.4.0.md` | Release **1.4.0** — editorial Inbox dashboard (queue + workspace, source tabs) |
 | `1.5.0.md` | Release **1.5.0** — GitHub Markdown live, Drive Markdown, Analytics + Restore |
+| `1.6.0.md` | Release **1.6.0** — lazy Incoming tree, Docs tables, image preview, export-error chip |
 | `README.md` | This guide |
 
 ## Template (`X.Y.Z.md`)

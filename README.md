@@ -4,7 +4,7 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 
 **Plugin page:** [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/) · [WordPress.org](https://wordpress.org/plugins/4wp-drive/) · [4wp.dev](https://4wp.dev/) · GPL-2.0-or-later
 
-**Current stable:** 1.5.0
+**Current stable:** 1.6.0
 
 ## What it does
 
@@ -15,6 +15,32 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 5. **Analytics** records each import. **Restore to incoming** moves the package back if the WordPress post was deleted or the import needs a redo.
 
 Front-matter lines before a separator (`---` or `=====`) map to post fields (title, slug, categories, SEO, etc.). The rest becomes Gutenberg post content.
+
+## What shipped in 1.6.0
+
+Incoming editor UX and Google Docs fidelity.
+
+### Incoming tree
+
+- The queue is a **lazy folder tree**: one Drive/GitHub level at a time, not a recursive dump of the whole `incoming/` tree.
+- Nested folders stay **closed** until expanded. `incoming` / `published` / `failed` open when they have child folders.
+- Expand fetches children (including shortcuts / shared drives). Empty folders no longer stay empty if Drive has files.
+
+### Google Docs
+
+- **Classic tables** import as `core/table`. Docs wraps cells in `<p>`; those paragraphs no longer leak into the post body.
+- Default: strip Google Arial/11pt so the **theme fonts** win. Import checkbox **Keep document fonts** when you need the Doc’s typeface.
+
+### Images
+
+- Image files in the tree get an **image icon**.
+- Click the name: **workspace preview** (no Import / Reject).
+- Open-outside icon: Drive file view or GitHub blob.
+
+### Status
+
+- Sync cooldown (“already ran recently”) is **yellow**, not red.
+- **Export errors: N** is from the last Sync: Google could not export that many articles as HTML (Docs export API, Word conversion, or unsupported mime). Click the chip for names and messages. It is **not** a failed WordPress import.
 
 ## What shipped in 1.5.0
 
@@ -127,7 +153,7 @@ composer run lint
 
 WordPress.org assets: see [.wordpress-org/assets/README.txt](.wordpress-org/assets/README.txt).
 
-Release announcements (Google, social, newsletter): [docs/releases/](docs/releases/) — not shipped in the wp.org ZIP. Latest: [1.5.0.md](docs/releases/1.5.0.md).
+Release announcements (Google, social, newsletter): [docs/releases/](docs/releases/) — not shipped in the wp.org ZIP. Latest: [1.6.0.md](docs/releases/1.6.0.md).
 
 ## External services
 

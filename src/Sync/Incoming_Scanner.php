@@ -38,7 +38,8 @@ final class Incoming_Scanner {
 	public function run() {
 		$new_ready     = 0;
 		$scanned       = 0;
-		$export_errors = 0;
+		$export_errors      = 0;
+		$export_error_items = array();
 		$removed       = 0;
 		$any_ready     = false;
 
@@ -97,6 +98,12 @@ final class Incoming_Scanner {
 				$export_failed = ! empty( $item['export_failed'] );
 				if ( $export_failed ) {
 					++$export_errors;
+					$scan_error = (string) ( $metadata['scan_error'] ?? '' );
+					$export_error_items[] = array(
+						'file_id'   => $file_id,
+						'file_name' => (string) ( $item['file_name'] ?? '' ),
+						'message'   => $scan_error,
+					);
 				}
 
 				$was_new = ! $existing || Document_Status::READY !== $existing->status;
@@ -152,12 +159,13 @@ final class Incoming_Scanner {
 		}
 
 		$summary = array(
-			'scanned'       => $scanned,
-			'new_ready'     => $new_ready,
-			'removed'       => $removed,
-			'ready_total'   => $ready_count,
-			'export_errors' => $export_errors,
-			'timestamp'     => current_time( 'mysql', true ),
+			'scanned'            => $scanned,
+			'new_ready'          => $new_ready,
+			'removed'            => $removed,
+			'ready_total'        => $ready_count,
+			'export_errors'      => $export_errors,
+			'export_error_items' => array_slice( $export_error_items, 0, 20 ),
+			'timestamp'          => current_time( 'mysql', true ),
 		);
 
 		Settings::instance()->set_last_sync( $summary );

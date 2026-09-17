@@ -34,6 +34,12 @@
 	color: #1d2327;
 }
 
+.forwp-drive-wrap .forwp-drive-status--wait.forwp-drive-status--visible {
+	border-left-color: #dba617;
+	background: #fcf9e8;
+	color: #614200;
+}
+
 .forwp-drive-actions {
 	display: flex;
 	flex-wrap: wrap;
@@ -330,6 +336,10 @@
 	color: #8a2424;
 }
 
+.forwp-drive-chip--action {
+	cursor: pointer;
+}
+
 .forwp-drive-chip--muted {
 	color: #646970;
 	font-weight: 400;
@@ -446,6 +456,16 @@
 	/* Indent past the folder toggle column so file icons align with folder icons. */
 	grid-template-columns: 16px minmax(0, 1fr) !important;
 	padding-left: calc(6px + 14px + 6px + (var(--forwp-drive-tree-depth, 0) * 12px));
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-file--image {
+	grid-template-columns: 16px minmax(0, 1fr) 22px !important;
+	cursor: pointer;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-file--image.is-readonly {
+	cursor: pointer;
+	opacity: 1;
 }
 
 #forwp-drive-inbox-list .forwp-drive-tree__row:hover {
@@ -589,6 +609,32 @@
 
 #forwp-drive-inbox-list .forwp-drive-tree__row.is-file .forwp-drive-tree__label {
 	grid-column: 2;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__open {
+	grid-column: 3;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	margin: 0;
+	color: #656d76;
+	border-radius: 4px;
+	text-decoration: none;
+	box-sizing: border-box;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__open:hover,
+#forwp-drive-inbox-list .forwp-drive-tree__open:focus {
+	color: #0969da;
+	background: #ddf4ff;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__open svg {
+	display: block;
+	width: 14px;
+	height: 14px;
 }
 
 #forwp-drive-inbox-list .forwp-drive-tree__tools {

@@ -79,7 +79,7 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 	}
 
 	/**
-	 * Browse incoming / published / failed for the inbox tree (includes empty role folders).
+	 * Browse incoming / published / failed — one listing per role folder (lazy children).
 	 *
 	 * @return array{folders: array<string, array<string, mixed>>, files: array<int, array<string, mixed>>}|WP_Error
 	 */
@@ -97,22 +97,49 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 
 		foreach ( array( 'incoming', 'published', 'failed' ) as $role ) {
 			$id = $settings->get_folder_id( $role );
-			$root['folders'][ $role ] = $this->browse_role_node( $client, $id, $role, $role, 0 );
+			$root['folders'][ $role ] = $this->list_browse_level( $client, $id, $role, $role, $role );
 		}
 
 		return $root;
 	}
 
 	/**
+	 * One folder listing for lazy tree expand.
+	 *
+	 * @param string $folder_id Drive folder id.
+	 * @param string $path      Tree path (incoming/…).
+	 * @param string $name      Display name.
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public function browse_folder( string $folder_id, string $path = '', string $name = '' ) {
+		if ( ! $this->is_ready() ) {
+			return new WP_Error( 'forwp_drive_not_ready', __( 'Google Drive is not configured.', '4wp-drive' ) );
+		}
+
+		$folder_id = sanitize_text_field( $folder_id );
+		if ( '' === $folder_id ) {
+			return new WP_Error( 'forwp_drive_browse_folder', __( 'Missing folder id.', '4wp-drive' ) );
+		}
+
+		$path   = trim( str_replace( '\\', '/', $path ), '/' );
+		$name   = '' !== $name ? $name : ( '' !== $path ? basename( $path ) : $folder_id );
+		$client = new Google_Drive_Client( Google_OAuth::instance() );
+
+		return $this->list_browse_level( $client, $folder_id, $name, '', $path );
+	}
+
+	/**
 	 * @return array<string, mixed>
 	 */
-	private function browse_role_node( Google_Drive_Client $client, string $folder_id, string $name, string $role, int $depth, string $path = '' ): array {
+	private function list_browse_level( Google_Drive_Client $client, string $folder_id, string $name, string $role, string $path ): array {
 		$path = '' !== $path ? $path : $name;
 		$node = array(
 			'name'    => $name,
 			'path'    => $path,
 			'role'    => $role,
 			'id'      => $folder_id,
+			'lazy'    => false,
+			'loaded'  => true,
 			'folders' => array(),
 			'files'   => array(),
 		);
@@ -123,6 +150,8 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 
 		$entries = $client->list_folder_entries( $folder_id );
 		if ( is_wp_error( $entries ) ) {
+			$node['error'] = $entries->get_error_message();
+
 			return $node;
 		}
 
@@ -136,26 +165,17 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 				continue;
 			}
 
-			$child_path = $path . '/' . $child_name;
-			if ( $depth < 5 ) {
-				$node['folders'][ $child_name ] = $this->browse_role_node(
-					$client,
-					$child_id,
-					$child_name,
-					'',
-					$depth + 1,
-					$child_path
-				);
-			} else {
-				$node['folders'][ $child_name ] = array(
-					'name'    => $child_name,
-					'path'    => $child_path,
-					'role'    => '',
-					'id'      => $child_id,
-					'folders' => array(),
-					'files'   => array(),
-				);
-			}
+			$child_path = '' !== $path ? $path . '/' . $child_name : $child_name;
+			$node['folders'][ $child_name ] = array(
+				'name'    => $child_name,
+				'path'    => $child_path,
+				'role'    => '',
+				'id'      => $child_id,
+				'lazy'    => true,
+				'loaded'  => false,
+				'folders' => array(),
+				'files'   => array(),
+			);
 		}
 
 		foreach ( (array) ( $entries['files'] ?? array() ) as $file ) {

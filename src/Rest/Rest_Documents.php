@@ -12,6 +12,7 @@ use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Featured_Image_Chooser;
+use ForWP\Drive\Import\Google_Doc_Content;
 use ForWP\Drive\Import\Import_Runner;
 use ForWP\Drive\Import\Import_Target_Resolver;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
@@ -37,6 +38,7 @@ final class Rest_Documents {
 	 */
 	public static function register(): void {
 		add_action( 'rest_api_init', array( self::class, 'register_routes' ) );
+		add_filter( 'rest_pre_serve_request', array( self::class, 'serve_media_binary' ), 10, 4 );
 	}
 
 	/**
@@ -53,6 +55,62 @@ final class Rest_Documents {
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( self::class, 'list_documents' ),
 					'permission_callback' => array( self::class, 'can_view_inbox' ),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/browse',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( self::class, 'browse_folder' ),
+					'permission_callback' => array( self::class, 'can_view_inbox' ),
+					'args'                => array(
+						'source'    => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_key',
+						),
+						'folder_id' => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'path'      => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'name'      => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/media',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( self::class, 'get_media' ),
+					'permission_callback' => array( self::class, 'can_view_inbox' ),
+					'args'                => array(
+						'source'  => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_key',
+						),
+						'file_id' => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'name'    => array(
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_file_name',
+						),
+					),
 				),
 			)
 		);
@@ -279,6 +337,112 @@ final class Rest_Documents {
 	}
 
 	/**
+	 * GET one folder listing for lazy inbox tree.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 */
+	public static function browse_folder( WP_REST_Request $request ): WP_REST_Response {
+		$slug   = sanitize_key( (string) $request->get_param( 'source' ) );
+		$source = Source_Registry::get( $slug );
+		if ( ! $source || ! method_exists( $source, 'browse_folder' ) ) {
+			return new WP_REST_Response(
+				array( 'message' => __( 'This source does not support folder browse.', '4wp-drive' ) ),
+				400
+			);
+		}
+
+		$node = $source->browse_folder(
+			(string) $request->get_param( 'folder_id' ),
+			(string) $request->get_param( 'path' ),
+			(string) $request->get_param( 'name' )
+		);
+
+		if ( is_wp_error( $node ) ) {
+			return new WP_REST_Response(
+				array( 'message' => $node->get_error_message() ),
+				400
+			);
+		}
+
+		return new WP_REST_Response( $node, 200 );
+	}
+
+	/**
+	 * Stream an image from Drive or GitHub for the inbox workspace.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 */
+	public static function get_media( WP_REST_Request $request ): WP_REST_Response {
+		$fetched = Media_Preview::fetch(
+			(string) $request->get_param( 'source' ),
+			(string) $request->get_param( 'file_id' ),
+			(string) $request->get_param( 'name' )
+		);
+
+		if ( is_wp_error( $fetched ) ) {
+			$data   = $fetched->get_error_data();
+			$status = is_array( $data ) && isset( $data['status'] ) ? (int) $data['status'] : 400;
+			if ( $status < 400 ) {
+				$status = 400;
+			}
+
+			return new WP_REST_Response(
+				array( 'message' => $fetched->get_error_message() ),
+				$status
+			);
+		}
+
+		$response = new WP_REST_Response( $fetched['bytes'], 200 );
+		$response->header( 'Content-Type', $fetched['mime'] );
+		$response->header(
+			'Content-Disposition',
+			'inline; filename="' . sanitize_file_name( $fetched['name'] ) . '"'
+		);
+		$response->header( 'Cache-Control', 'private, max-age=120' );
+		$response->header( 'X-Content-Type-Options', 'nosniff' );
+
+		return $response;
+	}
+
+	/**
+	 * Serve `/media` as raw bytes instead of JSON.
+	 *
+	 * @param bool                      $served  Whether the request has already been served.
+	 * @param WP_REST_Response|WP_Error $result  Result to send to the client.
+	 * @param WP_REST_Request           $request Request used to generate the response.
+	 * @param \WP_REST_Server           $server  Server instance.
+	 * @return bool
+	 */
+	public static function serve_media_binary( $served, $result, $request, $server ): bool {
+		if ( $served ) {
+			return true;
+		}
+		if ( ! $request instanceof WP_REST_Request ) {
+			return (bool) $served;
+		}
+		if ( '/forwp-drive/v1/media' !== $request->get_route() ) {
+			return (bool) $served;
+		}
+		if ( $result instanceof \WP_Error ) {
+			return false;
+		}
+		if ( ! $result instanceof WP_REST_Response ) {
+			return false;
+		}
+		if ( $result->get_status() < 200 || $result->get_status() >= 300 ) {
+			return false;
+		}
+		$data = $result->get_data();
+		if ( ! is_string( $data ) ) {
+			return false;
+		}
+
+		echo $data; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binary image payload.
+
+		return true;
+	}
+
+	/**
 	 * GET single document preview.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -330,6 +494,7 @@ final class Rest_Documents {
 		if ( isset( $params['post_type'] ) ) {
 			$options['post_type'] = sanitize_key( (string) $params['post_type'] );
 		}
+		$options['keep_document_fonts'] = ! empty( $params['keep_document_fonts'] );
 
 		$result = ( new Import_Runner() )->import( $id, $options );
 
@@ -589,8 +754,12 @@ final class Rest_Documents {
 		);
 
 		if ( $full ) {
-			$data['body_html'] = isset( $meta['body_html'] ) ? (string) $meta['body_html'] : '';
-			$data['body']      = isset( $meta['body'] ) ? (string) $meta['body'] : '';
+			$stored = isset( $meta['body_html'] ) ? (string) $meta['body_html'] : '';
+			$clean  = Google_Doc_Content::strip_presentational_markup( $stored );
+			$data['body_html']                   = $clean;
+			$data['body_html_with_fonts']        = $stored;
+			$data['keep_document_fonts_available'] = $stored !== $clean && false !== stripos( $stored, 'font-family' );
+			$data['body']                        = isset( $meta['body'] ) ? (string) $meta['body'] : '';
 		}
 
 		return $data;

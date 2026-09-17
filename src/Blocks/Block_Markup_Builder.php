@@ -135,6 +135,14 @@ final class Block_Markup_Builder {
 				continue;
 			}
 
+			if ( 'table' === $tag || 'figure' === $tag ) {
+				$converted = Gutenberg_Content::from_html( (string) $node['html'] );
+				if ( '' !== $converted ) {
+					$parts[] = $converted;
+					continue;
+				}
+			}
+
 			$text = trim( (string) $node['text'] );
 			if ( '' === $text ) {
 				continue;
