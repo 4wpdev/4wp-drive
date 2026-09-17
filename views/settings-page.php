@@ -198,6 +198,10 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 						</table>
 						<p>
 							<button type="button" class="button button-primary" id="forwp-drive-save-github"><?php esc_html_e( 'Save GitHub settings', '4wp-drive' ); ?></button>
+							<button type="button" class="button" id="forwp-drive-disconnect-github" hidden><?php esc_html_e( 'Disconnect', '4wp-drive' ); ?></button>
+						</p>
+						<p class="description">
+							<?php esc_html_e( 'Disconnect removes the saved token from WordPress. Revoke the same token on GitHub → Settings → Developer settings → Personal access tokens if you want it dead on GitHub’s side too.', '4wp-drive' ); ?>
 						</p>
 					</div>
 

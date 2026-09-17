@@ -218,6 +218,8 @@ final class Admin_Menu {
 					'syncRunning'             => __( 'Syncing…', '4wp-drive' ),
 					'importRunning'           => __( 'Importing…', '4wp-drive' ),
 					'disconnectConfirm'       => __( 'Disconnect Google Drive from this site?', '4wp-drive' ),
+					'disconnectGitHubConfirm' => __( 'Disconnect GitHub from this site? The saved personal access token will be removed.', '4wp-drive' ),
+					'dialogDisconnectGitHubTitle' => __( 'Disconnect GitHub', '4wp-drive' ),
 					'disconnectRunning'       => __( 'Disconnecting…', '4wp-drive' ),
 					'clearCredentialsConfirm' => __( 'Clear saved Client ID and Client Secret? This also disconnects your Drive account.', '4wp-drive' ),
 					'clearCredentialsRunning' => __( 'Clearing…', '4wp-drive' ),

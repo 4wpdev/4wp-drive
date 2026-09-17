@@ -3338,6 +3338,12 @@
 				connectedLink.textContent = '';
 			}
 		}
+		const disconnectGh = document.getElementById(
+			'forwp-drive-disconnect-github'
+		);
+		if ( disconnectGh ) {
+			disconnectGh.hidden = ! github.has_token;
+		}
 	}
 
 	function openSourceDetail( slug ) {
@@ -4117,6 +4123,46 @@
 						}
 					}
 				);
+			} );
+			return;
+		}
+		if ( target.id === 'forwp-drive-disconnect-github' ) {
+			const strings = forwpDriveAdmin.strings || {};
+			confirmDialog( {
+				title: strings.dialogDisconnectGitHubTitle || 'Disconnect GitHub',
+				message:
+					strings.disconnectGitHubConfirm ||
+					'Disconnect GitHub from this site? The saved personal access token will be removed.',
+				confirmLabel: strings.dialogConfirm || 'Confirm',
+				danger: true,
+			} ).then( ( confirmed ) => {
+				if ( ! confirmed ) {
+					return;
+				}
+				const status = document.getElementById(
+					'forwp-drive-settings-status'
+				);
+				setStatus(
+					status,
+					strings.disconnectRunning || 'Disconnecting…',
+					false,
+					true
+				);
+				api( 'settings', {
+					method: 'POST',
+					body: JSON.stringify( { github_disconnect: true } ),
+				} ).then( ( { ok, data } ) => {
+					setStatus(
+						status,
+						ok
+							? data.message || 'Disconnected.'
+							: data.message || 'Could not disconnect.',
+						! ok
+					);
+					if ( ok ) {
+						loadSettings();
+					}
+				} );
 			} );
 			return;
 		}

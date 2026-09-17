@@ -108,6 +108,15 @@ final class GitHub_Settings {
 	}
 
 	/**
+	 * Remove the stored PAT. Owner/repo stay so a new token can be saved.
+	 */
+	public static function clear_token(): void {
+		$current = self::get_raw();
+		$current['token'] = '';
+		update_option( self::OPTION, $current, false );
+	}
+
+	/**
 	 * @return array<string, mixed>
 	 */
 	private static function get_raw(): array {

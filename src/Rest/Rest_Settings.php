@@ -201,7 +201,10 @@ final class Rest_Settings {
 			$messages[] = __( 'Document template saved.', '4wp-drive' );
 		}
 
-		if ( array_key_exists( 'github', $params ) && is_array( $params['github'] ) ) {
+		if ( ! empty( $params['github_disconnect'] ) ) {
+			GitHub_Settings::clear_token();
+			$messages[] = __( 'GitHub disconnected. The personal access token was removed from this site.', '4wp-drive' );
+		} elseif ( array_key_exists( 'github', $params ) && is_array( $params['github'] ) ) {
 			GitHub_Settings::save( $params['github'] );
 			$messages[] = __( 'GitHub settings saved.', '4wp-drive' );
 		}
