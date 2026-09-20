@@ -11,22 +11,104 @@ defined( 'ABSPATH' ) || exit;
 
 // phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- View template locals.
 
-$history       = isset( $history ) && is_array( $history ) ? $history : array();
-$total         = isset( $total ) ? (int) $total : count( $history );
-$page          = isset( $page ) ? (int) $page : 1;
-$pages         = isset( $pages ) ? (int) $pages : 1;
-$restored      = ! empty( $restored );
-$restore_error = isset( $restore_error ) ? (string) $restore_error : '';
+$history = isset( $history ) && is_array( $history ) ? $history : array();
+$total   = isset( $total ) ? (int) $total : count( $history );
+$page    = isset( $page ) ? (int) $page : 1;
+$pages   = isset( $pages ) ? (int) $pages : 1;
 
-$format_gmt = static function ( string $gmt ): string {
+$format_gmt = static function ( string $gmt, string $part = 'datetime' ): string {
 	if ( '' === $gmt ) {
 		return '—';
 	}
 	$local = function_exists( 'get_date_from_gmt' ) ? get_date_from_gmt( $gmt ) : $gmt;
+	if ( ! function_exists( 'mysql2date' ) ) {
+		return $local;
+	}
+	if ( 'date' === $part ) {
+		return (string) mysql2date( get_option( 'date_format' ), $local );
+	}
+	if ( 'time' === $part ) {
+		return (string) mysql2date( get_option( 'time_format' ), $local );
+	}
 
-	return function_exists( 'mysql2date' )
-		? (string) mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $local )
-		: $local;
+	return (string) mysql2date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $local );
+};
+
+$decode_summary = static function ( $row ): array {
+	$raw = isset( $row->summary_json ) ? (string) $row->summary_json : '';
+	if ( '' === $raw ) {
+		return array();
+	}
+	$decoded = json_decode( $raw, true );
+
+	return is_array( $decoded ) ? $decoded : array();
+};
+
+$status_label = static function ( string $status ): string {
+	$map = array(
+		'draft'   => __( 'Draft', '4wp-drive' ),
+		'publish' => __( 'Published', '4wp-drive' ),
+		'pending' => __( 'Pending', '4wp-drive' ),
+		'private' => __( 'Private', '4wp-drive' ),
+		'future'  => __( 'Scheduled', '4wp-drive' ),
+		'trash'   => __( 'Trash', '4wp-drive' ),
+	);
+
+	return $map[ $status ] ?? ( $status !== '' ? $status : '—' );
+};
+
+$tax_label = static function ( string $taxonomy ): string {
+	if ( function_exists( 'get_taxonomy' ) ) {
+		$obj = get_taxonomy( $taxonomy );
+		if ( $obj && ! empty( $obj->labels->name ) ) {
+			return (string) $obj->labels->name;
+		}
+	}
+
+	$map = array(
+		'category' => __( 'Categories', '4wp-drive' ),
+		'post_tag' => __( 'Tags', '4wp-drive' ),
+	);
+
+	return $map[ $taxonomy ] ?? $taxonomy;
+};
+
+$summary_rows = static function ( array $summary ) use ( $tax_label ): array {
+	$rows   = array();
+	$chars  = isset( $summary['chars'] ) ? (int) $summary['chars'] : 0;
+	$images = isset( $summary['images'] ) ? (int) $summary['images'] : 0;
+	$rows[] = array(
+		'label' => __( 'Chars', '4wp-drive' ),
+		'value' => (string) number_format_i18n( $chars ),
+	);
+	$rows[] = array(
+		'label' => __( 'Images', '4wp-drive' ),
+		'value' => (string) number_format_i18n( $images ),
+	);
+	if ( ! empty( $summary['featured'] ) ) {
+		$rows[] = array(
+			'label' => __( 'Featured', '4wp-drive' ),
+			'value' => __( 'yes', '4wp-drive' ),
+		);
+	}
+	$tax = isset( $summary['taxonomies'] ) && is_array( $summary['taxonomies'] ) ? $summary['taxonomies'] : array();
+	foreach ( $tax as $taxonomy => $names ) {
+		if ( ! is_array( $names ) || empty( $names ) ) {
+			continue;
+		}
+		if ( function_exists( 'get_taxonomy' ) ) {
+			$obj = get_taxonomy( (string) $taxonomy );
+			if ( $obj && empty( $obj->public ) ) {
+				continue;
+			}
+		}
+		$rows[] = array(
+			'label' => $tax_label( (string) $taxonomy ),
+			'value' => implode( ', ', array_map( 'strval', $names ) ),
+		);
+	}
+
+	return $rows;
 };
 ?>
 <div class="wrap forwp-drive-admin-shell forwp-drive-analytics-page">
@@ -34,88 +116,76 @@ $format_gmt = static function ( string $gmt ): string {
 		<span class="forwp-drive-admin-heading__text"><?php esc_html_e( '4WP Drive — Analytics', '4wp-drive' ); ?></span>
 	</h1>
 
-	<?php if ( $restored ) : ?>
-		<div class="notice notice-success is-dismissible">
-			<p><?php esc_html_e( 'Package restored to incoming. Run Incoming → Sync to see it in the queue.', '4wp-drive' ); ?></p>
-		</div>
-	<?php endif; ?>
-
-	<?php if ( '' !== $restore_error ) : ?>
-		<div class="notice notice-error is-dismissible">
-			<p><?php echo esc_html( $restore_error ); ?></p>
-		</div>
-	<?php endif; ?>
-
 	<p class="forwp-drive-analytics__lead">
-		<?php esc_html_e( 'Each import writes a history row: source, post, folder alias, site slug, and where the package moved (incoming → published). Restore sends the package back to incoming without rebuilding it from WordPress.', '4wp-drive' ); ?>
+		<?php esc_html_e( 'Every successful import is logged here — drafts and published.', '4wp-drive' ); ?>
 	</p>
 
 	<div class="forwp-drive-admin-app">
 		<?php if ( empty( $history ) ) : ?>
 			<div class="forwp-drive-analytics-empty">
-				<p><?php esc_html_e( 'No imports recorded yet. History appears here after the next successful import.', '4wp-drive' ); ?></p>
+				<p><?php esc_html_e( 'No imports recorded yet. History appears after a successful import (draft or published).', '4wp-drive' ); ?></p>
 			</div>
 		<?php else : ?>
 			<table class="widefat striped forwp-drive-analytics-table">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Source', '4wp-drive' ); ?></th>
 						<th><?php esc_html_e( 'Date', '4wp-drive' ); ?></th>
-						<th><?php esc_html_e( 'Folder alias', '4wp-drive' ); ?></th>
-						<th><?php esc_html_e( 'Site alias', '4wp-drive' ); ?></th>
-						<th><?php esc_html_e( 'Post', '4wp-drive' ); ?></th>
-						<th><?php esc_html_e( 'Incoming', '4wp-drive' ); ?></th>
-						<th><?php esc_html_e( 'Published', '4wp-drive' ); ?></th>
-						<th><?php esc_html_e( 'Mode', '4wp-drive' ); ?></th>
-						<th><?php esc_html_e( 'Actions', '4wp-drive' ); ?></th>
+						<th><?php esc_html_e( 'Time', '4wp-drive' ); ?></th>
+						<th><?php esc_html_e( 'Type', '4wp-drive' ); ?></th>
+						<th><?php esc_html_e( 'Post ID', '4wp-drive' ); ?></th>
+						<th><?php esc_html_e( 'Type', '4wp-drive' ); ?></th>
+						<th><?php esc_html_e( 'Status', '4wp-drive' ); ?></th>
+						<th><?php esc_html_e( 'Add / UPD', '4wp-drive' ); ?></th>
+						<th><?php esc_html_e( 'Details', '4wp-drive' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php foreach ( $history as $row ) : ?>
 						<?php
-						$source_slug = (string) ( $row->source ?? '' );
-						$source_obj  = Source_Registry::get( $source_slug );
+						$source_slug  = (string) ( $row->source ?? '' );
+						$source_obj   = Source_Registry::get( $source_slug );
 						$source_label = $source_obj ? $source_obj->get_label() : $source_slug;
-						$post_id     = (int) ( $row->post_id ?? 0 );
-						$post_type   = (string) ( $row->post_type ?? 'post' );
-						$pto         = get_post_type_object( $post_type );
-						$type_label  = $pto ? (string) $pto->labels->singular_name : $post_type;
-						$post        = $post_id > 0 ? get_post( $post_id ) : null;
-						$edit_url    = $post ? get_edit_post_link( $post_id, 'raw' ) : '';
-						$is_restored = ! empty( $row->restored_at );
-						$mode        = (string) ( $row->mode ?? 'create' );
+						$post_id      = (int) ( $row->post_id ?? 0 );
+						$post_type    = (string) ( $row->post_type ?? 'post' );
+						$pto          = get_post_type_object( $post_type );
+						$type_label   = $pto ? (string) $pto->labels->singular_name : $post_type;
+						$post         = $post_id > 0 ? get_post( $post_id ) : null;
+						$edit_url     = $post ? get_edit_post_link( $post_id, 'raw' ) : '';
+						$mode         = (string) ( $row->mode ?? 'create' );
+						$summary      = $decode_summary( $row );
+						$live_status  = $post ? (string) $post->post_status : (string) ( $summary['status'] ?? '' );
+						$imported_at  = (string) ( $row->imported_at ?? '' );
+						$detail_rows  = $summary_rows( $summary );
 						?>
 						<tr>
+							<td><?php echo esc_html( $format_gmt( $imported_at, 'date' ) ); ?></td>
+							<td><?php echo esc_html( $format_gmt( $imported_at, 'time' ) ); ?></td>
 							<td><?php echo esc_html( $source_label ); ?></td>
-							<td><?php echo esc_html( $format_gmt( (string) ( $row->imported_at ?? '' ) ) ); ?></td>
-							<td><code><?php echo esc_html( (string) ( $row->folder_alias ?? '' ) ?: '—' ); ?></code></td>
-							<td><code><?php echo esc_html( (string) ( $row->site_alias ?? '' ) ?: '—' ); ?></code></td>
 							<td>
 								<?php if ( $edit_url ) : ?>
-									<a href="<?php echo esc_url( $edit_url ); ?>">
-										<?php echo esc_html( sprintf( '#%d · %s', $post_id, $type_label ) ); ?>
-									</a>
+									<a href="<?php echo esc_url( $edit_url ); ?>"><?php echo esc_html( (string) $post_id ); ?></a>
 								<?php elseif ( $post_id > 0 ) : ?>
-									<?php echo esc_html( sprintf( '#%d · %s', $post_id, $type_label ) ); ?>
+									<?php echo esc_html( (string) $post_id ); ?>
 									<span class="description"><?php esc_html_e( '(deleted)', '4wp-drive' ); ?></span>
 								<?php else : ?>
 									—
 								<?php endif; ?>
 							</td>
-							<td><code><?php echo esc_html( (string) ( $row->incoming_path ?? '' ) ?: '—' ); ?></code></td>
-							<td><code><?php echo esc_html( (string) ( $row->published_path ?? '' ) ?: '—' ); ?></code></td>
-							<td><?php echo esc_html( 'update' === $mode ? __( 'Update', '4wp-drive' ) : __( 'Create', '4wp-drive' ) ); ?></td>
+							<td><?php echo esc_html( $type_label ); ?></td>
+							<td><?php echo esc_html( $status_label( $live_status ) ); ?></td>
+							<td><?php echo esc_html( 'update' === $mode ? __( 'UPD', '4wp-drive' ) : __( 'Add', '4wp-drive' ) ); ?></td>
 							<td>
-								<?php if ( $is_restored ) : ?>
-									<span class="description"><?php esc_html_e( 'Restored', '4wp-drive' ); ?></span>
+								<?php if ( empty( $detail_rows ) ) : ?>
+									—
 								<?php else : ?>
-									<form method="post" class="forwp-drive-analytics-restore" onsubmit="return confirm('<?php echo esc_js( __( 'Move this package from published back to incoming?', '4wp-drive' ) ); ?>');">
-										<?php wp_nonce_field( 'forwp_drive_restore_history' ); ?>
-										<input type="hidden" name="history_id" value="<?php echo esc_attr( (string) (int) $row->id ); ?>" />
-										<button type="submit" name="forwp_drive_restore_history" value="1" class="button button-small">
-											<?php esc_html_e( 'Restore to incoming', '4wp-drive' ); ?>
-										</button>
-									</form>
+									<div class="forwp-drive-analytics-summary">
+										<?php foreach ( $detail_rows as $detail ) : ?>
+											<div class="forwp-drive-analytics-summary__row">
+												<span class="forwp-drive-analytics-summary__label"><?php echo esc_html( (string) $detail['label'] ); ?></span>
+												<span class="forwp-drive-analytics-summary__value"><?php echo esc_html( (string) $detail['value'] ); ?></span>
+											</div>
+										<?php endforeach; ?>
+									</div>
 								<?php endif; ?>
 							</td>
 						</tr>

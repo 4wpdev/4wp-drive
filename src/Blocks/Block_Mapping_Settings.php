@@ -126,9 +126,10 @@ final class Block_Mapping_Settings {
 			$headings
 		);
 
-		return array(
+		$config = array(
 			'type'                 => $recipe_type,
 			'template'             => $template_id,
+			'block'                => trim( (string) ( $template['block'] ?? '' ) ),
 			'requires_plugins'     => isset( $template['requires_plugins'] ) && is_array( $template['requires_plugins'] )
 				? $template['requires_plugins']
 				: array(),
@@ -139,6 +140,8 @@ final class Block_Mapping_Settings {
 			'item_heading_level'   => 3,
 			'keep_section_heading' => ! empty( $rule['keep_section_heading'] ),
 		);
+
+		return $config;
 	}
 
 	/**
@@ -218,6 +221,15 @@ final class Block_Mapping_Settings {
 				),
 			),
 		);
+	}
+
+	/**
+	 * Comma-separated heading labels → unique list.
+	 *
+	 * @return string[]
+	 */
+	public static function heading_aliases( string $value ): array {
+		return self::parse_heading_list( $value );
 	}
 
 	/**

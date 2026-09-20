@@ -27,7 +27,7 @@ final class Schema {
 	/**
 	 * Bump when custom tables change so existing installs run dbDelta.
 	 */
-	public const DB_VERSION = 2;
+	public const DB_VERSION = 3;
 
 	public const DB_VERSION_OPTION = 'forwp_drive_db_version';
 
@@ -47,7 +47,8 @@ final class Schema {
 	 */
 	public static function maybe_upgrade(): void {
 		$installed = (int) get_option( self::DB_VERSION_OPTION, 0 );
-		if ( $installed >= self::DB_VERSION ) {
+		$missing   = ! self::history_table_exists();
+		if ( $installed >= self::DB_VERSION && ! $missing ) {
 			return;
 		}
 
@@ -114,6 +115,7 @@ final class Schema {
 			document_id bigint(20) unsigned DEFAULT NULL,
 			file_id varchar(191) NOT NULL DEFAULT '',
 			mode varchar(20) NOT NULL DEFAULT 'create',
+			summary_json longtext,
 			restored_at datetime DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY source (source),
@@ -143,5 +145,16 @@ final class Schema {
 		global $wpdb;
 
 		return $wpdb->prefix . self::HISTORY_TABLE;
+	}
+
+	public static function history_table_exists(): bool {
+		global $wpdb;
+
+		$table = self::history_table_name();
+		$like  = $wpdb->esc_like( $table );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $like ) );
+
+		return is_string( $found ) && $found === $table;
 	}
 }

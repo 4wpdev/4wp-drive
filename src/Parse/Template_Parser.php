@@ -8,6 +8,7 @@
 namespace ForWP\Drive\Parse;
 
 use ForWP\Drive\Blocks\Block_Recipe_Engine;
+use ForWP\Drive\Blocks\Wrap_Capability_Registry;
 use ForWP\Drive\Import\Google_Doc_Content;
 
 defined( 'ABSPATH' ) || exit;
@@ -71,7 +72,7 @@ final class Template_Parser {
 					$body_html = wpautop( esc_html( $body ) );
 				}
 
-				return $this->assemble_parse_result( $meta, $body, $body_html );
+				return $this->assemble_parse_result( $meta, $body, $body_html, $header_plain );
 			}
 		}
 
@@ -88,7 +89,7 @@ final class Template_Parser {
 			$body_html = wpautop( esc_html( $body ) );
 		}
 
-		return $this->assemble_parse_result( $meta, $body, $body_html );
+		return $this->assemble_parse_result( $meta, $body, $body_html, $header );
 	}
 
 	/**
@@ -129,7 +130,7 @@ final class Template_Parser {
 
 		list( $meta, $body ) = $this->apply_first_line_title_fallback( $meta, $body );
 
-		return $this->assemble_parse_result( $meta, $body, trim( $body_html ) );
+		return $this->assemble_parse_result( $meta, $body, trim( $body_html ), $header_plain );
 	}
 
 	/**
@@ -144,7 +145,7 @@ final class Template_Parser {
 	}
 
 	/**
-	 * @param array{title: string, slug: string, date: string, author: string, taxonomies: array<string, string|array<int, string>>, meta: array<string, string>} $meta Parsed header.
+	 * @param array{title: string, slug: string, date: string, author: string, map: string, taxonomies: array<string, string|array<int, string>>, meta: array<string, string>} $meta Parsed header.
 	 * @return array{0: array<string, mixed>, 1: string}
 	 */
 	private function apply_first_line_title_fallback( array $meta, string $body ): array {
@@ -161,10 +162,10 @@ final class Template_Parser {
 	}
 
 	/**
-	 * @param array{title: string, slug: string, date: string, taxonomies: array<string, string|array<int, string>>, meta: array<string, string>} $meta Parsed header.
+	 * @param array{title: string, slug: string, date: string, author: string, map: string, taxonomies: array<string, string|array<int, string>>, meta: array<string, string>} $meta Parsed header.
 	 * @return array<string, mixed>
 	 */
-	private function assemble_parse_result( array $meta, string $body, string $body_html ): array {
+	private function assemble_parse_result( array $meta, string $body, string $body_html, string $header = '' ): array {
 		$category = '';
 		$tags     = array();
 		if ( isset( $meta['taxonomies']['category'] ) ) {
@@ -176,13 +177,19 @@ final class Template_Parser {
 			$tags = $meta['taxonomies']['post_tag'];
 		}
 
-		$slug = $this->resolve_slug( (string) $meta['slug'], (string) $meta['title'] );
+		$slug         = $this->resolve_slug( (string) $meta['slug'], (string) $meta['title'] );
+		$meta['map']  = Wrap_Capability_Registry::detect_map(
+			(string) $meta['map'],
+			$header,
+			$body_html . "\n" . $body
+		);
 
 		$body_html = ( new Block_Recipe_Engine() )->apply(
 			$body_html,
 			array(
 				'title' => $meta['title'],
 				'slug'  => $slug,
+				'map'   => $meta['map'],
 			)
 		);
 
@@ -191,6 +198,7 @@ final class Template_Parser {
 			'slug'       => $slug,
 			'date'       => $meta['date'],
 			'author'     => $meta['author'],
+			'map'        => $meta['map'],
 			'category'   => $category,
 			'tags'       => $tags,
 			'taxonomies' => $meta['taxonomies'],
@@ -251,13 +259,14 @@ final class Template_Parser {
 	}
 
 	/**
-	 * @return array{title: string, slug: string, date: string, author: string, taxonomies: array<string, string|array<int, string>>, meta: array<string, string>}
+	 * @return array{title: string, slug: string, date: string, author: string, map: string, taxonomies: array<string, string|array<int, string>>, meta: array<string, string>}
 	 */
 	private function parse_header( string $header ): array {
 		$title       = '';
 		$slug        = '';
 		$date        = '';
 		$author      = '';
+		$map         = Wrap_Capability_Registry::MAP_ARTICLE;
 		$taxonomies  = array();
 		$meta        = array();
 		$label_index = $this->build_label_index();
@@ -286,6 +295,8 @@ final class Template_Parser {
 					$date = $value;
 				} elseif ( 'author' === ( $field['field'] ?? '' ) ) {
 					$author = $value;
+				} elseif ( 'map' === ( $field['field'] ?? '' ) ) {
+					$map = Wrap_Capability_Registry::normalize_map( $value );
 				}
 				continue;
 			}
@@ -317,6 +328,7 @@ final class Template_Parser {
 			'slug'       => $slug,
 			'date'       => $date,
 			'author'     => $author,
+			'map'        => $map,
 			'taxonomies' => $taxonomies,
 			'meta'       => $meta,
 		);

@@ -40,6 +40,8 @@ final class Core_Image_Recipe implements Block_Recipe_Interface {
 			return $body_html;
 		}
 
+		$body_html = self::normalize_loose_markers( $body_html );
+
 		$builder = new Block_Markup_Builder();
 
 		$replace_token = static function ( array $matches ) use ( $attachments, $builder ): string {
@@ -103,6 +105,22 @@ final class Core_Image_Recipe implements Block_Recipe_Interface {
 		}
 
 		return array_values( $tokens );
+	}
+
+	/**
+	 * `[file.png]` / `[file.png left]` from preview mistakes → `[image:file.png left]`.
+	 */
+	public static function normalize_loose_markers( string $html ): string {
+		$out = (string) preg_replace_callback(
+			'/\[(?!image:)(\s*[^\]\n]+\.(?:png|jpe?g|gif|webp|avif)(?:\s+(?:left|right|center))?)\s*\]/iu',
+			static function ( array $matches ): string {
+				$token = trim( (string) $matches[1] );
+				return '[image:' . $token . ']';
+			},
+			$html
+		);
+
+		return is_string( $out ) ? $out : $html;
 	}
 
 	/**

@@ -25,6 +25,9 @@ class Template_ParserTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		forwp_drive_tests_reset_options();
+		if ( function_exists( 'remove_all_filters' ) ) {
+			remove_all_filters( 'forwp_drive_detect_map' );
+		}
 	}
 
 	/**
@@ -384,5 +387,65 @@ class Template_ParserTest extends TestCase {
 		$result = $parser->parse( "Title: Story\nAuthor: Jane Editor\n\n{$mark}\n\nBody." );
 
 		$this->assertSame( 'Jane Editor', $result['author'] );
+	}
+
+	/**
+	 * @return void
+	 */
+	public function test_parses_map_field(): void {
+		$mark   = Template_Separator::mark();
+		$parser = new Template_Parser();
+		$result = $parser->parse( "Title: Story\nMap: tech-article\n\n{$mark}\n\nBody." );
+
+		$this->assertSame( 'tech-article', $result['map'] );
+	}
+
+	/**
+	 * @return void
+	 */
+	public function test_map_defaults_to_article(): void {
+		$mark   = Template_Separator::mark();
+		$parser = new Template_Parser();
+		$result = $parser->parse( "Title: Story\n\n{$mark}\n\nBody." );
+
+		$this->assertSame( 'article', $result['map'] );
+	}
+
+	/**
+	 * @return void
+	 */
+	public function test_map_accepts_techarticle_alias(): void {
+		$mark   = Template_Separator::mark();
+		$parser = new Template_Parser();
+		$result = $parser->parse( "Title: Story\nMap: TechArticle\n\n{$mark}\n\nBody." );
+
+		$this->assertSame( 'tech-article', $result['map'] );
+	}
+
+	/**
+	 * @return void
+	 */
+	public function test_map_detects_body_block_markup(): void {
+		add_filter(
+			'forwp_drive_detect_map',
+			static function ( string $map, string $header, string $body ): string {
+				unset( $map, $header );
+				if ( false !== strpos( $body, 'wp:forwp-seo/techarticle-' ) ) {
+					return 'tech-article';
+				}
+
+				return 'article';
+			},
+			10,
+			3
+		);
+
+		$mark   = Template_Separator::mark();
+		$parser = new Template_Parser();
+		$result = $parser->parse(
+			"Title: Story\n\n{$mark}\n\n<!-- wp:forwp-seo/techarticle-goal -->Goal text<!-- /wp:forwp-seo/techarticle-goal -->"
+		);
+
+		$this->assertSame( 'tech-article', $result['map'] );
 	}
 }

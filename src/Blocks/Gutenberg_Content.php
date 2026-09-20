@@ -27,6 +27,9 @@ final class Gutenberg_Content {
 			return '';
 		}
 
+		$held = array();
+		$html = self::hold_protected_blocks( $html, $held );
+
 		if ( function_exists( 'has_blocks' ) && function_exists( 'parse_blocks' ) && function_exists( 'serialize_block' ) && has_blocks( $html ) ) {
 			$parsed = parse_blocks( $html );
 			$out    = array();
@@ -48,10 +51,49 @@ final class Gutenberg_Content {
 				$out[] = serialize_block( $block );
 			}
 
-			return implode( "\n\n", $out );
+			return self::restore_protected_blocks( implode( "\n\n", $out ), $held );
 		}
 
-		return self::from_html( $html );
+		return self::restore_protected_blocks( self::from_html( $html ), $held );
+	}
+
+	/**
+	 * parse_blocks + serialize_block empties accordion-panel wrappers. Keep FAQ/accordion as authored.
+	 *
+	 * @param array<string, string> $held Placeholder map.
+	 */
+	private static function hold_protected_blocks( string $html, array &$held ): string {
+		$names = array( 'forwp/faq', 'accordion' );
+		foreach ( $names as $name ) {
+			$quoted = preg_quote( $name, '/' );
+			$html   = (string) preg_replace_callback(
+				'/<!--\s+wp:' . $quoted . '(?:\s+\{[\s\S]*?\})?\s+-->[\s\S]*?<!--\s+\/wp:' . $quoted . '\s+-->/u',
+				static function ( array $matches ) use ( &$held ): string {
+					$key          = 'FORWPDRIVEHOLD' . count( $held ) . 'Z';
+					$held[ $key ] = $matches[0];
+					return '<p>' . $key . '</p>';
+				},
+				$html
+			);
+		}
+
+		return $html;
+	}
+
+	/**
+	 * @param array<string, string> $held Placeholder map.
+	 */
+	private static function restore_protected_blocks( string $html, array $held ): string {
+		if ( empty( $held ) ) {
+			return $html;
+		}
+
+		foreach ( $held as $key => $original ) {
+			$html = str_replace( '<p>' . $key . '</p>', $original, $html );
+			$html = str_replace( $key, $original, $html );
+		}
+
+		return $html;
 	}
 
 	/**

@@ -81,8 +81,11 @@ final class Rest_Patterns {
 		}
 
 		$rules = isset( $params['rules'] ) && is_array( $params['rules'] ) ? $params['rules'] : array();
+		$scope = sanitize_key( (string) ( $params['scope'] ?? '' ) );
 
-		$result = Pattern_Library::save_custom_rules( $rules );
+		$result = 'family' === $scope
+			? Pattern_Library::save_family_rules( $rules )
+			: Pattern_Library::save_custom_rules( $rules );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

@@ -73,6 +73,7 @@ defined( 'ABSPATH' ) || exit;
 			class="forwp-drive-inbox-queue"
 			aria-labelledby="forwp-drive-inbox-queue-heading"
 		>
+			<div id="forwp-drive-wrap-pin-slot" class="forwp-drive-wrap-pin-slot" hidden></div>
 			<div class="forwp-drive-inbox-pane__header">
 				<h2 id="forwp-drive-inbox-queue-heading" class="forwp-drive-inbox-pane__title">
 					<?php esc_html_e( 'Queue', '4wp-drive' ); ?>
@@ -103,6 +104,7 @@ defined( 'ABSPATH' ) || exit;
 
 			<div id="forwp-drive-preview" class="forwp-drive-preview" hidden>
 				<div id="forwp-drive-import-top" class="forwp-drive-import-top forwp-drive-admin-chrome">
+					<div id="forwp-drive-detected-tags" class="forwp-drive-detected-tags" hidden></div>
 					<div id="forwp-drive-import-featured-wrap" class="forwp-drive-import-featured-wrap" hidden>
 						<label class="forwp-drive-import-featured-wrap__label" for="forwp-drive-import-featured">
 							<?php esc_html_e( 'Featured image', '4wp-drive' ); ?>
@@ -127,15 +129,6 @@ defined( 'ABSPATH' ) || exit;
 								<?php esc_html_e( 'Required when the site has more than one language. Update mode lists only posts in this language.', '4wp-drive' ); ?>
 							</p>
 						</div>
-						<div id="forwp-drive-import-source-wrap" class="forwp-drive-import-featured-wrap" hidden>
-							<p id="forwp-drive-import-source-label" class="forwp-drive-import-featured-wrap__label">
-								<?php esc_html_e( 'File to import', '4wp-drive' ); ?>
-							</p>
-							<select id="forwp-drive-import-source-file" class="forwp-drive-import-source-file" aria-labelledby="forwp-drive-import-source-label"></select>
-							<p class="description forwp-drive-import-featured-wrap__hint">
-								<?php esc_html_e( 'This folder has more than one document. Markdown is preferred when present.', '4wp-drive' ); ?>
-							</p>
-						</div>
 					</div>
 				</div>
 
@@ -156,30 +149,31 @@ defined( 'ABSPATH' ) || exit;
 					<p id="forwp-drive-import-options-label" class="forwp-drive-import-options__label">
 						<?php esc_html_e( 'Import destination', '4wp-drive' ); ?>
 					</p>
-					<div id="forwp-drive-import-post-type-wrap" class="forwp-drive-import-post-type-wrap">
-						<label class="forwp-drive-import-post-type-wrap__label" for="forwp-drive-inbox-import-post-type">
-							<?php esc_html_e( 'Post type', '4wp-drive' ); ?>
-						</label>
-						<select id="forwp-drive-inbox-import-post-type" class="forwp-drive-inbox-import-post-type"></select>
-						<p class="description forwp-drive-import-post-type-wrap__hint">
-							<?php esc_html_e( 'Choose where this document goes: Post, Page, Hook, or another type registered on this site.', '4wp-drive' ); ?>
-						</p>
-					</div>
-					<div class="forwp-drive-import-options__choices" role="radiogroup" aria-labelledby="forwp-drive-import-options-label">
-						<label class="forwp-drive-import-options__choice">
-							<input type="radio" name="forwp-drive-import-mode" value="create" checked />
-							<span class="forwp-drive-import-options__choice-text">
-								<span class="forwp-drive-import-options__choice-title"><?php esc_html_e( 'Create new draft', '4wp-drive' ); ?></span>
-								<span class="forwp-drive-import-options__choice-hint"><?php esc_html_e( 'Adds a new post from this document.', '4wp-drive' ); ?></span>
-							</span>
-						</label>
-						<label class="forwp-drive-import-options__choice">
-							<input type="radio" name="forwp-drive-import-mode" value="update" />
-							<span class="forwp-drive-import-options__choice-text">
-								<span class="forwp-drive-import-options__choice-title"><?php esc_html_e( 'Update existing post', '4wp-drive' ); ?></span>
-								<span class="forwp-drive-import-options__choice-hint"><?php esc_html_e( 'Replace content in a post you select below.', '4wp-drive' ); ?></span>
-							</span>
-						</label>
+					<div class="forwp-drive-import-options__row">
+						<div id="forwp-drive-import-post-type-wrap" class="forwp-drive-import-post-type-wrap">
+							<label class="forwp-drive-import-post-type-wrap__label" for="forwp-drive-inbox-import-post-type">
+								<?php esc_html_e( 'Post type', '4wp-drive' ); ?>
+							</label>
+							<select
+								id="forwp-drive-inbox-import-post-type"
+								class="forwp-drive-inbox-import-post-type"
+								title="<?php esc_attr_e( 'Choose where this document goes: Post, Page, Hook, or another type registered on this site.', '4wp-drive' ); ?>"
+							></select>
+						</div>
+						<div class="forwp-drive-import-options__choices" role="radiogroup" aria-labelledby="forwp-drive-import-options-label">
+							<label class="forwp-drive-import-options__choice" title="<?php esc_attr_e( 'Adds a new post from this document.', '4wp-drive' ); ?>">
+								<input type="radio" name="forwp-drive-import-mode" value="create" checked />
+								<span class="forwp-drive-import-options__choice-text">
+									<span class="forwp-drive-import-options__choice-title"><?php esc_html_e( 'Create new draft', '4wp-drive' ); ?></span>
+								</span>
+							</label>
+							<label class="forwp-drive-import-options__choice" title="<?php esc_attr_e( 'Replace content in a post you select below.', '4wp-drive' ); ?>">
+								<input type="radio" name="forwp-drive-import-mode" value="update" />
+								<span class="forwp-drive-import-options__choice-text">
+									<span class="forwp-drive-import-options__choice-title"><?php esc_html_e( 'Update existing post', '4wp-drive' ); ?></span>
+								</span>
+							</label>
+						</div>
 					</div>
 					<div id="forwp-drive-import-target-wrap" class="forwp-drive-import-target-wrap" hidden>
 						<label class="forwp-drive-import-target-wrap__label" for="forwp-drive-import-target">
@@ -193,13 +187,13 @@ defined( 'ABSPATH' ) || exit;
 						</p>
 					</div>
 					<div id="forwp-drive-import-fonts-wrap" class="forwp-drive-import-fonts-wrap">
-						<label class="forwp-drive-import-fonts-wrap__label">
+						<label
+							class="forwp-drive-import-fonts-wrap__label"
+							title="<?php esc_attr_e( 'Off (default): use the site fonts. On: keep Google Docs typeface and size in the imported post.', '4wp-drive' ); ?>"
+						>
 							<input type="checkbox" id="forwp-drive-import-keep-fonts" value="1" />
-							<span class="forwp-drive-import-fonts-wrap__title"><?php esc_html_e( 'Keep fonts from the document', '4wp-drive' ); ?></span>
+							<span class="forwp-drive-import-fonts-wrap__title"><?php esc_html_e( 'Keep document fonts', '4wp-drive' ); ?></span>
 						</label>
-						<p class="description forwp-drive-import-fonts-wrap__hint">
-							<?php esc_html_e( 'Off (default): use the site fonts. On: keep Google Docs typeface and size in the imported post.', '4wp-drive' ); ?>
-						</p>
 					</div>
 				</div>
 				<div class="forwp-drive-preview__actions forwp-drive-admin-chrome">
@@ -215,6 +209,23 @@ defined( 'ABSPATH' ) || exit;
 				</div>
 			</div>
 		</section>
+	</div>
+	<div id="forwp-drive-package-dock" hidden>
+		<aside id="forwp-drive-image-pin" class="forwp-drive-image-pin forwp-drive-admin-chrome" hidden>
+			<p class="forwp-drive-image-pin__label"><?php esc_html_e( 'Place in article', '4wp-drive' ); ?></p>
+			<p class="description forwp-drive-image-pin__hint"><?php esc_html_e( 'Click an image in the tree (or below), pick alignment, then click a paragraph in the preview.', '4wp-drive' ); ?></p>
+			<div id="forwp-drive-image-pin-align" class="forwp-drive-image-pin__align" role="radiogroup">
+				<label><input type="radio" name="forwp-drive-image-align" value="left" /> <?php esc_html_e( 'Left', '4wp-drive' ); ?></label>
+				<label><input type="radio" name="forwp-drive-image-align" value="center" checked /> <?php esc_html_e( 'Center', '4wp-drive' ); ?></label>
+				<label><input type="radio" name="forwp-drive-image-align" value="right" /> <?php esc_html_e( 'Right', '4wp-drive' ); ?></label>
+			</div>
+			<div id="forwp-drive-image-pin-list" class="forwp-drive-image-pin__list"></div>
+		</aside>
+		<aside id="forwp-drive-wrap-pin" class="forwp-drive-image-pin forwp-drive-wrap-pin forwp-drive-admin-chrome" hidden>
+			<p class="forwp-drive-image-pin__label"><?php esc_html_e( 'Wrap section', '4wp-drive' ); ?></p>
+			<p class="description forwp-drive-image-pin__hint"><?php esc_html_e( 'Select a wrap, then click the heading or any paragraph in that section. × removes the wrap.', '4wp-drive' ); ?></p>
+			<div id="forwp-drive-wrap-pin-list" class="forwp-drive-image-pin__list"></div>
+		</aside>
 	</div>
 	<div id="forwp-drive-busy" class="forwp-drive-busy" hidden>
 		<div class="forwp-drive-busy__panel" role="alertdialog" aria-modal="true" aria-labelledby="forwp-drive-busy-message" tabindex="-1">

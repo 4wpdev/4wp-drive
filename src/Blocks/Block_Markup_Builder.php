@@ -17,17 +17,11 @@ final class Block_Markup_Builder {
 	private const ACCORDION_ITEM_TEMPLATE = '<!-- wp:accordion-item -->
 <div class="wp-block-accordion-item">
 <!-- wp:accordion-heading -->
-<h3 class="wp-block-accordion-heading">
-<button type="button" aria-expanded="false" class="wp-block-accordion-heading__toggle">
-<span class="wp-block-accordion-heading__toggle-title">%1$s</span>
-<span class="wp-block-accordion-heading__toggle-icon" aria-hidden="true">+</span>
-</button>
-</h3>
+<h3 class="wp-block-accordion-heading has-icon has-icon-right"><button type="button" class="wp-block-accordion-heading__toggle"><span class="wp-block-accordion-heading__toggle-title">{{question}}</span><span class="wp-block-accordion-heading__toggle-icon" aria-hidden="true">+</span></button></h3>
 <!-- /wp:accordion-heading -->
-
 <!-- wp:accordion-panel -->
-<div class="wp-block-accordion-panel">
-%2$s
+<div class="wp-block-accordion-panel" role="region">
+{{panel}}
 </div>
 <!-- /wp:accordion-panel -->
 </div>
@@ -56,19 +50,22 @@ final class Block_Markup_Builder {
 				$panel = '<!-- wp:paragraph --><p></p><!-- /wp:paragraph -->';
 			}
 
-			$items_markup .= sprintf( self::ACCORDION_ITEM_TEMPLATE, $question, $panel );
+			$items_markup .= strtr(
+				self::ACCORDION_ITEM_TEMPLATE,
+				array(
+					'{{question}}' => $question,
+					'{{panel}}'    => $panel,
+				)
+			);
 		}
 
 		if ( '' === $items_markup ) {
 			return '';
 		}
 
-		$accordion = sprintf(
-			'<!-- wp:accordion -->
-<div class="wp-block-accordion">%s</div>
-<!-- /wp:accordion -->',
-			$items_markup
-		);
+		$accordion = '<!-- wp:accordion -->
+<div class="wp-block-accordion" role="group">' . $items_markup . '</div>
+<!-- /wp:accordion -->';
 
 		if ( Block_Template_Registry::TEMPLATE_CORE_ACCORDION === sanitize_key( $template ) ) {
 			return $accordion;

@@ -369,11 +369,75 @@
 	max-width: 100%;
 }
 
-.forwp-drive-inbox-queue {
+.forwp-drive-wrap-pin-slot {
+	flex: 0 0 auto;
+	padding: 10px 12px 8px;
+	border-bottom: 1px solid #dcdcde;
+	background: #fff;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-wrap-pin {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__list {
 	display: flex;
 	flex-direction: column;
-	max-height: min(75vh, 780px);
-	overflow: hidden;
+	gap: 6px;
+	max-height: 220px;
+	overflow: auto;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__file {
+	align-items: center;
+	background: #fff;
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+	padding: 8px 10px;
+	text-align: left;
+	width: 100%;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__name {
+	flex: 1 1 auto;
+	white-space: normal;
+}
+
+.forwp-drive-wrap-pin__used {
+	background: #e6f4ea;
+	border-radius: 999px;
+	color: #0a7c42;
+	flex: 0 0 auto;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	line-height: 1.4;
+	padding: 1px 8px;
+	white-space: nowrap;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__file.has-used {
+	border-color: #8cbf9a;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__file.is-selected {
+	background: #2271b1;
+	border-color: #135e96;
+	box-shadow: 0 0 0 3px rgba(34, 113, 177, 0.35);
+	color: #fff;
+	font-weight: 600;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__file.is-selected .forwp-drive-image-pin__name {
+	color: #fff;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__file.is-selected .forwp-drive-wrap-pin__used {
+	background: #fff;
+	color: #135e96;
 }
 
 .forwp-drive-inbox-pane__header {
@@ -992,6 +1056,11 @@
 	box-sizing: border-box;
 }
 
+#forwp-drive-import-top .forwp-drive-image-pin {
+	margin-top: 12px;
+	padding-top: 12px;
+}
+
 .forwp-drive-image-pin__label {
 	margin: 0 0 4px;
 	font-size: 11px;
@@ -1090,6 +1159,95 @@
 	color: #2271b1;
 }
 
+#forwp-drive-preview-post-content.is-wrapping {
+	cursor: crosshair;
+}
+
+#forwp-drive-preview-post-content.is-wrapping h2.is-wrap-target,
+#forwp-drive-preview-post-content.is-wrapping [data-drive-wrap],
+#forwp-drive-preview-post-content.is-wrapping .forwp-drive-declared-wrap {
+	cursor: pointer;
+}
+
+#forwp-drive-preview-post-content.is-wrapping h2.is-wrap-target {
+	outline: 1px dashed #2271b1;
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+
+#forwp-drive-preview-post-content [data-drive-wrap] {
+	position: relative;
+	outline: 1px dashed #2271b1;
+	outline-offset: 4px;
+	padding-top: 1.5em;
+	margin: 12px 0;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-declared-wrap {
+	position: relative;
+	margin: 12px 0;
+	padding: 1.6em 10px 10px;
+	outline: 2px solid #0a7c42;
+	outline-offset: 2px;
+	background: rgba(10, 124, 66, 0.05);
+	border-radius: 4px;
+}
+
+#forwp-drive-preview-post-content [data-drive-wrap].is-declared-match {
+	outline-color: #0a7c42;
+}
+
+.forwp-drive-declared-wrap__badge,
+.forwp-drive-wrap-pin__badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	position: absolute;
+	top: 0;
+	inset-inline-start: 0;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	padding: 1px 4px 1px 6px;
+	border-radius: 2px;
+	pointer-events: none;
+	z-index: 2;
+}
+
+.forwp-drive-declared-wrap__badge {
+	color: #0a7c42;
+	background: #e6f4ea;
+}
+
+.forwp-drive-wrap-pin__badge {
+	color: #2271b1;
+	background: #f0f6fc;
+}
+
+.forwp-drive-wrap-dismiss {
+	pointer-events: auto;
+	appearance: none;
+	background: transparent;
+	border: 0;
+	border-radius: 2px;
+	color: inherit;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1;
+	margin: 0;
+	opacity: 0.7;
+	padding: 0 3px;
+}
+
+.forwp-drive-wrap-dismiss:hover,
+.forwp-drive-wrap-dismiss:focus {
+	opacity: 1;
+	outline: none;
+	background: rgba(0, 0, 0, 0.08);
+}
+
 .forwp-drive-busy[hidden] {
 	display: none;
 }
@@ -1158,25 +1316,94 @@ body.forwp-drive-is-busy {
 }
 
 #forwp-drive-preview-post-content .forwp-drive-image-marker {
+	box-sizing: border-box;
+	margin: 12px 0;
+	padding: 0;
+	background: #fff;
+	border: 1px solid #d0d7de;
+	border-radius: 6px;
+	overflow: hidden;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+	font-size: 12px;
+	line-height: 1.3;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker.is-align-left {
+	float: left;
+	width: min(46%, 280px);
+	margin: 4px 1.25em 1em 0;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker.is-align-right {
+	float: right;
+	width: min(46%, 280px);
+	margin: 4px 0 1em 1.25em;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker.is-align-center {
+	float: none;
+	width: min(72%, 420px);
+	margin: 16px auto;
+	clear: both;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker__bar {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	margin: 12px 0;
-	padding: 8px 12px;
-	background: #f6f7f7;
-	border: 1px dashed #c3c4c7;
+	gap: 4px;
+	padding: 6px 8px;
+	background: #f6f8fa;
+	border-bottom: 1px solid #d0d7de;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker__align,
+#forwp-drive-preview-post-content .forwp-drive-image-marker__remove {
+	appearance: none;
+	margin: 0;
+	padding: 2px 8px;
+	border: 1px solid transparent;
 	border-radius: 4px;
-	font-family: Consolas, Monaco, monospace;
-	font-size: 13px;
+	background: transparent;
+	color: #1f2328;
+	font-size: 11px;
+	font-weight: 700;
 	line-height: 1.4;
+	cursor: pointer;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker__align:hover,
+#forwp-drive-preview-post-content .forwp-drive-image-marker__remove:hover {
+	background: #fff;
+	border-color: #d0d7de;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker__align.is-on {
+	background: #fff;
+	border-color: #0969da;
+	color: #0969da;
 }
 
 #forwp-drive-preview-post-content .forwp-drive-image-marker__remove {
-	flex-shrink: 0;
-	cursor: pointer;
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-	font-size: 13px;
+	margin-left: auto;
+	font-weight: 600;
+	color: #cf222e;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker__frame {
+	height: 88px;
+	background:
+		linear-gradient(45deg, #f6f8fa 25%, transparent 25%, transparent 75%, #f6f8fa 75%),
+		linear-gradient(45deg, #f6f8fa 25%, transparent 25%, transparent 75%, #f6f8fa 75%);
+	background-position: 0 0, 8px 8px;
+	background-size: 16px 16px;
+	background-color: #eaeef2;
+}
+
+#forwp-drive-preview-post-content .forwp-drive-image-marker__name {
+	display: block;
+	padding: 6px 8px 8px;
+	color: #656d76;
+	word-break: break-all;
 }
 
 #forwp-drive-preview-post-content.is-pinning .forwp-drive-image-marker,

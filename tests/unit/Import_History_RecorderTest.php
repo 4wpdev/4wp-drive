@@ -57,6 +57,8 @@ class Import_History_RecorderTest extends TestCase {
 		$this->assertSame( 'incoming/4wp-drive-plugin-overview', $row['incoming_path'] );
 		$this->assertSame( 'published/4wp-drive-plugin-overview', $row['published_path'] );
 		$this->assertSame( 'incoming/4wp-drive-plugin-overview', $row['package_ref'] );
+		$this->assertArrayHasKey( 'summary', $row );
+		$this->assertIsArray( $row['summary'] );
 	}
 
 	public function test_drive_package_uses_incoming_and_published_labels(): void {

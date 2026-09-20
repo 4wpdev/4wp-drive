@@ -40,6 +40,62 @@ final class Import_History_Recorder {
 			'document_id'    => isset( $args['document_id'] ) ? (int) $args['document_id'] : null,
 			'file_id'        => (string) ( $args['file_id'] ?? '' ),
 			'mode'           => sanitize_key( (string) ( $args['mode'] ?? 'create' ) ) ?: 'create',
+			'summary'        => self::summarize_post(
+				isset( $args['post_id'] ) ? (int) $args['post_id'] : 0,
+				$metadata
+			),
+		);
+	}
+
+	/**
+	 * Snapshot of the created/updated post: status, chars, images, taxonomies.
+	 *
+	 * @param array<string, mixed> $metadata Scan metadata.
+	 * @return array<string, mixed>
+	 */
+	public static function summarize_post( int $post_id, array $metadata = array() ): array {
+		if ( $post_id <= 0 || ! function_exists( 'get_post' ) ) {
+			return array();
+		}
+
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return array();
+		}
+
+		$content = (string) $post->post_content;
+		$text    = function_exists( 'wp_strip_all_tags' ) ? wp_strip_all_tags( $content ) : strip_tags( $content );
+		$chars   = function_exists( 'mb_strlen' ) ? mb_strlen( $text ) : strlen( $text );
+		$images  = preg_match_all( '/<!--\s*wp:image\b/', $content );
+		$images  = is_int( $images ) ? $images : 0;
+
+		$used = isset( $metadata['used_source_file_ids'] ) && is_array( $metadata['used_source_file_ids'] )
+			? count( $metadata['used_source_file_ids'] )
+			: 0;
+		if ( $used > $images ) {
+			$images = $used;
+		}
+
+		$taxonomies = array();
+		if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) ) {
+			foreach ( get_object_taxonomies( (string) $post->post_type, 'objects' ) as $taxonomy => $tax_obj ) {
+				if ( empty( $tax_obj->public ) ) {
+					continue;
+				}
+				$terms = wp_get_object_terms( $post_id, $taxonomy, array( 'fields' => 'names' ) );
+				if ( is_wp_error( $terms ) || empty( $terms ) ) {
+					continue;
+				}
+				$taxonomies[ (string) $taxonomy ] = array_values( array_map( 'strval', $terms ) );
+			}
+		}
+
+		return array(
+			'status'     => (string) $post->post_status,
+			'chars'      => $chars,
+			'images'     => $images,
+			'featured'   => function_exists( 'get_post_thumbnail_id' ) ? (int) get_post_thumbnail_id( $post_id ) > 0 : false,
+			'taxonomies' => $taxonomies,
 		);
 	}
 

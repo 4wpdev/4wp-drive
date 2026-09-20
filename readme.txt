@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,7 +12,7 @@ Import Google Docs and Markdown from Drive or GitHub into WordPress drafts—or 
 
 == Description ==
 
-**4WP Drive** connects Drive and GitHub folder workflows to WordPress: writers drop documents in `incoming/`, editors review them on the admin **Incoming** screen, and approved content becomes **draft posts** or updates **existing posts and pages**—without copy-paste. **Analytics** stores import history (folder alias, site slug, incoming → published) and can restore a package back to incoming.
+**4WP Drive** connects Drive and GitHub folder workflows to WordPress: writers drop documents in `incoming/`, editors review them on the admin **Incoming** screen, and approved content becomes **draft posts** or updates **existing posts and pages**—without copy-paste. **Analytics** stores import history (folder alias, site slug, incoming → published) for drafts and published posts.
 
 A plugin by [4wp.dev](https://4wp.dev/).
 
@@ -33,7 +33,7 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 3. Drive: set the **root folder ID**; the plugin uses `incoming/` and `published/` subfolders. GitHub: set the repo and incoming path (default `incoming/`).
 4. Drop a package into `incoming/` (Google Doc, Markdown, or Word on Drive; Markdown on GitHub) or run **Sync**.
 5. Open **Incoming** — pick a source tab (Google Drive or GitHub live; OneDrive and Dropbox on the roadmap), sync, select a document, then preview and **Create new draft**, **Update existing post**, or Reject.
-6. On import, files move to `published/`. Open **Analytics** to see history; **Restore to incoming** if you need the package back in the queue.
+6. On import, files move to `published/`. Open **Analytics** to see history (drafts and published).
 
 = Key features =
 
@@ -41,10 +41,11 @@ Learn more, workflow details, and comparisons on the plugin page at [4wp.dev/plu
 * **Folder sync** — scan `incoming/` for Google Docs, Markdown, Word, and images (Drive) or Markdown packages (GitHub)
 * **GitHub** — live Markdown source: PAT, owner/repo, move to published/failed after import
 * **Editorial Incoming** — status bar, source tabs, lazy folder tree, document queue + side workspace for preview and import
-* **Package images** — preview jpg/png in Incoming without importing; open the file in Drive or GitHub
-* **Analytics** — import history (source, post, folder alias, site slug, incoming → published) and Restore to incoming
+* **Package images** — preview jpg/png in Incoming; drag from the tree or click to pin, pick left/center/right, drop/click a paragraph (`[image:file.png left]`)
+* **Analytics** — import history for drafts and published posts (source, post, folder alias, site slug, incoming → published)
 * **Document template** — front-matter lines before a separator (`---` or `=====`) map to post fields; body becomes post content (headings, lists, bold preserved)
-* **Body → block templates** — map FAQ-style sections to **4WP FAQ** or core Accordion; **Core Image** (default on) replaces `[image:filename.jpeg]` with `core/image` from the package folder
+* **Patterns** — Core Block always; Integrations Plugins catalog (**4WP FAQ**, **4WP SEO Helper** TechArticle) with install/activate links; Custom Blocks later
+* **Body → block templates** — FAQ accordion via **4WP FAQ**; TechArticle Goal / Context / Steps / Common mistakes via **4WP SEO Helper**; **Core Image** (default on) replaces `[image:filename.jpeg]` with `core/image` from the package folder
 * **Configurable field map** — title, slug, categories, tags, author, dates, SEO meta (when supported)
 * **Featured image** — import image from the same Drive subfolder
 * **Update existing content** — search and pick a post or page, then replace its content from the Drive document
@@ -202,6 +203,17 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 
 == Changelog ==
 
+= 1.7.0 =
+* **Images in the post** — from Incoming, insert a package image into the article: drag the file from the tree onto the preview, or click the image, pick Left / Center / Right, then click a paragraph. Writes `[image:file.png left]`. Markdown `![alt](file.png)` in the same folder still becomes the same marker.
+* **Patterns** — Overview, Core Block, Integrations Plugins, Custom Blocks. Overview front-matter sample is the live Settings template (not a stub), with a link to Settings → Documentation.
+* **Core Block** — headings, lists, tables, quotes, code, separators, and package-folder images. Always imported.
+* **Integrations Plugins** — family catalog in Drive (`Family_Plugin_Catalog`, filter `forwp_drive_family_plugins`). Cards stay visible when a plugin is missing: Get plugin / Activate. Active plugins expose editable H2 wrap titles.
+* **4WP FAQ** — H2 FAQ section + H3 Q&A → `forwp/faq` accordion. Pin/unwrap in Incoming; skip nested wrap badges.
+* **4WP SEO Helper (TechArticle)** — Goal, Context, Steps, Common mistakes wrappers. Map by H2 aliases in Patterns or by clicking the heading in Incoming (wrap pin + counts).
+* **Wrap pin** — click a paragraph/H2 to wrap; dismiss with ×; selected pin highlight; per-capability counts (FAQ-1, Goal-1).
+* **Incoming** — import destination on one row; Keep document fonts minimized; sticky plugin tags; tree no longer dies on a duplicate `const marker`.
+* **Analytics** — records drafts and published; Details column; no history ID; Restore removed from this screen (it moved the Drive/GitHub package, not the WordPress post).
+
 = 1.6.0 =
 * **Incoming tree** — browse Drive/GitHub one folder at a time instead of loading the whole tree. Nested folders stay closed until you expand them; role folders (`incoming`, `published`, `failed`) open when they contain child folders. Shortcuts and shared-drive items are listed. Empty folders fetch children on expand.
 * **Google Docs tables** — classic Docs tables survive the `======` split and import as Gutenberg `core/table` (cells are no longer dumped as paragraphs like “Risk Zone”).
@@ -262,6 +274,9 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.7.0 =
+Place package images in the article from Incoming (drag or pin). Patterns lists Core plus family plugins (4WP FAQ, 4WP SEO Helper TechArticle) with activate/install. Analytics logs drafts and published; Restore is gone from that screen.
 
 = 1.6.0 =
 Incoming tree is lazy, Google Docs tables import as tables, package images preview in the workspace, and Export errors explain failed Drive HTML exports.

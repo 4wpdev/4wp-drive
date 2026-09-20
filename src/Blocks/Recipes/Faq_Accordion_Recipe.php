@@ -1,6 +1,6 @@
 <?php
 /**
- * FAQ section recipe: H2 FAQ heading + H3 Q/A pairs → forwp/faq accordion.
+ * FAQ section recipe: H2 FAQ heading + H3 or bold-paragraph Q/A → forwp/faq accordion.
  *
  * @package ForWP\Drive
  */
@@ -74,14 +74,37 @@ final class Faq_Accordion_Recipe implements Block_Recipe_Interface {
 				}
 
 				++$index;
-				$items = $this->collect_items( $nodes, $index, $count, $item_level, $section_level, $section_pattern );
+				$lead = array();
+				while ( $index < $count ) {
+					$peek = $nodes[ $index ];
+					if ( $this->is_section_end( $peek, $section_level, $section_pattern ) ) {
+						break;
+					}
+					if ( $this->is_item_heading( $peek, $item_level ) ) {
+						break;
+					}
+					$lead[] = (string) $peek['html'];
+					++$index;
+				}
+
+				$items = array();
+				if ( $index < $count && ! $this->is_section_end( $nodes[ $index ], $section_level, $section_pattern ) ) {
+					$items = $this->collect_items( $nodes, $index, $count, $item_level, $section_level, $section_pattern );
+				}
 
 				if ( ! empty( $items ) ) {
+					foreach ( $lead as $lead_html ) {
+						$output[] = $lead_html;
+					}
 					$builder  = new Block_Markup_Builder();
 					$template = sanitize_key( (string) ( $config['template'] ?? Block_Template_Registry::TEMPLATE_4WP_FAQ ) );
 					$faq_html = $builder->build_accordion_section( $items, $template );
 					if ( '' !== $faq_html ) {
 						$output[] = $faq_html;
+					}
+				} else {
+					foreach ( $lead as $lead_html ) {
+						$output[] = $lead_html;
 					}
 				}
 
@@ -106,6 +129,10 @@ final class Faq_Accordion_Recipe implements Block_Recipe_Interface {
 	 */
 	private function is_section_start( array $node, int $section_level, string $pattern ): bool {
 		if ( (int) $node['level'] !== $section_level ) {
+			return false;
+		}
+
+		if ( Html_Body_Parser::heading_skips_wrap( $node ) ) {
 			return false;
 		}
 
@@ -149,10 +176,14 @@ final class Faq_Accordion_Recipe implements Block_Recipe_Interface {
 				continue;
 			}
 
-			$question = trim( (string) $node['text'] );
+			$extracted = $this->extract_item_question( $node );
+			$question  = $extracted['question'];
 			++$index;
 
 			$answer_parts = array();
+			if ( '' !== $extracted['answer_html'] ) {
+				$answer_parts[] = $extracted['answer_html'];
+			}
 			while ( $index < $count ) {
 				$next = $nodes[ $index ];
 				if ( $this->is_section_end( $next, $section_level, $section_pattern ) ) {
@@ -209,6 +240,67 @@ final class Faq_Accordion_Recipe implements Block_Recipe_Interface {
 	 * @param int                                                        $item_level Expected heading level.
 	 */
 	private function is_item_heading( array $node, int $item_level ): bool {
-		return (int) $node['level'] === $item_level;
+		if ( (int) $node['level'] === $item_level ) {
+			return true;
+		}
+
+		return $this->is_bold_question_paragraph( $node );
+	}
+
+	/**
+	 * Markdown FAQ often uses **question** as a paragraph, not H3.
+	 *
+	 * @param array{tag: string, level: int, html: string, text: string} $node Node.
+	 */
+	private function is_bold_question_paragraph( array $node ): bool {
+		if ( 'p' !== (string) $node['tag'] ) {
+			return false;
+		}
+
+		$html = trim( (string) $node['html'] );
+		if ( '' === $html ) {
+			return false;
+		}
+
+		return 1 === preg_match(
+			'/^<p(?:\s[^>]*)?>\s*<(strong|b)(?:\s[^>]*)?>[\s\S]+?<\/\1>/iu',
+			$html
+		);
+	}
+
+	/**
+	 * @param array{tag: string, level: int, html: string, text: string} $node Node.
+	 * @return array{question: string, answer_html: string}
+	 */
+	private function extract_item_question( array $node ): array {
+		if ( (int) $node['level'] > 0 ) {
+			return array(
+				'question'    => trim( (string) $node['text'] ),
+				'answer_html' => '',
+			);
+		}
+
+		$html = trim( (string) $node['html'] );
+		if ( preg_match(
+			'/^<p(?:\s[^>]*)?>\s*<(strong|b)(?:\s[^>]*)?>([\s\S]*?)<\/\1>\s*([\s\S]*?)<\/p>$/iu',
+			$html,
+			$matches
+		) ) {
+			$question = trim( wp_strip_all_tags( (string) $matches[2] ) );
+			$rest     = trim( (string) $matches[3] );
+			$rest     = preg_replace( '/^<(?:br\s*\/?|br)>/i', '', $rest );
+			$rest     = is_string( $rest ) ? trim( $rest ) : '';
+			$answer   = '' === $rest ? '' : '<p>' . $rest . '</p>';
+
+			return array(
+				'question'    => $question,
+				'answer_html' => $answer,
+			);
+		}
+
+		return array(
+			'question'    => trim( (string) $node['text'] ),
+			'answer_html' => '',
+		);
 	}
 }

@@ -4,7 +4,7 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 
 **Plugin page:** [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/) · [WordPress.org](https://wordpress.org/plugins/4wp-drive/) · [4wp.dev](https://4wp.dev/) · GPL-2.0-or-later
 
-**Current stable:** 1.6.0
+**Current stable:** 1.7.0
 
 ## What it does
 
@@ -12,9 +12,44 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 2. **4WP Drive** syncs them into the admin **Incoming** queue (source tabs + workspace).
 3. Editors **Preview**, pick **Content language** (Polylang, when needed), then **Create new draft**, **Update existing post**, or **Reject**.
 4. On import, the package moves to `published/` (same tree). Reject goes to `failed/`.
-5. **Analytics** records each import. **Restore to incoming** moves the package back if the WordPress post was deleted or the import needs a redo.
+5. **Analytics** records each import (drafts and published).
 
 Front-matter lines before a separator (`---` or `=====`) map to post fields (title, slug, categories, SEO, etc.). The rest becomes Gutenberg post content.
+
+## What shipped in 1.7.0
+
+Patterns, family plugins, placing images in the article, wrap pin, and Analytics that actually lists imports.
+
+### Images in the post
+
+- From Incoming: **drag** a package image from the tree onto the preview, or **click** the file, pick **L / C / R**, then click a paragraph.
+- Writes `[image:hero.png left]` (optional `center` / `right`). Markdown `![alt](hero.png)` in the same folder becomes the same marker.
+- Featured image is still Incoming (cover / hero / first file), not this marker.
+
+### Patterns
+
+- Tabs: **Overview**, **Core Block**, **Integrations Plugins**, **Custom Blocks** (soon).
+- Overview front-matter sample is the **live** Settings field map, with a link to **Settings → Documentation**.
+- **Core Block** — always imported: headings, paragraphs, lists, tables, quotes, code, separators, package-folder images.
+
+### Integrations Plugins (family catalog)
+
+Drive keeps the list in `src/Blocks/Family_Plugin_Catalog.php`. Add a sibling with a new row there, or the filter `forwp_drive_family_plugins`. Cards show even when the plugin is off: **Get plugin** / **Activate**. Wrap titles become editable after activate.
+
+- **4WP FAQ** — H2 FAQ (any language; aliases in Patterns) + H3 question / body answer → `forwp/faq` accordion.
+- **4WP SEO Helper (TechArticle)** — Goal, Context, Steps, Common mistakes. Map: `tech-article` (or `TechArticle`) in front-matter, heading aliases, or wrap pin in Incoming.
+
+### Wrap pin (Incoming)
+
+Click a wrap in the toolbar, then a heading or paragraph to wrap that section. **×** unwraps. Selected pin is highlighted; counts show on the pin (`FAQ-1`, `Goal-1`).
+
+### Incoming chrome
+
+Import destination on one row. Keep document fonts is compact. Plugin tags stay sticky. Tree load no longer dies on a duplicate `const marker`.
+
+### Analytics
+
+Drafts **and** published. Columns: date/time, type, post ID/type, status, create vs update, details. No history ID. **Restore to incoming** is removed from this screen (it moved the storage package, not the WordPress post).
 
 ## What shipped in 1.6.0
 
@@ -53,7 +88,8 @@ Progress since **1.4.0** (Inbox dashboard). This is the release cut.
 - Status bar: connection, last sync, ready count, **Open folder**, **Sync**.
 - Package folders: one article = a subfolder with a document + png/jpg images.
 - **File to import** when a folder has more than one document (Markdown preferred).
-- **Image pin** in preview: pick a package image, set alignment, click a paragraph. Markdown `![](hero.png)` in the same folder becomes `[image:hero.png]`.
+- **Inline images** from the article folder: Google Doc paragraph `[image:hero.png]` (optional `left` / `center` / `right`). Markdown `![alt](hero.png)` becomes the same marker. Exact filename. Featured image is Incoming (cover / hero / first file), not this marker.
+- **Image pin** in preview: pick a package image, set alignment, click a paragraph.
 - Import still writes **core blocks** (headings, paragraphs, lists, quotes, code, images).
 
 ### Google Drive
@@ -147,13 +183,14 @@ composer run lint
 ```
 
 - PHP source: `src/` (PSR-4 `ForWP\Drive\`)
+- Family plugins for Patterns: `src/Blocks/Family_Plugin_Catalog.php` (`forwp_drive_family_plugins`)
 - Admin UI: plain JS in `assets/` (no npm build)
 - Tests: `tests/unit/`
 - History schema: `src/Database/Schema.php` (`forwp_drive_documents`, `forwp_drive_import_history`)
 
 WordPress.org assets: see [.wordpress-org/assets/README.txt](.wordpress-org/assets/README.txt).
 
-Release announcements (Google, social, newsletter): [docs/releases/](docs/releases/) — not shipped in the wp.org ZIP. Latest: [1.6.0.md](docs/releases/1.6.0.md).
+Release announcements (Google, social, newsletter): [docs/releases/](docs/releases/) — not shipped in the wp.org ZIP. Latest: [1.7.0.md](docs/releases/1.7.0.md).
 
 ## External services
 

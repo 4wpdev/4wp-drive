@@ -68,6 +68,8 @@ final class Package_Image_Importer {
 			$body = (string) ( $metadata['body_html'] ?? '' );
 		}
 
+		$body = Core_Image_Recipe::normalize_loose_markers( $body );
+
 		$tokens = Core_Image_Recipe::extract_tokens( $body );
 		if ( empty( $tokens ) ) {
 			return $empty;
@@ -135,12 +137,19 @@ final class Package_Image_Importer {
 		$new    = $recipe->transform( $body, $config );
 
 		if ( $new !== $body ) {
+			$kses_on = has_filter( 'content_save_pre', 'wp_filter_post_kses' );
+			if ( $kses_on ) {
+				kses_remove_filters();
+			}
 			wp_update_post(
 				array(
 					'ID'           => $post_id,
-					'post_content' => $new,
+					'post_content' => wp_slash( $new ),
 				)
 			);
+			if ( $kses_on ) {
+				kses_init_filters();
+			}
 		}
 
 		return array(

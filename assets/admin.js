@@ -182,6 +182,7 @@
 	let previewDoc = null;
 	let previewMediaKey = null;
 	let pinSelectedName = '';
+	let wrapSelectedId = '';
 	let multilingualConfig = forwpDriveAdmin.multilingual || null;
 	const INBOX_SOURCE_STORAGE_KEY = 'forwp_drive_inbox_active_source';
 
@@ -247,7 +248,29 @@
 		return documentsForSource( activeSourceSlug );
 	}
 
+	/**
+	 * Whether an implemented source can list/sync files.
+	 *
+	 * @param {string} slug Source slug.
+	 * @return {boolean}
+	 */
+	function isSourceReady( slug ) {
+		const map = inboxCache.sourceStatus || {};
+		const status = map[ slug ];
+		if ( ! status ) {
+			return true;
+		}
+		return !! status.ready;
+	}
+
+	function isActiveSourceReady() {
+		return isSourceReady( activeSourceSlug );
+	}
+
 	function incomingCountForSource( slug ) {
+		if ( ! isSourceReady( slug ) ) {
+			return 0;
+		}
 		return documentsForSource( slug ).length;
 	}
 
@@ -469,7 +492,7 @@
 		const strings = forwpDriveAdmin.strings || {};
 
 		if ( syncBtn ) {
-			syncBtn.disabled = ! implemented;
+			syncBtn.disabled = ! implemented || ! isActiveSourceReady();
 			syncBtn.textContent =
 				activeSourceSlug === 'google_drive'
 					? strings.syncFromDrive || 'Sync from Drive'
@@ -558,6 +581,17 @@
 			if ( queueCount ) {
 				queueCount.hidden = true;
 			}
+			return;
+		}
+
+		if ( ! isSourceReady( source.slug ) ) {
+			updateInboxStatusBar(
+				inboxCache.connection,
+				inboxCache.lastSync,
+				0,
+				inboxCache.incomingId
+			);
+			renderInboxNotConfigured();
 			return;
 		}
 
@@ -835,11 +869,67 @@
 	}
 
 	function dockPackageTools() {
-		// Package image-pin UI temporarily removed.
+		const dock = document.getElementById( 'forwp-drive-package-dock' );
+		const pin = document.getElementById( 'forwp-drive-image-pin' );
+		if ( dock && pin ) {
+			dock.appendChild( pin );
+		}
+		attachWrapPinToQueue();
+	}
+
+	function attachWrapPinToQueue() {
+		const wraps = document.getElementById( 'forwp-drive-wrap-pin' );
+		const slot = document.getElementById( 'forwp-drive-wrap-pin-slot' );
+		const dock = document.getElementById( 'forwp-drive-package-dock' );
+		const onSingle = !! previewId && ! previewMediaKey && wraps && ! wraps.hidden;
+		if ( onSingle && slot ) {
+			slot.hidden = false;
+			slot.appendChild( wraps );
+			return;
+		}
+		if ( slot ) {
+			slot.hidden = true;
+		}
+		if ( dock && wraps ) {
+			dock.appendChild( wraps );
+		}
 	}
 
 	function attachPackageToolsToSelectedCard() {
-		// Package image-pin UI temporarily removed.
+		const pin = document.getElementById( 'forwp-drive-image-pin' );
+		const dock = document.getElementById( 'forwp-drive-package-dock' );
+		if ( pin && dock ) {
+			pin.hidden = true;
+			dock.appendChild( pin );
+		}
+		attachWrapPinToQueue();
+	}
+
+	function selectImageForPin( name ) {
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		const list = document.getElementById( 'forwp-drive-image-pin-list' );
+		const next = String( name || '' ).trim();
+		if ( next && pinSelectedName === next ) {
+			pinSelectedName = '';
+		} else {
+			pinSelectedName = next;
+			if ( next ) {
+				wrapSelectedId = '';
+				syncWrapPinSelection();
+			}
+		}
+		if ( body ) {
+			body.classList.toggle( 'is-pinning', !! pinSelectedName );
+		}
+		if ( list ) {
+			list.querySelectorAll( '[data-image-name]' ).forEach( ( el ) => {
+				el.classList.toggle(
+					'is-selected',
+					!! pinSelectedName &&
+						el.getAttribute( 'data-image-name' ) === pinSelectedName
+				);
+			} );
+		}
 	}
 
 	/**
@@ -1043,17 +1133,104 @@
 		return /^\[image:\s*[^\]]+\]$/i.test( String( text || '' ).trim() );
 	}
 
+	function parseImageMarker( text ) {
+		const match = String( text || '' )
+			.trim()
+			.match( /^\[image:\s*([^\]]+)\]$/i );
+		if ( ! match ) {
+			return null;
+		}
+		let token = String( match[ 1 ] || '' ).trim();
+		let align = 'center';
+		const aligned = token.match( /^(.*?)\s+(left|right|center)$/i );
+		if ( aligned ) {
+			token = String( aligned[ 1 ] || '' ).trim();
+			align = String( aligned[ 2 ] || 'center' ).toLowerCase();
+		}
+		if ( ! token ) {
+			return null;
+		}
+		return { file: token, align };
+	}
+
+	function formatImageMarker( file, align ) {
+		const safeAlign = [ 'left', 'center', 'right' ].includes( align )
+			? align
+			: 'center';
+		return '[image:' + String( file || '' ).trim() + ' ' + safeAlign + ']';
+	}
+
+	function setImageMarkerAlign( marker, align ) {
+		const safeAlign = [ 'left', 'center', 'right' ].includes( align )
+			? align
+			: 'center';
+		marker.setAttribute( 'data-image-align', safeAlign );
+		marker.classList.remove(
+			'is-align-left',
+			'is-align-center',
+			'is-align-right'
+		);
+		marker.classList.add( 'is-align-' + safeAlign );
+		marker.querySelectorAll( '[data-image-align]' ).forEach( ( btn ) => {
+			btn.classList.toggle(
+				'is-on',
+				btn.getAttribute( 'data-image-align' ) === safeAlign
+			);
+		} );
+	}
+
 	function getPreviewBodyHtml( body ) {
 		const clone = body.cloneNode( true );
 		clone
 			.querySelectorAll(
-				'.forwp-drive-image-marker__remove, .forwp-drive-preview__blocks-note'
+				'.forwp-drive-preview__blocks-note, .forwp-drive-wrap-pin__badge, .forwp-drive-declared-wrap__badge'
 			)
 			.forEach( ( el ) => el.remove() );
 		clone.querySelectorAll( '.forwp-drive-image-marker' ).forEach( ( el ) => {
-			el.classList.remove( 'forwp-drive-image-marker' );
-			if ( ! el.className ) {
-				el.removeAttribute( 'class' );
+			const parsed =
+				parseImageMarker(
+					formatImageMarker(
+						el.getAttribute( 'data-image-file' ) || '',
+						el.getAttribute( 'data-image-align' ) || 'center'
+					)
+				) || parseImageMarker( el.textContent );
+			const p = clone.ownerDocument.createElement( 'p' );
+			p.textContent = parsed
+				? formatImageMarker( parsed.file, parsed.align )
+				: '[image:]';
+			if ( el.parentNode ) {
+				el.parentNode.replaceChild( p, el );
+			}
+		} );
+		clone.querySelectorAll( '.forwp-drive-declared-wrap' ).forEach( ( section ) => {
+			if ( ! section.parentNode ) {
+				return;
+			}
+			while ( section.firstChild ) {
+				section.parentNode.insertBefore( section.firstChild, section );
+			}
+			section.remove();
+		} );
+		clone.querySelectorAll( '[data-drive-wrap]' ).forEach( ( section ) => {
+			const block = String( section.getAttribute( 'data-drive-wrap' ) || '' ).trim();
+			if ( ! block || ! section.parentNode ) {
+				return;
+			}
+			const prev = section.previousSibling;
+			const prevText = prev && prev.nodeType === 8 ? String( prev.nodeValue || '' ) : '';
+			if ( prevText.indexOf( 'wp:' + block ) === -1 ) {
+				section.parentNode.insertBefore(
+					clone.ownerDocument.createComment( ' wp:' + block + ' ' ),
+					section
+				);
+			}
+			const next = section.nextSibling;
+			const nextText = next && next.nodeType === 8 ? String( next.nodeValue || '' ) : '';
+			if ( nextText.indexOf( '/wp:' + block ) === -1 ) {
+				section.parentNode.insertBefore(
+					clone.ownerDocument.createComment( ' /wp:' + block + ' ' ),
+					section.nextSibling
+				);
 			}
 		} );
 		return clone.innerHTML;
@@ -1075,29 +1252,748 @@
 		} );
 	}
 
+	function getWrapCapabilities() {
+		return Array.isArray( forwpDriveAdmin.wraps ) ? forwpDriveAdmin.wraps : [];
+	}
+
+	function wrapCapById( id ) {
+		return getWrapCapabilities().find( ( cap ) => cap && cap.id === id ) || null;
+	}
+
+	function capLabelForBlock( block ) {
+		const wanted = String( block || '' );
+		const rule = declaredPatternRules().find( ( row ) => row && row.block === wanted );
+		if ( rule && rule.label ) {
+			return String( rule.label );
+		}
+		const cap = getWrapCapabilities().find( ( row ) => row && row.block === wanted );
+		return ( cap && ( cap.label || cap.id ) ) || wanted;
+	}
+
+	function wrapBlockClass( block ) {
+		return String( block || '' ).replace( /\//g, '-' );
+	}
+
+	function inferWrapBlock( section ) {
+		if ( ! ( section instanceof HTMLElement ) ) {
+			return '';
+		}
+		const stamped = String( section.getAttribute( 'data-drive-wrap' ) || '' ).trim();
+		if ( stamped ) {
+			return stamped;
+		}
+		const caps = getWrapCapabilities();
+		for ( let i = 0; i < caps.length; i++ ) {
+			const block = String( caps[ i ].block || '' );
+			const cls = wrapBlockClass( block );
+			if (
+				cls &&
+				( section.classList.contains( cls ) ||
+					section.classList.contains( 'wp-block-' + cls ) )
+			) {
+				return block;
+			}
+		}
+		return '';
+	}
+
+	function countWrapsForCap( cap, body ) {
+		if ( ! cap || ! body ) {
+			return 0;
+		}
+		const block = String( cap.block || '' );
+		const id = String( cap.id || '' );
+		let count = 0;
+		if ( block ) {
+			body.querySelectorAll( '[data-drive-wrap]' ).forEach( ( el ) => {
+				if ( el.getAttribute( 'data-drive-wrap' ) !== block ) {
+					return;
+				}
+				let parent = el.parentElement;
+				while ( parent ) {
+					if ( parent.getAttribute && parent.getAttribute( 'data-drive-wrap' ) === block ) {
+						return;
+					}
+					parent = parent.parentElement;
+				}
+				count += 1;
+			} );
+		}
+		if ( id ) {
+			body
+				.querySelectorAll(
+					'.forwp-drive-declared-wrap[data-declared-id="' + id.replace( /"/g, '' ) + '"]'
+				)
+				.forEach( ( el ) => {
+					if ( block && el.closest( '[data-drive-wrap]' ) ) {
+						const host = el.closest( '[data-drive-wrap]' );
+						if ( host && host.getAttribute( 'data-drive-wrap' ) === block ) {
+							return;
+						}
+					}
+					count += 1;
+				} );
+		}
+		return count;
+	}
+
+	function syncWrapPinCounts() {
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		const list = document.getElementById( 'forwp-drive-wrap-pin-list' );
+		if ( ! list ) {
+			return;
+		}
+		list.querySelectorAll( '[data-wrap-id]' ).forEach( ( btn ) => {
+			const cap = wrapCapById( btn.getAttribute( 'data-wrap-id' ) );
+			const n = countWrapsForCap( cap, body );
+			btn.classList.toggle( 'has-used', n > 0 );
+			const used = btn.querySelector( '.forwp-drive-wrap-pin__used' );
+			if ( ! used ) {
+				return;
+			}
+			if ( n > 0 ) {
+				used.hidden = false;
+				used.textContent = '− ' + n;
+			} else {
+				used.hidden = true;
+				used.textContent = '';
+			}
+		} );
+	}
+
+	function wrapDismissLabel() {
+		const strings = forwpDriveAdmin.strings || {};
+		return strings.unwrapSection || 'Remove wrap';
+	}
+
+	function createWrapDismissButton() {
+		const btn = document.createElement( 'button' );
+		btn.type = 'button';
+		btn.className = 'forwp-drive-wrap-dismiss';
+		btn.setAttribute( 'aria-label', wrapDismissLabel() );
+		btn.title = wrapDismissLabel();
+		btn.textContent = '×';
+		return btn;
+	}
+
+	function attachWrapDismiss( host ) {
+		if ( ! host || host.querySelector( '.forwp-drive-wrap-dismiss' ) ) {
+			return;
+		}
+		host.appendChild( createWrapDismissButton() );
+	}
+
+	function headingSkipsWrap( h2 ) {
+		return !!(
+			h2 &&
+			h2.classList &&
+			h2.classList.contains( 'forwp-drive-skip-wrap' )
+		);
+	}
+
+	function markHeadingSkipWrap( h2 ) {
+		if ( h2 && h2.classList ) {
+			h2.classList.add( 'forwp-drive-skip-wrap' );
+		}
+	}
+
+	function flattenRecipeBlocks( root ) {
+		if ( ! root || ! root.querySelectorAll ) {
+			return;
+		}
+		root.querySelectorAll( '.wp-block-accordion-item' ).forEach( ( item ) => {
+			const title = item.querySelector(
+				'.wp-block-accordion-heading__toggle-title'
+			);
+			const panel = item.querySelector( '.wp-block-accordion-panel' );
+			const heading = document.createElement( 'h3' );
+			heading.textContent = title ? String( title.textContent || '' ).trim() : '';
+			const parent = item.parentNode;
+			if ( ! parent ) {
+				return;
+			}
+			parent.insertBefore( heading, item );
+			if ( panel ) {
+				while ( panel.firstChild ) {
+					parent.insertBefore( panel.firstChild, item );
+				}
+			}
+			item.remove();
+		} );
+		root
+			.querySelectorAll( '.wp-block-accordion, .wp-block-forwp-faq' )
+			.forEach( ( wrap ) => {
+				if ( ! wrap.parentNode ) {
+					return;
+				}
+				while ( wrap.firstChild ) {
+					wrap.parentNode.insertBefore( wrap.firstChild, wrap );
+				}
+				wrap.remove();
+			} );
+	}
+
+	function dismissWrapSection( section ) {
+		if ( ! section || ! section.parentNode ) {
+			return;
+		}
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		const h2 = section.querySelector( 'h2' );
+		flattenRecipeBlocks( section );
+		markHeadingSkipWrap( h2 );
+		unwrapDriveSection( section );
+		if ( body ) {
+			decorateWraps( body );
+			highlightDeclaredWraps( body );
+		}
+		persistPreviewBody();
+	}
+
+	function findPreviousHeading( node, body, tagName ) {
+		const wanted = String( tagName || 'H2' ).toUpperCase();
+		let el = node;
+		while ( el && el !== body ) {
+			let prev = el.previousElementSibling;
+			while ( prev ) {
+				if ( prev.tagName === wanted ) {
+					return prev;
+				}
+				const all = prev.querySelectorAll( wanted.toLowerCase() );
+				if ( all.length ) {
+					return all[ all.length - 1 ];
+				}
+				prev = prev.previousElementSibling;
+			}
+			el = el.parentElement;
+		}
+		return null;
+	}
+
+	function resolveWrapStart( node, body ) {
+		if ( ! node || ! body || ! body.contains( node ) ) {
+			return null;
+		}
+		if ( node.classList && node.classList.contains( 'forwp-drive-preview__blocks-note' ) ) {
+			return null;
+		}
+		const heading = node.closest( 'h1, h2, h3, h4, h5, h6' );
+		if (
+			heading &&
+			body.contains( heading ) &&
+			heading.tagName === 'H2' &&
+			! heading.classList.contains( 'forwp-drive-preview__blocks-note' )
+		) {
+			return heading;
+		}
+		const wrap = node.closest(
+			'[data-drive-wrap], .forwp-drive-declared-wrap, section'
+		);
+		if ( wrap && body.contains( wrap ) ) {
+			const nested = wrap.querySelector( 'h2' );
+			if ( nested ) {
+				return nested;
+			}
+		}
+		const previousH2 = findPreviousHeading( node, body, 'H2' );
+		if ( previousH2 ) {
+			return previousH2;
+		}
+		if (
+			heading &&
+			body.contains( heading ) &&
+			! heading.classList.contains( 'forwp-drive-preview__blocks-note' )
+		) {
+			return heading;
+		}
+		return null;
+	}
+
+	function unwrapDriveSection( section ) {
+		if ( ! section || ! section.parentNode ) {
+			return;
+		}
+		const parent = section.parentNode;
+		const prev = section.previousSibling;
+		if ( prev && prev.nodeType === 8 ) {
+			prev.remove();
+		}
+		const next = section.nextSibling;
+		if ( next && next.nodeType === 8 ) {
+			next.remove();
+		}
+		while ( section.firstChild ) {
+			parent.insertBefore( section.firstChild, section );
+		}
+		section.remove();
+	}
+
+	function applyWrapPin( start ) {
+		const cap = wrapCapById( wrapSelectedId );
+		if ( ! cap || ! ( start instanceof HTMLElement ) ) {
+			return;
+		}
+		start.classList.remove( 'forwp-drive-skip-wrap' );
+		const declared = start.closest( '.forwp-drive-declared-wrap' );
+		if ( declared ) {
+			clearDeclaredHighlights( declared.parentElement );
+		}
+		const existing = start.closest( '[data-drive-wrap]' );
+		if ( existing ) {
+			unwrapDriveSection( existing );
+		}
+
+		const parent = start.parentNode;
+		if ( ! parent ) {
+			return;
+		}
+
+		const nodes = [];
+		let node = start;
+		while ( node ) {
+			if ( node !== start && node.nodeType === 1 ) {
+				const tag = String( node.tagName || '' );
+				if ( tag === 'H1' || tag === 'H2' ) {
+					break;
+				}
+				if ( node.getAttribute && node.getAttribute( 'data-drive-wrap' ) ) {
+					break;
+				}
+			}
+			if (
+				node.nodeType === 1 ||
+				( node.nodeType === 3 && String( node.textContent || '' ).trim() )
+			) {
+				nodes.push( node );
+			}
+			node = node.nextSibling;
+		}
+
+		const section = document.createElement( 'section' );
+		section.className = wrapBlockClass( cap.block );
+		section.setAttribute( 'data-drive-wrap', cap.block );
+		parent.insertBefore( section, start );
+		nodes.forEach( ( item ) => {
+			section.appendChild( item );
+		} );
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		decorateWraps( body || section.parentElement );
+		highlightDeclaredWraps( body || section.parentElement );
+		persistPreviewBody();
+	}
+
+	function decorateWraps( body ) {
+		if ( ! body ) {
+			return;
+		}
+		body.querySelectorAll( 'section' ).forEach( ( section ) => {
+			const block = inferWrapBlock( section );
+			if ( ! block ) {
+				return;
+			}
+			section.setAttribute( 'data-drive-wrap', block );
+			if (
+				section.parentElement &&
+				section.parentElement.closest( '[data-drive-wrap], .forwp-drive-declared-wrap' )
+			) {
+				return;
+			}
+			const existingBadge = Array.prototype.find.call(
+				section.children,
+				( el ) =>
+					el &&
+					el.classList &&
+					el.classList.contains( 'forwp-drive-wrap-pin__badge' )
+			);
+			if ( existingBadge ) {
+				attachWrapDismiss( existingBadge );
+				return;
+			}
+			const badge = document.createElement( 'span' );
+			badge.className = 'forwp-drive-wrap-pin__badge';
+			badge.appendChild( document.createTextNode( capLabelForBlock( block ) ) );
+			attachWrapDismiss( badge );
+			section.insertBefore( badge, section.firstChild );
+		} );
+	}
+
+	function declaredPatternRules() {
+		return Array.isArray( forwpDriveAdmin.patternHighlights )
+			? forwpDriveAdmin.patternHighlights
+			: [];
+	}
+
+	function normalizeHeadingText( text ) {
+		return String( text || '' )
+			.replace( /\s+/g, ' ' )
+			.trim()
+			.toLowerCase();
+	}
+
+	function matchDeclaredRule( headingText ) {
+		const normalized = normalizeHeadingText( headingText );
+		if ( ! normalized ) {
+			return null;
+		}
+		return (
+			declaredPatternRules().find( ( rule ) =>
+				( rule.headings || [] ).some(
+					( heading ) => normalizeHeadingText( heading ) === normalized
+				)
+			) || null
+		);
+	}
+
+	function clearDeclaredHighlights( body ) {
+		if ( ! body ) {
+			return;
+		}
+		body.querySelectorAll( '.forwp-drive-declared-wrap' ).forEach( ( section ) => {
+			if ( ! section.parentNode ) {
+				return;
+			}
+			while ( section.firstChild ) {
+				section.parentNode.insertBefore( section.firstChild, section );
+			}
+			section.remove();
+		} );
+	}
+
+	function highlightDeclaredSection( h2, rule ) {
+		const nodes = [];
+		let node = h2;
+		while ( node ) {
+			if ( node !== h2 && node.nodeType === 1 ) {
+				const tag = String( node.tagName || '' );
+				if ( tag === 'H1' || tag === 'H2' ) {
+					break;
+				}
+				if ( node.getAttribute && ( node.getAttribute( 'data-drive-wrap' ) || node.classList.contains( 'forwp-drive-declared-wrap' ) ) ) {
+					break;
+				}
+			}
+			if ( node.nodeType === 1 || ( node.nodeType === 3 && String( node.textContent || '' ).trim() ) ) {
+				nodes.push( node );
+			}
+			node = node.nextSibling;
+		}
+
+		const section = document.createElement( 'div' );
+		section.className = 'forwp-drive-declared-wrap';
+		section.setAttribute( 'data-declared-id', rule.id || '' );
+		const badge = document.createElement( 'span' );
+		badge.className = 'forwp-drive-declared-wrap__badge';
+		badge.appendChild( document.createTextNode( rule.label || rule.id || '' ) );
+		attachWrapDismiss( badge );
+		section.appendChild( badge );
+		h2.parentNode.insertBefore( section, h2 );
+		nodes.forEach( ( item ) => {
+			section.appendChild( item );
+		} );
+	}
+
+	function highlightDeclaredWraps( body ) {
+		if ( ! body ) {
+			syncWrapPinCounts();
+			return;
+		}
+		clearDeclaredHighlights( body );
+		if ( ! declaredPatternRules().length ) {
+			syncWrapPinCounts();
+			return;
+		}
+
+		const headings = Array.prototype.slice.call( body.querySelectorAll( 'h2' ) );
+		for ( let i = headings.length - 1; i >= 0; i-- ) {
+			const h2 = headings[ i ];
+			if (
+				h2.closest( '[data-drive-wrap], .forwp-drive-declared-wrap' ) ||
+				headingSkipsWrap( h2 )
+			) {
+				continue;
+			}
+			const rule = matchDeclaredRule( h2.textContent );
+			if ( ! rule ) {
+				continue;
+			}
+			highlightDeclaredSection( h2, rule );
+		}
+
+		body.querySelectorAll( '[data-drive-wrap]' ).forEach( ( section ) => {
+			const h2 = section.querySelector( 'h2' );
+			if ( ! h2 ) {
+				return;
+			}
+			const rule = matchDeclaredRule( h2.textContent );
+			if ( ! rule ) {
+				return;
+			}
+			section.classList.add( 'is-declared-match' );
+		} );
+		renderDetectedTags( body );
+		syncWrapPinCounts();
+	}
+
+	function pluginTagLabel( plugin ) {
+		if ( plugin === '4wp-faq' ) {
+			return '4WP FAQ';
+		}
+		if ( plugin === '4wp-seo-helper' ) {
+			return '4WP TechArticle';
+		}
+		return String( plugin || '' );
+	}
+
+	function enabledPluginTagGroups() {
+		const groups = {};
+		declaredPatternRules().forEach( ( rule ) => {
+			const cap = wrapCapById( rule.id );
+			const plugin = String( ( cap && cap.plugin ) || '' );
+			if ( ! plugin ) {
+				return;
+			}
+			if ( ! groups[ plugin ] ) {
+				groups[ plugin ] = {
+					plugin,
+					label: pluginTagLabel( plugin ),
+					ids: [],
+					blocks: [],
+					headings: [],
+				};
+			}
+			groups[ plugin ].ids.push( rule.id );
+			if ( rule.block ) {
+				groups[ plugin ].blocks.push( rule.block );
+			}
+			( rule.headings || [] ).forEach( ( heading ) => {
+				groups[ plugin ].headings.push( heading );
+			} );
+		} );
+		return Object.keys( groups ).map( ( key ) => groups[ key ] );
+	}
+
+	function pluginTagIsDetected( group, body, doc ) {
+		if ( group.plugin === '4wp-seo-helper' && doc && doc.map === 'tech-article' ) {
+			return true;
+		}
+		if ( ! body ) {
+			return false;
+		}
+		if (
+			group.ids.some( ( id ) =>
+				body.querySelector(
+					'.forwp-drive-declared-wrap[data-declared-id="' + id + '"]'
+				)
+			)
+		) {
+			return true;
+		}
+		if (
+			group.blocks.some( ( block ) =>
+				body.querySelector( '[data-drive-wrap="' + block + '"]' )
+			)
+		) {
+			return true;
+		}
+		return Array.prototype.some.call( body.querySelectorAll( 'h2' ), ( h2 ) => {
+			if ( headingSkipsWrap( h2 ) ) {
+				return false;
+			}
+			return ( group.headings || [] ).some(
+				( heading ) =>
+					normalizeHeadingText( heading ) === normalizeHeadingText( h2.textContent )
+			);
+		} );
+	}
+
+	function renderDetectedTags( body ) {
+		const bar = document.getElementById( 'forwp-drive-detected-tags' );
+		if ( ! bar ) {
+			return;
+		}
+		const groups = enabledPluginTagGroups();
+		if ( ! groups.length ) {
+			bar.hidden = true;
+			bar.innerHTML = '';
+			return;
+		}
+		bar.hidden = false;
+		bar.innerHTML = groups
+			.map( ( group ) => {
+				const on = pluginTagIsDetected( group, body, previewDoc );
+				return `<span class="forwp-drive-detected-tag${
+					on ? ' is-detected' : ''
+				}">${ escapeHtml( group.label ) }</span>`;
+			} )
+			.join( '' );
+	}
+
+	function syncWrapPinSelection() {
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		const list = document.getElementById( 'forwp-drive-wrap-pin-list' );
+		if ( body ) {
+			body.classList.toggle( 'is-wrapping', !! wrapSelectedId );
+			body.querySelectorAll( 'h2' ).forEach( ( h2 ) => {
+				h2.classList.toggle(
+					'is-wrap-target',
+					!! wrapSelectedId &&
+						! h2.classList.contains( 'forwp-drive-preview__blocks-note' )
+				);
+			} );
+		}
+		if ( ! list ) {
+			return;
+		}
+		list.querySelectorAll( '[data-wrap-id]' ).forEach( ( el ) => {
+			el.classList.toggle(
+				'is-selected',
+				!! wrapSelectedId && el.getAttribute( 'data-wrap-id' ) === wrapSelectedId
+			);
+		} );
+		syncWrapPinCounts();
+	}
+
+	function selectWrapForPin( id ) {
+		const next = String( id || '' ).trim();
+		if ( next && wrapSelectedId === next ) {
+			wrapSelectedId = '';
+		} else {
+			wrapSelectedId = next;
+			pinSelectedName = '';
+			const body = document.getElementById( 'forwp-drive-preview-post-content' );
+			if ( body ) {
+				body.classList.remove( 'is-pinning' );
+			}
+			const imageList = document.getElementById( 'forwp-drive-image-pin-list' );
+			if ( imageList ) {
+				imageList.querySelectorAll( '[data-image-name]' ).forEach( ( el ) => {
+					el.classList.remove( 'is-selected' );
+				} );
+			}
+		}
+		syncWrapPinSelection();
+	}
+
+	function setupWrapPinUi() {
+		const wrap = document.getElementById( 'forwp-drive-wrap-pin' );
+		const list = document.getElementById( 'forwp-drive-wrap-pin-list' );
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		if ( ! wrap || ! list || ! body ) {
+			return;
+		}
+
+		const caps = declaredPatternRules()
+			.map( ( rule ) => wrapCapById( rule.id ) )
+			.filter(
+				( cap ) => cap && ( cap.wrap === 'section' || cap.wrap === 'faq-qa' )
+			);
+		wrapSelectedId = '';
+		body.classList.remove( 'is-wrapping' );
+
+		if ( ! caps.length ) {
+			wrap.hidden = true;
+			list.innerHTML = '';
+			decorateWraps( body );
+			highlightDeclaredWraps( body );
+			attachPackageToolsToSelectedCard();
+			return;
+		}
+
+		wrap.hidden = false;
+		list.innerHTML = caps
+			.map( ( cap ) => {
+				const rule = declaredPatternRules().find( ( row ) => row.id === cap.id ) || {};
+				const label = rule.label || cap.label || cap.id;
+				return `<div class="forwp-drive-image-pin__row">
+				<button type="button" class="button forwp-drive-image-pin__file" data-wrap-id="${ escapeHtml(
+					cap.id
+				) }">
+					<span class="forwp-drive-image-pin__name">${ escapeHtml( label ) }</span>
+					<span class="forwp-drive-wrap-pin__used" hidden></span>
+				</button>
+			</div>`;
+			} )
+			.join( '' );
+
+		list.querySelectorAll( '[data-wrap-id]' ).forEach( ( btn ) => {
+			btn.addEventListener( 'click', ( event ) => {
+				event.preventDefault();
+				selectWrapForPin( btn.getAttribute( 'data-wrap-id' ) );
+			} );
+		} );
+
+		bindPreviewBodyActions( body );
+		decorateWraps( body );
+		highlightDeclaredWraps( body );
+		attachPackageToolsToSelectedCard();
+	}
+
 	function decorateImageMarkers( body ) {
 		if ( ! body ) {
 			return;
 		}
 		const strings = forwpDriveAdmin.strings || {};
 		const removeLabel = strings.removeImageMarker || 'Remove';
+		const labels = {
+			left: strings.imageAlignLeft || 'Left',
+			center: strings.imageAlignCenter || 'Center',
+			right: strings.imageAlignRight || 'Right',
+		};
 		body.querySelectorAll( 'p, h1, h2, h3, h4, h5, h6, li' ).forEach( ( node ) => {
 			if ( node.classList.contains( 'forwp-drive-preview__blocks-note' ) ) {
 				return;
 			}
-			if ( node.classList.contains( 'forwp-drive-image-marker' ) ) {
+			if ( node.querySelector( '.forwp-drive-image-marker__bar' ) ) {
 				return;
 			}
-			if ( ! isImageMarkerText( node.textContent ) ) {
+			const parsed = node.classList.contains( 'forwp-drive-image-marker' )
+				? parseImageMarker(
+						formatImageMarker(
+							node.getAttribute( 'data-image-file' ) || '',
+							node.getAttribute( 'data-image-align' ) || 'center'
+						)
+				  ) || parseImageMarker( node.textContent )
+				: parseImageMarker( node.textContent );
+			if ( ! parsed ) {
 				return;
 			}
-			node.classList.add( 'forwp-drive-image-marker' );
-			const button = document.createElement( 'button' );
-			button.type = 'button';
-			button.className =
-				'button-link-delete forwp-drive-image-marker__remove';
-			button.textContent = removeLabel;
-			node.appendChild( button );
+			node.className = 'forwp-drive-image-marker is-align-' + parsed.align;
+			node.setAttribute( 'data-image-file', parsed.file );
+			node.setAttribute( 'data-image-align', parsed.align );
+			node.innerHTML = '';
+			const bar = document.createElement( 'div' );
+			bar.className = 'forwp-drive-image-marker__bar';
+			bar.setAttribute( 'role', 'toolbar' );
+			bar.setAttribute(
+				'aria-label',
+				strings.imageAlignToolbar || 'Image alignment'
+			);
+			[ 'left', 'center', 'right' ].forEach( ( align ) => {
+				const btn = document.createElement( 'button' );
+				btn.type = 'button';
+				btn.className =
+					'forwp-drive-image-marker__align' +
+					( align === parsed.align ? ' is-on' : '' );
+				btn.setAttribute( 'data-image-align', align );
+				btn.setAttribute( 'aria-label', labels[ align ] );
+				btn.title = labels[ align ];
+				btn.textContent =
+					align === 'left' ? 'L' : align === 'right' ? 'R' : 'C';
+				bar.appendChild( btn );
+			} );
+			const remove = document.createElement( 'button' );
+			remove.type = 'button';
+			remove.className = 'forwp-drive-image-marker__remove';
+			remove.textContent = removeLabel;
+			bar.appendChild( remove );
+			const frame = document.createElement( 'div' );
+			frame.className = 'forwp-drive-image-marker__frame';
+			frame.setAttribute( 'aria-hidden', 'true' );
+			const name = document.createElement( 'span' );
+			name.className = 'forwp-drive-image-marker__name';
+			name.textContent = parsed.file;
+			node.appendChild( bar );
+			node.appendChild( frame );
+			node.appendChild( name );
 		} );
 	}
 
@@ -1107,6 +2003,32 @@
 		}
 		body.dataset.drivePinBound = '1';
 		body.addEventListener( 'click', ( event ) => {
+			const dismissBtn = event.target.closest( '.forwp-drive-wrap-dismiss' );
+			if ( dismissBtn && body.contains( dismissBtn ) ) {
+				event.preventDefault();
+				event.stopPropagation();
+				const section = dismissBtn.closest(
+					'[data-drive-wrap], .forwp-drive-declared-wrap'
+				);
+				if ( section && body.contains( section ) ) {
+					dismissWrapSection( section );
+				}
+				return;
+			}
+			const marker = event.target.closest( '.forwp-drive-image-marker' );
+			const alignBtn = event.target.closest(
+				'.forwp-drive-image-marker__align'
+			);
+			if ( alignBtn && marker && body.contains( marker ) ) {
+				event.preventDefault();
+				event.stopPropagation();
+				setImageMarkerAlign(
+					marker,
+					alignBtn.getAttribute( 'data-image-align' )
+				);
+				persistPreviewBody();
+				return;
+			}
 			const removeBtn = event.target.closest(
 				'.forwp-drive-image-marker__remove'
 			);
@@ -1117,6 +2039,15 @@
 				if ( marker ) {
 					marker.remove();
 					persistPreviewBody();
+				}
+				return;
+			}
+
+			if ( wrapSelectedId && body.classList.contains( 'is-wrapping' ) ) {
+				const start = resolveWrapStart( event.target, body );
+				if ( start ) {
+					event.preventDefault();
+					applyWrapPin( start );
 				}
 				return;
 			}
@@ -1139,26 +2070,136 @@
 				return;
 			}
 			event.preventDefault();
-			const align = getSelectedImageAlign();
-			const marker = `[image:${ pinSelectedName } ${ align }]`;
-			const p = document.createElement( 'p' );
-			p.textContent = marker;
-			node.insertAdjacentElement( 'afterend', p );
-			decorateImageMarkers( body );
-			persistPreviewBody();
+			insertImageMarkerAfterNode( body, node, pinSelectedName );
+		} );
+
+		body.addEventListener( 'dragover', ( event ) => {
+			if ( ! previewId ) {
+				return;
+			}
+			event.preventDefault();
+			if ( event.dataTransfer ) {
+				event.dataTransfer.dropEffect = 'copy';
+			}
+		} );
+
+		body.addEventListener( 'drop', ( event ) => {
+			if ( ! previewId ) {
+				return;
+			}
+			const name = fileNameFromImageDrop( event );
+			if ( ! name ) {
+				return;
+			}
+			event.preventDefault();
+			let node = event.target.closest( 'p, h1, h2, h3, h4, h5, h6, li' );
+			if (
+				! node ||
+				! body.contains( node ) ||
+				node.classList.contains( 'forwp-drive-preview__blocks-note' )
+			) {
+				node = body.lastElementChild;
+			}
+			if ( ! node ) {
+				return;
+			}
+			selectImageForPin( name );
+			insertImageMarkerAfterNode( body, node, name );
+		} );
+	}
+
+	function fileNameFromImageDrop( event ) {
+		if ( ! event || ! event.dataTransfer ) {
+			return '';
+		}
+		const typed = event.dataTransfer.getData(
+			'application/x-forwp-drive-image'
+		);
+		if ( typed ) {
+			return String( typed ).trim();
+		}
+		return String( event.dataTransfer.getData( 'text/plain' ) || '' ).trim();
+	}
+
+	function insertImageMarkerAfterNode( body, node, fileName ) {
+		const name = String( fileName || '' ).trim();
+		if ( ! body || ! node || ! name ) {
+			return;
+		}
+		const markerText = `[image:${ name } ${ getSelectedImageAlign() }]`;
+		const p = document.createElement( 'p' );
+		p.textContent = markerText;
+		node.insertAdjacentElement( 'afterend', p );
+		decorateImageMarkers( body );
+		persistPreviewBody();
+	}
+
+	function bindTreeImageDrag() {
+		const list = document.getElementById( 'forwp-drive-inbox-list' );
+		if ( ! list || list.dataset.driveImageDrag === '1' ) {
+			return;
+		}
+		list.dataset.driveImageDrag = '1';
+		list.addEventListener( 'dragstart', ( event ) => {
+			const row = event.target.closest(
+				'.forwp-drive-tree__row.is-file--image'
+			);
+			if ( ! row || ! event.dataTransfer ) {
+				return;
+			}
+			const name = String( row.getAttribute( 'data-name' ) || '' ).trim();
+			if ( ! name ) {
+				return;
+			}
+			event.dataTransfer.setData( 'application/x-forwp-drive-image', name );
+			event.dataTransfer.setData( 'text/plain', name );
+			event.dataTransfer.effectAllowed = 'copy';
+			selectImageForPin( name );
 		} );
 	}
 
 	function setupImagePinUi( doc ) {
-		// Image pin / alignment UI temporarily removed from Incoming.
-		pinSelectedName = '';
+		const wrap = document.getElementById( 'forwp-drive-image-pin' );
+		const list = document.getElementById( 'forwp-drive-image-pin-list' );
 		const body = document.getElementById( 'forwp-drive-preview-post-content' );
-		if ( body ) {
-			body.classList.remove( 'is-pinning' );
-			bindPreviewBodyActions( body );
-			decorateImageMarkers( body );
+		if ( ! wrap || ! list || ! body ) {
+			return;
 		}
-		void doc;
+
+		bindPreviewBodyActions( body );
+		decorateImageMarkers( body );
+
+		pinSelectedName = '';
+		body.classList.remove( 'is-pinning' );
+		wrap.hidden = true;
+		list.innerHTML = '';
+		attachPackageToolsToSelectedCard();
+	}
+
+	function beginPinFromTree( fileName ) {
+		const panel = document.getElementById( 'forwp-drive-preview' );
+		const articleOpen =
+			!! previewDoc &&
+			!! previewId &&
+			panel &&
+			! panel.classList.contains( 'is-media-preview' );
+		const status = document.getElementById( 'forwp-drive-inbox-status' );
+		const name = String( fileName || '' ).trim();
+		if ( articleOpen && name ) {
+			selectImageForPin( name );
+			setStatus(
+				status,
+				'Click a paragraph in the preview to place ' + name + '.',
+				'wait'
+			);
+			return true;
+		}
+		setStatus(
+			status,
+			'Open the article first, then click the image to place it in the body. Use the open-outside icon to view the file.',
+			'wait'
+		);
+		return false;
 	}
 
 	function resetImportTargetSelect( message ) {
@@ -1500,7 +2541,8 @@
 	function updateInboxStatusBar( connection, lastSync, documentCount, incomingId ) {
 		const srcStatus = getActiveSourceStatus();
 		const effectiveConnection =
-			( srcStatus && srcStatus.connection ) || connection || null;
+			( srcStatus && srcStatus.connection ) ||
+			( activeSourceSlug === 'google_drive' ? connection || null : null );
 		const effectiveLastSync =
 			( srcStatus && srcStatus.last_sync ) || lastSync || null;
 		const strings = forwpDriveAdmin.strings || {};
@@ -1825,6 +2867,41 @@
 
 		const folder = findFolder( root, folderPath );
 		return folder ? walk( folder ) : null;
+	}
+
+	function renderInboxNotConfigured() {
+		const list = document.getElementById( 'forwp-drive-inbox-list' );
+		if ( ! list ) {
+			return;
+		}
+
+		const strings = forwpDriveAdmin.strings || {};
+		const source = getSourceBySlug( activeSourceSlug );
+		const srcStatus = getActiveSourceStatus();
+		const connection = srcStatus && srcStatus.connection ? srcStatus.connection : null;
+		const settingsUrl =
+			( connection && connection.settings_url ) ||
+			'admin.php?page=forwp-drive-settings';
+		const title =
+			strings.sourceNotConfiguredTitle || 'This source is not configured.';
+		const hint =
+			( source && source.status ) ||
+			( connection && connection.message ) ||
+			strings.sourceNotConfiguredBody ||
+			'Connect it in Settings before files appear in Incoming.';
+		const openLabel = strings.openSettings || 'Open Settings';
+
+		list.innerHTML = `
+			<div class="forwp-drive-empty-panel forwp-drive-admin-chrome">
+				<p class="forwp-drive-empty-panel__lead"><strong>${ escapeHtml(
+					title
+				) }</strong></p>
+				<p>${ escapeHtml( hint ) }</p>
+				<p><a class="button button-primary" href="${ escapeHtml(
+					settingsUrl
+				) }">${ escapeHtml( openLabel ) }</a></p>
+			</div>`;
+		showWorkspacePlaceholder();
 	}
 
 	function renderInboxEmpty( lastSync ) {
@@ -2503,7 +3580,7 @@
 			const actionAttrs = isImage
 				? `data-action="preview-media" data-file-id="${ escapeHtml(
 						storageFileId
-				  ) }" data-name="${ escapeHtml( file.name || '' ) }"`
+				  ) }" data-name="${ escapeHtml( file.name || '' ) }" draggable="true"`
 				: selectable
 				? `data-action="select" data-id="${ escapeHtml(
 						String( fileDocId )
@@ -2534,6 +3611,11 @@
 			return;
 		}
 
+		if ( ! isActiveSourceReady() ) {
+			renderInboxNotConfigured();
+			return;
+		}
+
 		const browse = browseTreeForActiveSource();
 		const tree = buildInboxTree( browse, documents );
 		lastInboxTree = tree;
@@ -2555,6 +3637,7 @@
 			tree,
 			0
 		) }</div>`;
+		bindTreeImageDrag();
 
 		const stillThere =
 			keepId &&
@@ -2908,6 +3991,7 @@
 			setupSourceFileUi( data );
 			setupFeaturedImageUi( data );
 			setupImagePinUi( data );
+			setupWrapPinUi();
 			if ( requiresImportLanguage() ) {
 				resetImportTargetSelect();
 			}
@@ -2976,7 +4060,16 @@
 			return;
 		}
 		const html = previewBodyHtml( data );
-		body.innerHTML = html || escapeHtml( ( data && data.body ) || '' );
+		const fallback = ( data && data.body ) || '';
+		const scanError = data && data.scan_error ? String( data.scan_error ) : '';
+		if ( ! html && ! fallback && scanError ) {
+			body.innerHTML =
+				'<p class="forwp-drive-preview__meta">' +
+				escapeHtml( scanError ) +
+				'</p>';
+			return;
+		}
+		body.innerHTML = html || escapeHtml( fallback );
 		if ( html && html.includes( '<!-- wp:' ) ) {
 			body.insertAdjacentHTML(
 				'afterbegin',
@@ -3076,11 +4169,46 @@
 			btn.tabIndex = active ? 0 : -1;
 		} );
 		document.querySelectorAll( '.forwp-drive-tab-panel [role="tabpanel"]' ).forEach( ( panel ) => {
-			const show =
-				( tabId === 'sources' && panel.id === 'forwp-drive-panel-sources' ) ||
-				( tabId === 'documentation' && panel.id === 'forwp-drive-panel-documentation' );
-			panel.hidden = ! show;
+			const expected = 'forwp-drive-panel-' + tabId;
+			panel.hidden = panel.id !== expected;
 		} );
+	}
+
+	function initDriveTabs() {
+		document.querySelectorAll( '.forwp-drive-tab, [data-open-tab]' ).forEach( ( btn ) => {
+			btn.addEventListener( 'click', () => {
+				const tab = btn.getAttribute( 'data-tab' ) || btn.getAttribute( 'data-open-tab' );
+				if ( tab ) {
+					setActiveTab( tab );
+				}
+			} );
+		} );
+	}
+
+	function openSettingsTabFromUrl() {
+		if ( ! document.getElementById( 'forwp-drive-panel-documentation' ) ) {
+			return;
+		}
+		const params = new URLSearchParams( window.location.search );
+		const tab = params.get( 'tab' );
+		if ( tab === 'documentation' || tab === 'sources' ) {
+			setActiveTab( tab );
+		}
+		const hash = String( window.location.hash || '' );
+		if ( ! hash ) {
+			return;
+		}
+		const target = document.querySelector( hash );
+		if ( ! ( target instanceof HTMLElement ) ) {
+			return;
+		}
+		const details = target.closest( 'details' );
+		if ( details ) {
+			details.open = true;
+		}
+		window.setTimeout( () => {
+			target.scrollIntoView( { block: 'start' } );
+		}, 50 );
 	}
 
 	function showSourceOverview() {
@@ -3402,14 +4530,8 @@
 	}
 
 	function initSettingsChrome() {
-		document.querySelectorAll( '.forwp-drive-tab' ).forEach( ( btn ) => {
-			btn.addEventListener( 'click', () => {
-				const tab = btn.getAttribute( 'data-tab' );
-				if ( tab ) {
-					setActiveTab( tab );
-				}
-			} );
-		} );
+		initDriveTabs();
+		openSettingsTabFromUrl();
 
 		document.getElementById( 'forwp-drive-source-back' )?.addEventListener( 'click', showSourceOverview );
 
@@ -3690,6 +4812,68 @@
 		return { rules: rows };
 	}
 
+	function collectFamilyRulesFromDom() {
+		const rows = [];
+		document.querySelectorAll( '.forwp-drive-family-rule' ).forEach( ( li ) => {
+			const capId = li.getAttribute( 'data-cap-id' ) || '';
+			const postEl = li.querySelector( '.forwp-drive-family-rule__post-id' );
+			const enabledEl = li.querySelector( '.forwp-drive-family-rule__enabled' );
+			const headingsEl = li.querySelector( '.forwp-drive-family-rule__headings' );
+			const keepEl = li.querySelector( '.forwp-drive-family-rule__keep-heading' );
+			const labelEl = li.querySelector( 'strong' );
+			rows.push( {
+				post_id: postEl ? parseInt( postEl.value, 10 ) || 0 : 0,
+				preset_slug: capId,
+				template: capId,
+				origin: 'family',
+				label: labelEl ? labelEl.textContent.trim() : capId,
+				enabled: !! ( enabledEl && enabledEl.checked ),
+				section_headings: headingsEl ? headingsEl.value.trim() : '',
+				keep_section_heading: !! ( keepEl && keepEl.checked ),
+			} );
+		} );
+		return rows;
+	}
+
+	function applyFamilyRulesToDom( rules ) {
+		( rules || [] ).forEach( ( rule ) => {
+			const slug = rule.preset_slug || rule.template || '';
+			if ( ! slug ) {
+				return;
+			}
+			const li = document.querySelector(
+				'.forwp-drive-family-rule[data-cap-id="' + slug + '"]'
+			);
+			if ( ! li ) {
+				return;
+			}
+			const postEl = li.querySelector( '.forwp-drive-family-rule__post-id' );
+			if ( postEl && rule.post_id ) {
+				postEl.value = String( rule.post_id );
+			}
+			const enabledEl = li.querySelector( '.forwp-drive-family-rule__enabled' );
+			if ( enabledEl && ! enabledEl.disabled ) {
+				enabledEl.checked = !! rule.enabled;
+			}
+			const headingsEl = li.querySelector( '.forwp-drive-family-rule__headings' );
+			if ( headingsEl && typeof rule.section_headings === 'string' ) {
+				headingsEl.value = rule.section_headings;
+			}
+			const keepEl = li.querySelector( '.forwp-drive-family-rule__keep-heading' );
+			if ( keepEl ) {
+				keepEl.checked = !! rule.keep_section_heading;
+			}
+			const on = !!( enabledEl && enabledEl.checked );
+			li.classList.toggle( 'is-off', ! on );
+			if ( headingsEl ) {
+				headingsEl.disabled = ! on;
+			}
+			if ( keepEl ) {
+				keepEl.disabled = ! on;
+			}
+		} );
+	}
+
 	function applyPatternsPayload( data ) {
 		if ( ! data ) {
 			return;
@@ -3702,6 +4886,7 @@
 			settingsCache = { block_mapping: data };
 		}
 		renderBlockMappingRows();
+		applyFamilyRulesToDom( data.rules || [] );
 	}
 
 	function loadPatternsPage() {
@@ -3980,10 +5165,7 @@
 				return;
 			}
 			if ( target.getAttribute( 'data-action' ) === 'preview-media' ) {
-				openImagePreview(
-					target.getAttribute( 'data-file-id' ),
-					target.getAttribute( 'data-name' )
-				);
+				beginPinFromTree( target.getAttribute( 'data-name' ) );
 				return;
 			}
 			const id = target.getAttribute( 'data-id' );
@@ -3999,7 +5181,21 @@
 			return;
 		}
 
-		if ( target.closest( '#forwp-drive-image-pin' ) ) {
+		const tabTrigger = target.closest( '.forwp-drive-tab, [data-open-tab]' );
+		if ( tabTrigger instanceof HTMLAnchorElement && tabTrigger.getAttribute( 'href' ) ) {
+			return;
+		}
+		if ( tabTrigger instanceof HTMLElement ) {
+			const tab = tabTrigger.getAttribute( 'data-tab' ) || tabTrigger.getAttribute( 'data-open-tab' );
+			if ( tab && tabTrigger.closest( '.forwp-drive-tab-panel' ) ) {
+				setActiveTab( tab );
+			}
+		}
+
+		if (
+			target.closest( '#forwp-drive-image-pin' ) ||
+			target.closest( '#forwp-drive-wrap-pin' )
+		) {
 			return;
 		}
 
@@ -4021,10 +5217,7 @@
 			return;
 		}
 		if ( action === 'preview-media' && actionEl ) {
-			openImagePreview(
-				actionEl.getAttribute( 'data-file-id' ),
-				actionEl.getAttribute( 'data-name' )
-			);
+			beginPinFromTree( actionEl.getAttribute( 'data-name' ) );
 			return;
 		}
 		if ( action === 'source-tab' && actionEl ) {
@@ -4343,7 +5536,9 @@
 			const status =
 				document.getElementById( 'forwp-drive-patterns-status' ) ||
 				document.getElementById( 'forwp-drive-settings-status' );
-			const payload = collectBlockMappingFromDom();
+			const payload = document.querySelector( '.forwp-drive-family-rule' )
+				? { scope: 'family', rules: collectFamilyRulesFromDom() }
+				: collectBlockMappingFromDom();
 			api( 'patterns', {
 				method: 'POST',
 				body: JSON.stringify( payload ),
@@ -4433,6 +5628,16 @@
 
 	document.addEventListener( 'change', ( event ) => {
 		const target = event.target;
+		if ( target && target.classList && target.classList.contains( 'forwp-drive-family-rule__enabled' ) ) {
+			const row = target.closest( '.forwp-drive-family-rule' );
+			if ( row ) {
+				const on = !! target.checked;
+				row.classList.toggle( 'is-off', ! on );
+				row.querySelectorAll( '.forwp-drive-family-rule__headings, .forwp-drive-family-rule__keep-heading' ).forEach( ( el ) => {
+					el.disabled = ! on;
+				} );
+			}
+		}
 		if ( target && target.id === 'forwp-drive-import-post-type' ) {
 			const status = document.getElementById( 'forwp-drive-settings-status' );
 			api( 'settings', {
@@ -4462,9 +5667,11 @@
 		initSettingsChrome();
 		loadSettings();
 	} else if (
+		document.querySelector( '.forwp-drive-patterns-page' ) ||
 		document.getElementById( 'forwp-drive-block-mapping-rows' ) ||
 		document.getElementById( 'forwp-drive-patterns-preset-list' )
 	) {
+		initDriveTabs();
 		loadPatternsPage();
 	}
 } )();

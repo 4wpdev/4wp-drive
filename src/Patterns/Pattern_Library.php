@@ -9,6 +9,7 @@ namespace ForWP\Drive\Patterns;
 
 use ForWP\Drive\Blocks\Block_Mapping_Settings;
 use ForWP\Drive\Blocks\Block_Template_Registry;
+use ForWP\Drive\Blocks\Wrap_Capability_Registry;
 use WP_Error;
 use WP_Post;
 use WP_Query;
@@ -33,7 +34,7 @@ final class Pattern_Library {
 	 */
 	public static function ensure_editable_library() {
 		if ( self::is_customized() ) {
-			return true;
+			return self::sync_family_wrap_patterns();
 		}
 
 		$legacy = ( new Block_Mapping_Settings() )->get()['rules'];
@@ -63,7 +64,7 @@ final class Pattern_Library {
 
 		update_option( self::OPTION_CUSTOMIZED, true, false );
 
-		return true;
+		return self::sync_family_wrap_patterns();
 	}
 
 	/**
@@ -212,13 +213,62 @@ final class Pattern_Library {
 	}
 
 	/**
+	 * Enabled wrap patterns for Incoming preview (H2 match → highlight).
+	 *
+	 * @return array<int, array{id: string, label: string, block: string, headings: list<string>}>
+	 */
+	public static function preview_highlights(): array {
+		$rows = array();
+
+		foreach ( self::get_rules() as $rule ) {
+			if ( ! is_array( $rule ) || empty( $rule['enabled'] ) ) {
+				continue;
+			}
+
+			$slug = sanitize_key( (string) ( $rule['preset_slug'] ?? '' ) );
+			if ( '' === $slug ) {
+				$slug = sanitize_key( (string) ( $rule['template'] ?? '' ) );
+			}
+
+			$headings = Block_Mapping_Settings::heading_aliases( (string) ( $rule['section_headings'] ?? '' ) );
+			if ( '' === $slug || empty( $headings ) ) {
+				continue;
+			}
+
+			$cap   = Wrap_Capability_Registry::get( $slug );
+			$block = $cap ? (string) ( $cap['block'] ?? '' ) : '';
+			if ( '' === $block ) {
+				$template = Block_Template_Registry::get( $slug );
+				$block    = $template ? trim( (string) ( $template['block'] ?? '' ) ) : '';
+			}
+			if ( '' === $block ) {
+				continue;
+			}
+
+			$label = (string) ( $rule['label'] ?? '' );
+			if ( '' === $label && $cap ) {
+				$label = (string) ( $cap['label'] ?? $slug );
+			}
+
+			$rows[] = array(
+				'id'       => $slug,
+				'label'    => $label !== '' ? $label : $slug,
+				'block'    => $block,
+				'headings' => $headings,
+			);
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * Copy presets (+ legacy option rules) into CPT and flip the gate.
 	 *
 	 * @return true|WP_Error
 	 */
 	public static function begin_customize() {
 		if ( self::is_customized() ) {
-			return true;
+			return self::sync_family_wrap_patterns();
 		}
 
 		$rules = Pattern_Preset_Registry::as_rules( self::get_preset_enabled_overrides() );
@@ -262,6 +312,133 @@ final class Pattern_Library {
 		}
 
 		update_option( self::OPTION_CUSTOMIZED, true, false );
+
+		return self::sync_family_wrap_patterns();
+	}
+
+	/**
+	 * Import family wrap capabilities as editable Patterns rows (once per capability id).
+	 *
+	 * Heading aliases stay on the CPT — not in PHP.
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function sync_family_wrap_patterns() {
+		if ( ! self::is_customized() ) {
+			return true;
+		}
+
+		$existing_slugs = array();
+		foreach ( self::rules_from_cpt() as $rule ) {
+			$slug = sanitize_key( (string) ( $rule['preset_slug'] ?? '' ) );
+			if ( '' === $slug ) {
+				$slug = sanitize_key( (string) ( $rule['template'] ?? '' ) );
+			}
+			if ( '' !== $slug ) {
+				$existing_slugs[ $slug ] = true;
+			}
+		}
+
+		foreach ( Wrap_Capability_Registry::all() as $cap ) {
+			if ( Wrap_Capability_Registry::ORIGIN_FAMILY !== ( $cap['origin'] ?? '' ) ) {
+				continue;
+			}
+
+			$id = sanitize_key( (string) ( $cap['id'] ?? '' ) );
+			if ( '' === $id || isset( $existing_slugs[ $id ] ) ) {
+				continue;
+			}
+
+			$template = Block_Template_Registry::get( $id );
+			if ( null === $template ) {
+				continue;
+			}
+
+			$result = self::insert_pattern_from_rule(
+				array(
+					'id'                   => $id,
+					'enabled'              => false,
+					'template'             => $id,
+					'section_headings'     => (string) ( $cap['heading_seeds'] ?? '' ),
+					'keep_section_heading' => true,
+					'origin'               => 'family',
+					'preset_slug'          => $id,
+					'label'                => (string) ( $cap['label'] ?? $id ),
+				)
+			);
+			if ( is_wp_error( $result ) ) {
+				return $result;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Update family wrap patterns only — never trash custom or preset CPT rows.
+	 *
+	 * @param array<int, array<string, mixed>> $rules Family rows from Patterns Integrations.
+	 * @return true|WP_Error
+	 */
+	public static function save_family_rules( array $rules ) {
+		$ready = self::ensure_editable_library();
+		if ( is_wp_error( $ready ) ) {
+			return $ready;
+		}
+
+		$by_slug = array();
+		foreach ( self::rules_from_cpt() as $existing ) {
+			$slug = sanitize_key( (string) ( $existing['preset_slug'] ?? '' ) );
+			if ( '' === $slug ) {
+				$slug = sanitize_key( (string) ( $existing['template'] ?? '' ) );
+			}
+			if ( '' !== $slug && ! isset( $by_slug[ $slug ] ) ) {
+				$by_slug[ $slug ] = $existing;
+			}
+		}
+
+		foreach ( $rules as $rule ) {
+			if ( ! is_array( $rule ) ) {
+				continue;
+			}
+
+			$slug = sanitize_key( (string) ( $rule['preset_slug'] ?? '' ) );
+			if ( '' === $slug ) {
+				$slug = sanitize_key( (string) ( $rule['template'] ?? '' ) );
+			}
+			if ( '' === $slug ) {
+				continue;
+			}
+
+			$existing = $by_slug[ $slug ] ?? null;
+			$post_id  = isset( $rule['post_id'] ) ? (int) $rule['post_id'] : 0;
+			if ( $post_id < 1 && is_array( $existing ) ) {
+				$post_id = (int) ( $existing['post_id'] ?? 0 );
+			}
+
+			$payload = array(
+				'enabled'              => ! empty( $rule['enabled'] ),
+				'template'             => $slug,
+				'section_headings'     => (string) ( $rule['section_headings'] ?? ( is_array( $existing ) ? ( $existing['section_headings'] ?? '' ) : '' ) ),
+				'keep_section_heading' => ! empty( $rule['keep_section_heading'] ),
+				'origin'               => 'family',
+				'preset_slug'          => $slug,
+				'label'                => (string) ( $rule['label'] ?? ( is_array( $existing ) ? ( $existing['label'] ?? $slug ) : $slug ) ),
+			);
+
+			if ( $post_id > 0 ) {
+				$updated = self::update_pattern_post( $post_id, $payload );
+				if ( is_wp_error( $updated ) ) {
+					return $updated;
+				}
+				continue;
+			}
+
+			$created = self::insert_pattern_from_rule( $payload );
+			if ( is_wp_error( $created ) ) {
+				return $created;
+			}
+		}
 
 		return true;
 	}
@@ -445,7 +622,7 @@ final class Pattern_Library {
 	 */
 	private static function write_pattern_meta( int $post_id, array $rule ): void {
 		$origin = sanitize_key( (string) ( $rule['origin'] ?? 'custom' ) );
-		if ( ! in_array( $origin, array( 'preset', 'custom' ), true ) ) {
+		if ( ! in_array( $origin, array( 'preset', 'custom', 'family' ), true ) ) {
 			$origin = 'custom';
 		}
 

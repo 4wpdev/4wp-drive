@@ -403,7 +403,7 @@ $heading_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" widt
 								</div>
 							</details>
 
-							<details class="forwp-drive-accordion__item" open>
+							<details class="forwp-drive-accordion__item" id="forwp-drive-document-template" open>
 								<summary class="forwp-drive-accordion__summary">
 									<span class="forwp-drive-accordion__title"><?php esc_html_e( 'Document template & import mapping', '4wp-drive' ); ?></span>
 									<span class="forwp-drive-accordion__hint"><?php esc_html_e( 'Front-matter → WordPress fields', '4wp-drive' ); ?></span>

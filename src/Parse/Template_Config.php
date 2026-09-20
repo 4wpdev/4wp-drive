@@ -28,7 +28,7 @@ final class Template_Config {
 	 * @return string[]
 	 */
 	public static function core_field_keys(): array {
-		return array( 'title', 'slug', 'date', 'author' );
+		return array( 'title', 'slug', 'date', 'author', 'map' );
 	}
 
 	/**
@@ -65,6 +65,13 @@ final class Template_Config {
 				'key'      => 'author',
 				'type'     => 'core',
 				'field'    => 'author',
+				'required' => false,
+			),
+			array(
+				'label'    => 'Map',
+				'key'      => 'map',
+				'type'     => 'core',
+				'field'    => 'map',
 				'required' => false,
 			),
 		);
@@ -315,6 +322,8 @@ final class Template_Config {
 				$user    = wp_get_current_user();
 				$example = ( $user && $user->exists() ) ? $user->display_name : 'Jane Editor';
 				$lines[] = $label . ': ' . $example;
+			} elseif ( 'core' === ( $field['type'] ?? '' ) && 'map' === ( $field['field'] ?? '' ) ) {
+				$lines[] = $label . ': article';
 			} elseif ( 'taxonomy' === ( $field['type'] ?? '' ) ) {
 				$example = ! empty( $field['multi'] ) ? 'one, two' : 'Example';
 				$lines[] = $label . ': ' . $example;
@@ -564,6 +573,13 @@ final class Template_Config {
 				'key'      => 'author',
 				'type'     => 'core',
 				'field'    => 'author',
+				'required' => false,
+			),
+			'map'    => array(
+				'label'    => 'Map',
+				'key'      => 'map',
+				'type'     => 'core',
+				'field'    => 'map',
 				'required' => false,
 			),
 		);

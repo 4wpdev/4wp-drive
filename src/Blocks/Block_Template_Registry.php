@@ -38,7 +38,7 @@ final class Block_Template_Registry {
 					'requires_plugins' => array(),
 					'available'        => true,
 					'default_enabled'  => true,
-					'doc_hint'         => __( 'Put images in the article subfolder. In the Google Doc write [image:exact-filename.jpeg]. AI prompts like [IMAGE 2 — …] are ignored.', '4wp-drive' ),
+					'doc_hint'         => __( 'Same article folder. Google Doc: [image:exact-filename.jpeg] (optional left/center/right). Markdown: ![alt](file.png) or the same marker. AI prompts like [IMAGE 2 — …] are ignored. Featured image is Incoming, not this marker.', '4wp-drive' ),
 				),
 				self::TEMPLATE_4WP_FAQ        => array(
 					'label'            => __( '4WP FAQ', '4wp-drive' ),
@@ -127,6 +127,10 @@ final class Block_Template_Registry {
 			}
 
 			if ( '4wp-faq/4wp-faq.php' === $plugin && defined( 'FORWP_FAQ_VERSION' ) ) {
+				continue;
+			}
+
+			if ( '4wp-seo-helper/4wp-seo-helper.php' === $plugin && defined( 'FORWP_SEO_HELPER_VERSION' ) ) {
 				continue;
 			}
 

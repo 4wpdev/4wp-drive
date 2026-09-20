@@ -9,6 +9,7 @@ namespace ForWP\Drive\Rest;
 
 use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Auth\Google_OAuth;
+use ForWP\Drive\Blocks\Wrap_Capability_Registry;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Featured_Image_Chooser;
@@ -737,6 +738,7 @@ final class Rest_Documents {
 			'slug'                  => (string) ( $meta['slug'] ?? '' ),
 			'date'                  => (string) ( $meta['date'] ?? '' ),
 			'author'                => (string) ( $meta['author'] ?? '' ),
+			'map'                   => Wrap_Capability_Registry::normalize_map( (string) ( $meta['map'] ?? '' ) ),
 			'category'              => (string) ( $meta['category'] ?? '' ),
 			'tags'                  => $meta['tags'] ?? array(),
 			'has_image'             => '' !== $image_file_id,

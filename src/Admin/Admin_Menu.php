@@ -7,12 +7,13 @@
 
 namespace ForWP\Drive\Admin;
 
+use ForWP\Drive\Blocks\Wrap_Capability_Registry;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Database\Import_History_Repository;
 use ForWP\Drive\Documents\Document_Status;
-use ForWP\Drive\Import\Restore_To_Incoming;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Parse\Template_Config;
+use ForWP\Drive\Patterns\Pattern_Library;
 use ForWP\Drive\Source_Registry;
 
 defined( 'ABSPATH' ) || exit;
@@ -45,7 +46,6 @@ final class Admin_Menu {
 	public function boot(): void {
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-		add_action( 'admin_init', array( $this, 'handle_analytics_restore' ) );
 	}
 
 	/**
@@ -191,6 +191,19 @@ final class Admin_Menu {
 				'activeSource' => 'google_drive',
 				'importPostType' => ( new Template_Config() )->get_import_post_type(),
 				'postTypes'      => Template_Config::get_importable_post_types(),
+				'wraps'          => array_values(
+					array_filter(
+						Wrap_Capability_Registry::all(),
+						static function ( array $cap ): bool {
+							return in_array(
+								(string) ( $cap['wrap'] ?? '' ),
+								array( Wrap_Capability_Registry::WRAP_SECTION, Wrap_Capability_Registry::WRAP_FAQ_QA ),
+								true
+							);
+						}
+					)
+				),
+				'patternHighlights' => Pattern_Library::preview_highlights(),
 				'strings'      => array(
 					'importConfirm'           => __( 'Import this document as a draft?', '4wp-drive' ),
 					'updateConfirm'           => __( 'Update the selected post with this document content?', '4wp-drive' ),
@@ -211,6 +224,12 @@ final class Admin_Menu {
 					'destArticle'             => __( 'Article', '4wp-drive' ),
 					'featuredImageSuggested'  => __( 'Suggested', '4wp-drive' ),
 					'removeImageMarker'       => __( 'Remove', '4wp-drive' ),
+					'imageAlignLeft'          => __( 'Left', '4wp-drive' ),
+					'imageAlignCenter'        => __( 'Center', '4wp-drive' ),
+					'imageAlignRight'         => __( 'Right', '4wp-drive' ),
+					'wrapPinLabel'            => __( 'Wrap section', '4wp-drive' ),
+					'wrapPinHint'             => __( 'Select a wrap, then click the heading or any paragraph in that section. × removes the wrap.', '4wp-drive' ),
+					'unwrapSection'           => __( 'Remove wrap', '4wp-drive' ),
 					'previewAndImport'        => __( 'Preview & import', '4wp-drive' ),
 					'importAsDraft'           => __( 'Import as draft', '4wp-drive' ),
 					'queueImport'             => __( 'Import', '4wp-drive' ),
@@ -237,6 +256,8 @@ final class Admin_Menu {
 					'packageImagesMany'       => __( '%d images', '4wp-drive' ),
 					'packageMore'             => __( '+%d more', '4wp-drive' ),
 					'openSettings'            => __( 'Open Settings', '4wp-drive' ),
+					'sourceNotConfiguredTitle' => __( 'This source is not configured.', '4wp-drive' ),
+					'sourceNotConfiguredBody'  => __( 'Connect it in Settings before files appear in Incoming.', '4wp-drive' ),
 					'connectionProblemTitle'  => __( 'Google Drive connection problem', '4wp-drive' ),
 					'inboxStaleNote'          => __( 'The inbox below may be outdated until Drive access is restored and you sync again.', '4wp-drive' ),
 					'sourceSoon'              => __( 'This connector is on the roadmap. Use Google Drive or GitHub Markdown, or check Settings → Storage sources.', '4wp-drive' ),
@@ -247,34 +268,6 @@ final class Admin_Menu {
 				),
 			)
 		);
-	}
-
-	/**
-	 * Restore a published package back to incoming.
-	 */
-	public function handle_analytics_restore(): void {
-		if ( ! isset( $_POST['forwp_drive_restore_history'] ) ) {
-			return;
-		}
-
-		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'You do not have permission to restore packages.', '4wp-drive' ) );
-		}
-
-		check_admin_referer( 'forwp_drive_restore_history' );
-
-		$id     = isset( $_POST['history_id'] ) ? (int) $_POST['history_id'] : 0;
-		$result = ( new Restore_To_Incoming() )->restore( $id );
-		$args   = array( 'page' => 'forwp-drive-analytics' );
-
-		if ( is_wp_error( $result ) ) {
-			$args['restore_error'] = $result->get_error_message();
-		} else {
-			$args['restored'] = '1';
-		}
-
-		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
-		exit;
 	}
 
 	/**
@@ -289,6 +282,7 @@ final class Admin_Menu {
 	 */
 	public function render_analytics(): void {
 		$repo    = new Import_History_Repository();
+		$repo->backfill_from_documents();
 		$page    = isset( $_GET['paged'] ) ? max( 1, (int) $_GET['paged'] ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$per     = 40;
 		$total   = $repo->count();
@@ -296,9 +290,6 @@ final class Admin_Menu {
 		$page    = min( $page, $pages );
 		$offset  = ( $page - 1 ) * $per;
 		$history = $repo->list( $per, $offset );
-
-		$restored      = isset( $_GET['restored'] ) && '1' === $_GET['restored']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$restore_error = isset( $_GET['restore_error'] ) ? sanitize_text_field( wp_unslash( $_GET['restore_error'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 
 		require FORWP_DRIVE_PATH . 'views/analytics-page.php';
 	}

@@ -9,6 +9,7 @@ namespace ForWP\Drive\Blocks;
 
 use ForWP\Drive\Blocks\Recipes\Core_Image_Recipe;
 use ForWP\Drive\Blocks\Recipes\Faq_Accordion_Recipe;
+use ForWP\Drive\Blocks\Recipes\Section_Wrap_Recipe;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -31,6 +32,7 @@ final class Block_Recipe_Registry {
 			array(
 				'core-image'    => Core_Image_Recipe::class,
 				'faq-accordion' => Faq_Accordion_Recipe::class,
+				'section-wrap'  => Section_Wrap_Recipe::class,
 			)
 		);
 

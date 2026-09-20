@@ -63,4 +63,15 @@ final class Html_Body_Parser {
 
 		return $nodes;
 	}
+
+	/**
+	 * Author dismissed auto-wrap for this heading in Incoming preview.
+	 *
+	 * @param array{tag?: string, html?: string} $node Parsed node.
+	 */
+	public static function heading_skips_wrap( array $node ): bool {
+		$html = (string) ( $node['html'] ?? '' );
+
+		return false !== stripos( $html, 'forwp-drive-skip-wrap' );
+	}
 }
