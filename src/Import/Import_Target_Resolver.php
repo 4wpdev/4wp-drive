@@ -63,10 +63,29 @@ final class Import_Target_Resolver {
 			}
 		}
 
+		$limit = max( 1, min( 50, $limit ) );
+		$search = trim( $search );
+
+		if ( '' !== $search ) {
+			$ids     = self::search_post_ids( $post_type, $search, $lang, $limit );
+			$targets = array();
+			foreach ( $ids as $id ) {
+				$post = get_post( $id );
+				if ( $post instanceof WP_Post ) {
+					$targets[] = self::serialize_post( $post );
+				}
+			}
+
+			return array(
+				'targets'      => $targets,
+				'suggested_id' => null,
+			);
+		}
+
 		$query_args = array(
 			'post_type'              => $post_type,
 			'post_status'            => self::importable_statuses(),
-			'posts_per_page'         => max( 1, min( 50, $limit ) ),
+			'posts_per_page'         => $limit,
 			'orderby'                => 'modified',
 			'order'                  => 'DESC',
 			'ignore_sticky_posts'    => true,
@@ -74,10 +93,6 @@ final class Import_Target_Resolver {
 			'update_post_meta_cache' => false,
 			'update_post_term_cache' => false,
 		);
-
-		if ( '' !== trim( $search ) ) {
-			$query_args['s'] = sanitize_text_field( $search );
-		}
 
 		$query_args = self::apply_language_to_query( $query_args, $lang );
 
@@ -167,6 +182,62 @@ final class Import_Target_Resolver {
 		}
 
 		return $post_id;
+	}
+
+	/**
+	 * Search importable posts by title, slug, or ID.
+	 *
+	 * @return list<int>
+	 */
+	private static function search_post_ids( string $post_type, string $search, string $lang, int $limit ): array {
+		global $wpdb;
+
+		$search = sanitize_text_field( $search );
+		if ( '' === $search ) {
+			return array();
+		}
+
+		$statuses = self::importable_statuses();
+		$in       = implode(
+			',',
+			array_map(
+				static function ( string $status ) use ( $wpdb ): string {
+					return $wpdb->prepare( '%s', $status );
+				},
+				$statuses
+			)
+		);
+
+		$title_like = '%' . $wpdb->esc_like( $search ) . '%';
+		$slug_like  = '%' . $wpdb->esc_like( sanitize_title( $search ) ) . '%';
+		$clauses    = 'post_title LIKE %s OR post_name LIKE %s';
+		$params     = array( $post_type, $title_like, $slug_like );
+
+		if ( ctype_digit( $search ) ) {
+			$clauses .= ' OR ID = %d';
+			$params[] = (int) $search;
+		}
+
+		$params[] = $limit;
+		$sql      = "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status IN ({$in}) AND ({$clauses}) ORDER BY post_modified DESC LIMIT %d";
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared
+		$ids = $wpdb->get_col( $wpdb->prepare( $sql, $params ) );
+		$ids = array_values( array_filter( array_map( 'intval', is_array( $ids ) ? $ids : array() ) ) );
+
+		if ( '' === $lang ) {
+			return $ids;
+		}
+
+		$filtered = array();
+		foreach ( $ids as $id ) {
+			$post = get_post( $id );
+			if ( $post instanceof WP_Post && self::post_matches_language( $post, $lang ) ) {
+				$filtered[] = $id;
+			}
+		}
+
+		return $filtered;
 	}
 
 	/**
@@ -266,7 +337,7 @@ final class Import_Target_Resolver {
 	 * REST payload for one import target post.
 	 *
 	 * @param WP_Post $post Post object.
-	 * @return array{id: int, title: string, slug: string, post_type: string, post_type_label: string, status: string, edit_url: string, modified: string}
+	 * @return array{id: int, title: string, slug: string, post_type: string, post_type_label: string, status: string, edit_url: string, view_url: string, modified: string}
 	 */
 	private static function serialize_post( WP_Post $post ): array {
 		$provider  = Language_Provider_Registry::get_active();
@@ -294,8 +365,24 @@ final class Import_Target_Resolver {
 			'language'        => $lang,
 			'language_name'   => (string) $lang_name,
 			'edit_url'        => (string) get_edit_post_link( $post, 'raw' ),
+			'view_url'        => self::view_url_for_post( $post ),
 			'modified'        => (string) $post->post_modified,
 		);
+	}
+
+	/**
+	 * Frontend URL for confirming the target before overwrite (permalink or preview).
+	 */
+	private static function view_url_for_post( WP_Post $post ): string {
+		if ( 'publish' === $post->post_status ) {
+			$url = get_permalink( $post );
+			if ( is_string( $url ) && '' !== $url ) {
+				return $url;
+			}
+		}
+
+		$preview = get_preview_post_link( $post );
+		return is_string( $preview ) ? $preview : '';
 	}
 
 	/**

@@ -7,7 +7,9 @@
 
 namespace ForWP\Drive\Blocks\Recipes;
 
+use ForWP\Drive\Blocks\Block_Markup_Builder;
 use ForWP\Drive\Blocks\Block_Recipe_Interface;
+use ForWP\Drive\Blocks\Gutenberg_Content;
 use ForWP\Drive\Blocks\Html_Body_Parser;
 
 defined( 'ABSPATH' ) || exit;
@@ -32,9 +34,12 @@ final class Section_Wrap_Recipe implements Block_Recipe_Interface {
 			return $body_html;
 		}
 
+		$held      = array();
+		$body_html = $this->hold_other_wraps( $body_html, $held, $block );
+
 		$nodes = Html_Body_Parser::nodes( $body_html );
 		if ( empty( $nodes ) ) {
-			return $body_html;
+			return $this->restore_other_wraps( $body_html, $held );
 		}
 
 		$output = array();
@@ -66,10 +71,71 @@ final class Section_Wrap_Recipe implements Block_Recipe_Interface {
 		}
 
 		if ( ! $did ) {
-			return $body_html;
+			return $this->restore_other_wraps( $body_html, $held );
 		}
 
-		return implode( "\n\n", $output );
+		return $this->restore_other_wraps( implode( "\n\n", $output ), $held );
+	}
+
+	/**
+	 * @param array<string, string> $held Placeholder map.
+	 */
+	private function hold_other_wraps( string $html, array &$held, string $current_block ): string {
+		$names = array(
+			'forwp/faq',
+			'forwp/diagram',
+			'forwp-seo/techarticle-goal',
+			'forwp-seo/techarticle-context',
+			'forwp-seo/techarticle-issues',
+			'forwp-seo/techarticle-steps',
+		);
+
+		foreach ( $names as $name ) {
+			if ( $name === $current_block ) {
+				continue;
+			}
+			$quoted = preg_quote( $name, '/' );
+			// Self-closing (diagram) — DOM drops HTML comments.
+			$html = (string) preg_replace_callback(
+				'/<!--\s+wp:' . $quoted . '\b[\s\S]*?\/-->/u',
+				static function ( array $matches ) use ( &$held ): string {
+					$key          = 'FORWPDRIVESECHOLD' . count( $held ) . 'Z';
+					$held[ $key ] = $matches[0];
+
+					return '<p data-forwp-drive-hold="1">' . $key . '</p>';
+				},
+				$html
+			);
+			$html   = (string) preg_replace_callback(
+				'/<!--\s+wp:' . $quoted . '(?:\s+\{[\s\S]*?\})?\s+-->[\s\S]*?<!--\s+\/wp:' . $quoted . '\s+-->/u',
+				static function ( array $matches ) use ( &$held ): string {
+					$key          = 'FORWPDRIVESECHOLD' . count( $held ) . 'Z';
+					$held[ $key ] = $matches[0];
+
+					return '<p data-forwp-drive-hold="1">' . $key . '</p>';
+				},
+				$html
+			);
+		}
+
+		return $html;
+	}
+
+	/**
+	 * @param array<string, string> $held Placeholder map.
+	 */
+	private function restore_other_wraps( string $html, array $held ): string {
+		if ( empty( $held ) ) {
+			return $html;
+		}
+
+		foreach ( $held as $key => $original ) {
+			$html = str_replace( '<p data-forwp-drive-hold="1">' . $key . '</p>', $original, $html );
+			$html = str_replace( '<p>' . $key . '</p>', $original, $html );
+			$html = str_replace( $key, $original, $html );
+		}
+
+		return $html;
 	}
 
 	/**
@@ -104,14 +170,16 @@ final class Section_Wrap_Recipe implements Block_Recipe_Interface {
 	}
 
 	private function wrap_block( string $block, string $inner ): string {
-		$class = str_replace( '/', '-', $block );
 		$inner = trim( $inner );
+		$blocks = Gutenberg_Content::from_html( $inner );
+		if ( '' === $blocks ) {
+			$blocks = ( new Block_Markup_Builder() )->html_to_inner_blocks_markup( $inner );
+		}
 
 		return sprintf(
-			"<!-- wp:%1\$s -->\n<section class=\"%2\$s\">\n%3\$s\n</section>\n<!-- /wp:%1\$s -->",
+			"<!-- wp:%1\$s -->\n%2\$s\n<!-- /wp:%1\$s -->",
 			$block,
-			esc_attr( $class ),
-			$inner
+			$blocks
 		);
 	}
 }

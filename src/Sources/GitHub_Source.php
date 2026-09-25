@@ -306,6 +306,25 @@ final class GitHub_Source implements Storage_Source_Interface {
 	}
 
 	/**
+	 * Rescan one package folder after a sibling was imported (remaining .md files).
+	 *
+	 * @return array<int, array<string, mixed>> Scan items still present under the path.
+	 */
+	public function scan_package_path( string $package_path ): array {
+		$package_path = trim( str_replace( '\\', '/', $package_path ), '/' );
+		if ( '' === $package_path || ! $this->is_ready() ) {
+			return array();
+		}
+
+		$client = new GitHub_Client();
+		$parser = new Template_Parser();
+		$name   = basename( $package_path );
+		$found  = $this->scan_dir_for_packages( $client, $parser, $package_path, $name, 0 );
+
+		return is_array( $found ) ? $found : array();
+	}
+
+	/**
 	 * Move the imported article; if it was alone in its package folder, move the whole folder.
 	 *
 	 * @param array<string, mixed> $metadata Scan metadata.

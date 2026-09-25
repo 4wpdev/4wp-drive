@@ -140,7 +140,7 @@ defined( 'ABSPATH' ) || exit;
 				<div id="forwp-drive-preview-body" class="forwp-drive-preview-body">
 					<main class="wp-block-group single-post-main forwp-drive-preview-single">
 						<div class="wp-block-group alignfull single-post-entry-content">
-							<div id="forwp-drive-preview-post-content" class="wp-block-post-content entry-content"></div>
+							<div id="forwp-drive-preview-post-content" class="forwp-drive-preview-content entry-content"></div>
 						</div>
 					</main>
 				</div>
@@ -151,7 +151,7 @@ defined( 'ABSPATH' ) || exit;
 					</p>
 					<div class="forwp-drive-import-options__row">
 						<div id="forwp-drive-import-post-type-wrap" class="forwp-drive-import-post-type-wrap">
-							<label class="forwp-drive-import-post-type-wrap__label" for="forwp-drive-inbox-import-post-type">
+							<label class="forwp-drive-import-options__field-label" for="forwp-drive-inbox-import-post-type">
 								<?php esc_html_e( 'Post type', '4wp-drive' ); ?>
 							</label>
 							<select
@@ -160,7 +160,11 @@ defined( 'ABSPATH' ) || exit;
 								title="<?php esc_attr_e( 'Choose where this document goes: Post, Page, Hook, or another type registered on this site.', '4wp-drive' ); ?>"
 							></select>
 						</div>
-						<div class="forwp-drive-import-options__choices" role="radiogroup" aria-labelledby="forwp-drive-import-options-label">
+						<div class="forwp-drive-import-options__choices-wrap">
+							<p class="forwp-drive-import-options__field-label" id="forwp-drive-import-mode-label">
+								<?php esc_html_e( 'Action', '4wp-drive' ); ?>
+							</p>
+							<div class="forwp-drive-import-options__choices" role="radiogroup" aria-labelledby="forwp-drive-import-mode-label">
 							<label class="forwp-drive-import-options__choice" title="<?php esc_attr_e( 'Adds a new post from this document.', '4wp-drive' ); ?>">
 								<input type="radio" name="forwp-drive-import-mode" value="create" checked />
 								<span class="forwp-drive-import-options__choice-text">
@@ -173,17 +177,43 @@ defined( 'ABSPATH' ) || exit;
 									<span class="forwp-drive-import-options__choice-title"><?php esc_html_e( 'Update existing post', '4wp-drive' ); ?></span>
 								</span>
 							</label>
+							</div>
 						</div>
 					</div>
 					<div id="forwp-drive-import-target-wrap" class="forwp-drive-import-target-wrap" hidden>
-						<label class="forwp-drive-import-target-wrap__label" for="forwp-drive-import-target">
+						<label class="forwp-drive-import-target-wrap__label" for="forwp-drive-import-target-search">
 							<?php esc_html_e( 'Target post', '4wp-drive' ); ?>
 							<span class="forwp-drive-field-required" aria-hidden="true">*</span>
 						</label>
-						<select id="forwp-drive-import-target" class="forwp-drive-import-target" aria-describedby="forwp-drive-import-target-error forwp-drive-import-target-hint"></select>
+						<input
+							type="search"
+							id="forwp-drive-import-target-search"
+							class="forwp-drive-import-target-search"
+							placeholder="<?php esc_attr_e( 'Search by title, slug, or ID…', '4wp-drive' ); ?>"
+							autocomplete="off"
+						/>
+						<label class="screen-reader-text" for="forwp-drive-import-target"><?php esc_html_e( 'Matching posts', '4wp-drive' ); ?></label>
+						<select id="forwp-drive-import-target" class="forwp-drive-import-target" aria-describedby="forwp-drive-import-target-error forwp-drive-import-target-hint forwp-drive-import-target-actions"></select>
+						<div id="forwp-drive-import-target-actions" class="forwp-drive-import-target-actions" hidden>
+							<a
+								id="forwp-drive-import-target-view"
+								class="button button-secondary"
+								href="#"
+								target="_blank"
+								rel="noopener noreferrer"
+							><?php esc_html_e( 'View selected post', '4wp-drive' ); ?></a>
+							<a
+								id="forwp-drive-import-target-edit"
+								class="button-link"
+								href="#"
+								target="_blank"
+								rel="noopener noreferrer"
+							><?php esc_html_e( 'Edit in admin', '4wp-drive' ); ?></a>
+							<span id="forwp-drive-import-target-meta" class="forwp-drive-import-target-meta"></span>
+						</div>
 						<p id="forwp-drive-import-target-error" class="forwp-drive-field-error" hidden></p>
 						<p id="forwp-drive-import-target-hint" class="description forwp-drive-import-target-wrap__hint">
-							<?php esc_html_e( 'Each option: post type · slug · title. Best match by slug (then title) is selected first. Only posts in the selected language are listed.', '4wp-drive' ); ?>
+							<?php esc_html_e( 'Search the full site, then pick a match. Open View selected post before importing — similar titles are easy to mix up. Empty search shows recent posts. Only posts in the selected language are listed.', '4wp-drive' ); ?>
 						</p>
 					</div>
 					<div id="forwp-drive-import-fonts-wrap" class="forwp-drive-import-fonts-wrap">

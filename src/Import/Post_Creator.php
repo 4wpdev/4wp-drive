@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive\Import;
 
+use ForWP\Drive\Blocks\Block_Recipe_Engine;
 use ForWP\Drive\Blocks\Gutenberg_Content;
 use ForWP\Drive\Import\Post_Author_Resolver;
 use ForWP\Drive\Import\Post_Date_Parser;
@@ -89,7 +90,7 @@ final class Post_Creator {
 		 */
 		$postarr = apply_filters( 'forwp_drive_import_update_postarr', $postarr, $metadata, $post_id );
 
-		$updated = wp_update_post( $postarr, true );
+		$updated = wp_update_post( wp_slash( $postarr ), true );
 		if ( is_wp_error( $updated ) ) {
 			return $updated;
 		}
@@ -151,7 +152,9 @@ final class Post_Creator {
 		 */
 		$postarr = apply_filters( 'forwp_drive_import_postarr', $postarr, $metadata );
 
-		$post_id = wp_insert_post( $postarr, true );
+		// wp_insert_post expects slashed data; without this, diagram JSON escapes
+		// (\n, \u002d for Mermaid -->) are stripped and Mermaid breaks in the editor.
+		$post_id = wp_insert_post( wp_slash( $postarr ), true );
 		if ( is_wp_error( $post_id ) ) {
 			return $post_id;
 		}
@@ -179,6 +182,15 @@ final class Post_Creator {
 		if ( '' === trim( wp_strip_all_tags( $content ) ) && '' !== $plain ) {
 			return wpautop( esc_html( $plain ) );
 		}
+
+		$content = ( new Block_Recipe_Engine() )->apply(
+			$content,
+			array(
+				'title' => (string) ( $metadata['title'] ?? '' ),
+				'slug'  => (string) ( $metadata['slug'] ?? '' ),
+				'map'   => (string) ( $metadata['map'] ?? '' ),
+			)
+		);
 
 		$blocks = Gutenberg_Content::from_mixed( $content );
 		if ( '' !== $blocks ) {

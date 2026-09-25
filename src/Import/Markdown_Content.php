@@ -82,11 +82,12 @@ final class Markdown_Content {
 		$html    = array();
 		$para    = array();
 		$list    = null;
-		$in_code = false;
-		$code    = array();
-		$quote   = array();
-		$i       = 0;
-		$count   = count( $lines );
+		$in_code   = false;
+		$code      = array();
+		$code_lang = '';
+		$quote     = array();
+		$i         = 0;
+		$count     = count( $lines );
 
 		$flush_para = static function () use ( &$para, &$html ): void {
 			if ( empty( $para ) ) {
@@ -118,9 +119,19 @@ final class Markdown_Content {
 
 			if ( $in_code ) {
 				if ( preg_match( '/^```/', $line ) ) {
-					$html[]  = '<pre><code>' . esc_html( implode( "\n", $code ) ) . '</code></pre>';
-					$in_code = false;
-					$code    = array();
+					$code_body = implode( "\n", $code );
+					$default   = '<pre><code>' . esc_html( $code_body ) . '</code></pre>';
+					/**
+					 * Filter Markdown fenced code HTML (e.g. map ```mermaid → diagram block).
+					 *
+					 * @param string $html     Default pre/code markup.
+					 * @param string $code     Fence body.
+					 * @param string $language Fence language tag (may be empty).
+					 */
+					$html[]    = (string) apply_filters( 'forwp_drive_markdown_code_fence', $default, $code_body, $code_lang );
+					$in_code   = false;
+					$code      = array();
+					$code_lang = '';
 					++$i;
 					continue;
 				}
@@ -129,12 +140,13 @@ final class Markdown_Content {
 				continue;
 			}
 
-			if ( preg_match( '/^```/', $line ) ) {
+			if ( preg_match( '/^```([\w+-]*)/', $line, $fence ) ) {
 				$flush_para();
 				$flush_list();
 				$flush_quote();
-				$in_code = true;
-				$code    = array();
+				$in_code   = true;
+				$code      = array();
+				$code_lang = isset( $fence[1] ) ? strtolower( (string) $fence[1] ) : '';
 				++$i;
 				continue;
 			}

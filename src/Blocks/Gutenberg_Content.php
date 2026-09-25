@@ -27,34 +27,151 @@ final class Gutenberg_Content {
 			return '';
 		}
 
+		$html = self::strip_theme_shell_blocks( $html );
+		$html = self::hydrate_innerblock_wrappers( $html );
+
+		return self::protect_fragile_blocks(
+			$html,
+			static function ( string $body ): string {
+				if ( function_exists( 'has_blocks' ) && function_exists( 'parse_blocks' ) && function_exists( 'serialize_block' ) && has_blocks( $body ) ) {
+					$parsed = parse_blocks( $body );
+					$out    = array();
+
+					foreach ( $parsed as $block ) {
+						$name = $block['blockName'] ?? null;
+						if ( empty( $name ) ) {
+							$inner = trim( (string) ( $block['innerHTML'] ?? '' ) );
+							if ( '' === $inner ) {
+								continue;
+							}
+							$converted = self::from_html( $inner );
+							if ( '' !== $converted ) {
+								$out[] = $converted;
+							}
+							continue;
+						}
+
+						$out[] = serialize_block( $block );
+					}
+
+					return implode( "\n\n", $out );
+				}
+
+				return self::from_html( $body );
+			}
+		);
+	}
+
+	/**
+	 * Preview / theme chrome must never land in post_content.
+	 */
+	private static function strip_theme_shell_blocks( string $html ): string {
+		$html = (string) preg_replace(
+			'/<!--\s+wp:post-content(?:\s+\{[\s\S]*?\})?\s+-->/u',
+			'',
+			$html
+		);
+		$html = (string) preg_replace( '/<!--\s+\/wp:post-content\s+-->/u', '', $html );
+
+		return $html;
+	}
+
+	/**
+	 * Keep FAQ / accordion / TechArticle wrappers intact across parse_blocks + serialize_block.
+	 *
+	 * @param callable(string): string $mapper Transform unprotected HTML.
+	 */
+	public static function protect_fragile_blocks( string $html, callable $mapper ): string {
 		$held = array();
 		$html = self::hold_protected_blocks( $html, $held );
 
-		if ( function_exists( 'has_blocks' ) && function_exists( 'parse_blocks' ) && function_exists( 'serialize_block' ) && has_blocks( $html ) ) {
-			$parsed = parse_blocks( $html );
-			$out    = array();
+		return self::restore_protected_blocks( (string) $mapper( $html ), $held );
+	}
 
-			foreach ( $parsed as $block ) {
-				$name = $block['blockName'] ?? null;
-				if ( empty( $name ) ) {
-					$inner = trim( (string) ( $block['innerHTML'] ?? '' ) );
-					if ( '' === $inner ) {
-						continue;
-					}
-					$converted = self::from_html( $inner );
-					if ( '' !== $converted ) {
-						$out[] = $converted;
-					}
-					continue;
-				}
+	/**
+	 * Store preview HTML without stripping Gutenberg comments.
+	 */
+	public static function sanitize_stored_html( string $html ): string {
+		$held = array();
+		$html = (string) preg_replace_callback(
+			'/<!--[\s\S]*?-->/u',
+			static function ( array $matches ) use ( &$held ): string {
+				$key          = 'FORWPDRIVECMT' . count( $held ) . 'Z';
+				$held[ $key ] = $matches[0];
 
-				$out[] = serialize_block( $block );
-			}
-
-			return self::restore_protected_blocks( implode( "\n\n", $out ), $held );
+				return $key;
+			},
+			$html
+		);
+		$html = self::kses_import_html( $html );
+		foreach ( $held as $key => $comment ) {
+			$html = str_replace( $key, $comment, $html );
 		}
 
-		return self::restore_protected_blocks( self::from_html( $html ), $held );
+		return self::strip_theme_shell_blocks( $html );
+	}
+
+	private static function kses_import_html( string $html ): string {
+		if ( ! function_exists( 'wp_kses_allowed_html' ) || ! function_exists( 'wp_kses' ) ) {
+			return wp_kses_post( $html );
+		}
+
+		$allowed           = wp_kses_allowed_html( 'post' );
+		$allowed['button'] = array(
+			'type'          => true,
+			'class'         => true,
+			'aria-expanded' => true,
+			'aria-controls' => true,
+		);
+		foreach ( array( 'span', 'h3', 'div', 'section' ) as $tag ) {
+			if ( ! isset( $allowed[ $tag ] ) || ! is_array( $allowed[ $tag ] ) ) {
+				$allowed[ $tag ] = array();
+			}
+			$allowed[ $tag ]['class']       = true;
+			$allowed[ $tag ]['role']        = true;
+			$allowed[ $tag ]['aria-hidden'] = true;
+		}
+
+		return wp_kses( $html, $allowed );
+	}
+
+	/**
+	 * TechArticle wrappers save InnerBlocks — raw <section>/<h2> inside is invalid in the editor.
+	 */
+	private static function hydrate_innerblock_wrappers( string $html ): string {
+		$names = array(
+			'forwp-seo/techarticle-goal',
+			'forwp-seo/techarticle-context',
+			'forwp-seo/techarticle-issues',
+			'forwp-seo/techarticle-steps',
+		);
+
+		foreach ( $names as $name ) {
+			$quoted = preg_quote( $name, '/' );
+			$html   = (string) preg_replace_callback(
+				'/<!--\s+wp:' . $quoted . '(?:\s+\{[\s\S]*?\})?\s+-->([\s\S]*?)<!--\s+\/wp:' . $quoted . '\s+-->/u',
+				static function ( array $matches ) use ( $name ): string {
+					$inner = trim( $matches[1] );
+					if ( '' === $inner || false !== strpos( $inner, '<!-- wp:' ) ) {
+						return $matches[0];
+					}
+
+					$converted = self::from_html( $inner );
+					if ( '' === $converted ) {
+						return $matches[0];
+					}
+
+					return sprintf(
+						"<!-- wp:%1\$s -->\n%2\$s\n<!-- /wp:%1\$s -->",
+						$name,
+						$converted
+					);
+				},
+				$html
+			);
+		}
+
+		return $html;
 	}
 
 	/**
@@ -63,15 +180,34 @@ final class Gutenberg_Content {
 	 * @param array<string, string> $held Placeholder map.
 	 */
 	private static function hold_protected_blocks( string $html, array &$held ): string {
-		$names = array( 'forwp/faq', 'accordion' );
+		$names = array(
+			'forwp/faq',
+			'forwp/diagram',
+			'accordion',
+			'accordion-item',
+			'forwp-seo/techarticle-goal',
+			'forwp-seo/techarticle-context',
+			'forwp-seo/techarticle-issues',
+			'forwp-seo/techarticle-steps',
+		);
 		foreach ( $names as $name ) {
 			$quoted = preg_quote( $name, '/' );
+			// Self-closing: first --> ends the comment (attrs must escape `--`).
+			$html = (string) preg_replace_callback(
+				'/<!--\s+wp:' . $quoted . '\b[\s\S]*?\/-->/u',
+				static function ( array $matches ) use ( &$held ): string {
+					$key          = 'FORWPDRIVEHOLD' . count( $held ) . 'Z';
+					$held[ $key ] = $matches[0];
+					return '<p data-forwp-drive-hold="1">' . $key . '</p>';
+				},
+				$html
+			);
 			$html   = (string) preg_replace_callback(
 				'/<!--\s+wp:' . $quoted . '(?:\s+\{[\s\S]*?\})?\s+-->[\s\S]*?<!--\s+\/wp:' . $quoted . '\s+-->/u',
 				static function ( array $matches ) use ( &$held ): string {
 					$key          = 'FORWPDRIVEHOLD' . count( $held ) . 'Z';
 					$held[ $key ] = $matches[0];
-					return '<p>' . $key . '</p>';
+					return '<p data-forwp-drive-hold="1">' . $key . '</p>';
 				},
 				$html
 			);
@@ -89,7 +225,19 @@ final class Gutenberg_Content {
 		}
 
 		foreach ( $held as $key => $original ) {
-			$html = str_replace( '<p>' . $key . '</p>', $original, $html );
+			$quoted = preg_quote( $key, '/' );
+			// from_html / serialize wraps holds as paragraph blocks — unwrap fully.
+			$html = (string) preg_replace(
+				'/<!--\s+wp:paragraph(?:\s+\{[\s\S]*?\})?\s+-->\s*<p(?:\s[^>]*)?>\s*(?:<!--\s+)?' . $quoted . '(?:\s+-->)?\s*<\/p>\s*<!--\s+\/wp:paragraph\s+-->/u',
+				$original,
+				$html
+			);
+			$html = (string) preg_replace(
+				'/<p(?:\s[^>]*)?>\s*' . $quoted . '\s*<\/p>/u',
+				$original,
+				$html
+			);
+			$html = str_replace( '<!-- ' . $key . ' -->', $original, $html );
 			$html = str_replace( $key, $original, $html );
 		}
 

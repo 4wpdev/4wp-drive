@@ -245,9 +245,10 @@ final class Wrap_Capability_Registry {
 		}
 
 		$labels = array(
-			'4wp-faq'        => '4WP FAQ',
-			'4wp-seo-helper' => '4WP SEO Helper',
-			'4wp-drive'      => '4WP Drive',
+			'4wp-faq'           => '4WP FAQ',
+			'4wp-seo-helper'    => '4WP SEO Helper',
+			'4wp-advanced-code' => '4WP Advanced Code',
+			'4wp-drive'         => '4WP Drive',
 		);
 
 		return $labels[ $plugin ] ?? $plugin;

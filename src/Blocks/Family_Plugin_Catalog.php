@@ -27,7 +27,7 @@ final class Family_Plugin_Catalog {
 	 */
 	public static function all(): array {
 		$plugins = array(
-			'4wp-faq'        => array(
+			'4wp-faq'           => array(
 				'slug'         => '4wp-faq',
 				'label'        => '4WP FAQ',
 				'file'         => '4wp-faq/4wp-faq.php',
@@ -36,7 +36,7 @@ final class Family_Plugin_Catalog {
 				'description'  => __( 'FAQ H2 + H3 Q&A → forwp/faq accordion on import.', '4wp-drive' ),
 				'wrap_labels'  => array( '4WP FAQ' ),
 			),
-			'4wp-seo-helper' => array(
+			'4wp-seo-helper'    => array(
 				'slug'         => '4wp-seo-helper',
 				'label'        => '4WP SEO Helper',
 				'file'         => '4wp-seo-helper/4wp-seo-helper.php',
@@ -49,6 +49,15 @@ final class Family_Plugin_Catalog {
 					'TechArticle Steps',
 					'TechArticle Common mistakes',
 				),
+			),
+			'4wp-advanced-code' => array(
+				'slug'         => '4wp-advanced-code',
+				'label'        => '4WP Advanced Code',
+				'file'         => '4wp-advanced-code/4wp-advanced-code.php',
+				'uri'          => 'https://4wp.dev/plugin/4wp-advanced-code/',
+				'wporg'        => '',
+				'description'  => __( 'Mermaid fences → 4WP Diagram block on import.', '4wp-drive' ),
+				'wrap_labels'  => array( '4WP Diagram' ),
 			),
 		);
 
@@ -129,6 +138,9 @@ final class Family_Plugin_Catalog {
 			return true;
 		}
 		if ( '4wp-seo-helper' === $slug && defined( 'FORWP_SEO_HELPER_VERSION' ) ) {
+			return true;
+		}
+		if ( '4wp-advanced-code' === $slug && defined( 'FORWP_ADVANCED_CODE_VERSION' ) ) {
 			return true;
 		}
 

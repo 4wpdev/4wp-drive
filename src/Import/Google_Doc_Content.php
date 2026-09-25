@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive\Import;
 
+use ForWP\Drive\Blocks\Gutenberg_Content;
 use ForWP\Drive\Parse\Template_Separator;
 
 defined( 'ABSPATH' ) || exit;
@@ -310,8 +311,8 @@ final class Google_Doc_Content {
 	 */
 	private static function export_content_blocks( \DOMDocument $dom ): array {
 		$xpath = new \DOMXPath( $dom );
-		$query = '//body//*[self::p or self::hr or self::ul or self::ol or self::table or self::blockquote or self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]'
-			. '[not(ancestor::table)][not(ancestor::ul)][not(ancestor::ol)][not(ancestor::blockquote)]';
+		$query = '//body//*[self::p or self::hr or self::pre or self::ul or self::ol or self::table or self::blockquote or self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6]'
+			. '[not(ancestor::table)][not(ancestor::ul)][not(ancestor::ol)][not(ancestor::blockquote)][not(ancestor::pre)]';
 		$nodes = $xpath->query( $query );
 		if ( ! $nodes || 0 === $nodes->length ) {
 			return array();
@@ -879,16 +880,21 @@ final class Google_Doc_Content {
 			return $html;
 		}
 
-		if ( function_exists( 'has_blocks' ) && function_exists( 'parse_blocks' ) && function_exists( 'serialize_block' ) && has_blocks( $html ) ) {
-			$out = array();
-			foreach ( parse_blocks( $html ) as $block ) {
-				$out[] = serialize_block( self::strip_presentational_block( $block ) );
+		return Gutenberg_Content::protect_fragile_blocks(
+			$html,
+			static function ( string $body ): string {
+				if ( function_exists( 'has_blocks' ) && function_exists( 'parse_blocks' ) && function_exists( 'serialize_block' ) && has_blocks( $body ) ) {
+					$out = array();
+					foreach ( parse_blocks( $body ) as $block ) {
+						$out[] = serialize_block( self::strip_presentational_block( $block ) );
+					}
+
+					return implode( "\n\n", $out );
+				}
+
+				return self::strip_html_fragment( $body );
 			}
-
-			return implode( "\n\n", $out );
-		}
-
-		return self::strip_html_fragment( $html );
+		);
 	}
 
 	/**

@@ -121,6 +121,86 @@ class Gutenberg_ContentTest extends TestCase {
 		$this->assertStringNotContainsString( '<!-- wp:paragraph --><p>White</p>', $out );
 	}
 
+	public function test_from_mixed_hydrates_techarticle_wrapper_inner_blocks(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<!-- wp:forwp-seo/techarticle-issues -->'
+			. '<section class="forwp-seo-techarticle-issues"><h2>Common Mistakes</h2><p>Do not skip auth.</p></section>'
+			. '<!-- /wp:forwp-seo/techarticle-issues -->';
+
+		$out = Gutenberg_Content::from_mixed( $html );
+
+		$this->assertStringContainsString( '<!-- wp:forwp-seo/techarticle-issues -->', $out );
+		$this->assertStringContainsString( '<!-- wp:heading', $out );
+		$this->assertStringContainsString( '<!-- wp:paragraph -->', $out );
+		$this->assertStringContainsString( 'Common Mistakes', $out );
+		$this->assertStringNotContainsString( '<section class="forwp-seo-techarticle-issues">', $out );
+	}
+
+	public function test_from_mixed_preserves_faq_accordion_markup(): void {
+		$html = '<!-- wp:forwp/faq --><!-- wp:accordion -->'
+			. '<div class="wp-block-accordion" role="group">'
+			. '<!-- wp:accordion-item --><div class="wp-block-accordion-item">'
+			. '<!-- wp:accordion-heading --><h3 class="wp-block-accordion-heading">Q</h3><!-- /wp:accordion-heading -->'
+			. '<!-- wp:accordion-panel --><div class="wp-block-accordion-panel" role="region">'
+			. '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph -->'
+			. '</div><!-- /wp:accordion-panel -->'
+			. '</div><!-- /wp:accordion-item -->'
+			. '</div><!-- /wp:accordion -->'
+			. '<!-- /wp:forwp/faq -->';
+
+		$out = Gutenberg_Content::from_mixed( $html );
+
+		$this->assertStringContainsString( '<!-- wp:forwp/faq -->', $out );
+		$this->assertStringContainsString( '<!-- wp:accordion -->', $out );
+		$this->assertStringContainsString( 'role="region"', $out );
+		$this->assertStringContainsString( '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph -->', $out );
+	}
+
+	public function test_from_mixed_does_not_wrap_techarticle_in_paragraph(): void {
+		if ( ! class_exists( 'DOMDocument' ) ) {
+			$this->markTestSkipped( 'DOMDocument not available.' );
+		}
+
+		$html = '<p>Intro</p>'
+			. '<!-- wp:forwp-seo/techarticle-context -->'
+			. '<!-- wp:heading --><h2 class="wp-block-heading">Introduction</h2><!-- /wp:heading -->'
+			. '<!-- wp:paragraph --><p>Body copy.</p><!-- /wp:paragraph -->'
+			. '<!-- /wp:forwp-seo/techarticle-context -->'
+			. '<!-- wp:forwp/faq --><!-- wp:accordion -->'
+			. '<div class="wp-block-accordion" role="group">'
+			. '<!-- wp:accordion-item --><div class="wp-block-accordion-item">'
+			. '<!-- wp:accordion-heading --><h3>Q</h3><!-- /wp:accordion-heading -->'
+			. '<!-- wp:accordion-panel --><div class="wp-block-accordion-panel" role="region">'
+			. '<!-- wp:paragraph --><p>A</p><!-- /wp:paragraph -->'
+			. '</div><!-- /wp:accordion-panel --></div><!-- /wp:accordion-item -->'
+			. '</div><!-- /wp:accordion --><!-- /wp:forwp/faq -->';
+
+		$out = Gutenberg_Content::from_mixed( $html );
+
+		$this->assertStringContainsString( '<!-- wp:forwp-seo/techarticle-context -->', $out );
+		$this->assertStringContainsString( '<!-- wp:forwp/faq -->', $out );
+		$this->assertDoesNotMatchRegularExpression(
+			'/<!--\s+wp:paragraph[^>]*-->\s*<!--\s+wp:forwp-seo\/techarticle-context/',
+			$out
+		);
+		$this->assertDoesNotMatchRegularExpression(
+			'/<!--\s+wp:paragraph[^>]*-->\s*<!--\s+wp:forwp\/faq/',
+			$out
+		);
+		$this->assertStringNotContainsString( '<!-- /wp:forwp-seo/techarticle-context --><!-- /wp:paragraph -->', $out );
+	}
+
+	public function test_sanitize_stored_html_keeps_block_comments(): void {
+		$html = '<!-- wp:paragraph --><p>Hello</p><!-- /wp:paragraph -->';
+		$out  = Gutenberg_Content::sanitize_stored_html( $html );
+
+		$this->assertStringContainsString( '<!-- wp:paragraph -->', $out );
+		$this->assertStringContainsString( 'Hello', $out );
+	}
+
 	public function test_markdown_bootstrap_table_imports_as_core_table(): void {
 		if ( ! class_exists( 'DOMDocument' ) ) {
 			$this->markTestSkipped( 'DOMDocument not available.' );

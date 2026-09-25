@@ -109,10 +109,15 @@ final class Incoming_Scanner {
 				$was_new = ! $existing || Document_Status::READY !== $existing->status;
 
 				if ( $existing ) {
+					$update_file_id = $file_id;
+					$owner          = $this->repository->find_by_file_id( $file_id );
+					if ( $owner && (int) $owner->id !== (int) $existing->id ) {
+						$update_file_id = (string) $existing->file_id;
+					}
 					$this->repository->update(
 						(int) $existing->id,
 						array(
-							'file_id'       => $file_id,
+							'file_id'       => $update_file_id,
 							'file_name'     => (string) ( $item['file_name'] ?? $existing->file_name ),
 							'content_hash'  => $hash,
 							'status'        => Document_Status::READY,
@@ -171,6 +176,178 @@ final class Incoming_Scanner {
 		Settings::instance()->set_last_sync( $summary );
 
 		return $summary;
+	}
+
+	/**
+	 * After importing one file from a multi-article package, put remaining siblings back in the queue.
+	 *
+	 * @param array<string, mixed> $metadata Import metadata (needs package_folder_id).
+	 * @return array{new_ready: int, document_id: int, file_id: string}|WP_Error|null Null when nothing to requeue.
+	 */
+	public function requeue_package_after_import( string $source_slug, array $metadata ) {
+		$package = trim( str_replace( '\\', '/', (string) ( $metadata['package_folder_id'] ?? '' ) ), '/' );
+		if ( '' === $package ) {
+			return null;
+		}
+
+		return $this->requeue_package_path( $source_slug, $package );
+	}
+
+	/**
+	 * Scan one package path and upsert ready document row(s).
+	 *
+	 * @return array{new_ready: int, document_id: int, file_id: string}|WP_Error|null
+	 */
+	public function requeue_package_path( string $source_slug, string $package_path ) {
+		$package_path = trim( str_replace( '\\', '/', $package_path ), '/' );
+		if ( '' === $package_path ) {
+			return null;
+		}
+
+		$source = Source_Registry::get( $source_slug );
+		if ( ! $source || ! $source->is_ready() ) {
+			return new WP_Error( 'forwp_drive_not_ready', __( 'Storage source is not ready.', '4wp-drive' ) );
+		}
+
+		if ( ! method_exists( $source, 'scan_package_path' ) ) {
+			return null;
+		}
+
+		$items = $source->scan_package_path( $package_path );
+		if ( ! is_array( $items ) || empty( $items ) ) {
+			return null;
+		}
+
+		$new_ready   = 0;
+		$document_id = 0;
+		$file_id     = '';
+
+		foreach ( $items as $item ) {
+			$result = $this->upsert_scan_item( $source, $item, false );
+			if ( null === $result ) {
+				continue;
+			}
+			$new_ready  += (int) ( $result['was_new'] ?? 0 );
+			$document_id = (int) ( $result['document_id'] ?? 0 );
+			$file_id     = (string) ( $result['file_id'] ?? '' );
+		}
+
+		if ( $document_id <= 0 ) {
+			return null;
+		}
+
+		$ready_count = $this->repository->count_by_statuses( Document_Status::inbox_statuses() );
+		Settings::instance()->set_ready_count( $ready_count );
+		if ( $new_ready > 0 ) {
+			Admin_Notifier::mark_pending( $ready_count );
+		}
+
+		return array(
+			'new_ready'   => $new_ready,
+			'document_id' => $document_id,
+			'file_id'     => $file_id,
+		);
+	}
+
+	/**
+	 * Upsert one scan item into the document table.
+	 *
+	 * @param object               $source             Storage source.
+	 * @param array<string, mixed> $item               Scan item.
+	 * @param bool                 $preserve_selection Keep previously selected package file when possible.
+	 * @return array{document_id: int, file_id: string, was_new: int}|null
+	 */
+	private function upsert_scan_item( $source, array $item, bool $preserve_selection = true ): ?array {
+		$file_id = (string) ( $item['file_id'] ?? '' );
+		if ( '' === $file_id ) {
+			return null;
+		}
+
+		$metadata = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : array();
+		$existing = $this->repository->find_by_file_id( $file_id );
+		if ( ! $existing ) {
+			$package_id = (string) ( $metadata['package_folder_id'] ?? '' );
+			if ( '' !== $package_id ) {
+				$existing = $this->find_by_package_folder( $package_id, $source->get_slug() );
+			}
+		}
+
+		if ( $preserve_selection ) {
+			$item = $this->maybe_rescan_selected( $source, $item, $existing );
+		}
+		$file_id  = (string) ( $item['file_id'] ?? $file_id );
+		$metadata = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : $metadata;
+		$hash     = (string) ( $item['content_hash'] ?? '' );
+
+		if ( $existing && $existing->content_hash === $hash && Document_Status::READY === $existing->status ) {
+			$stored = $this->repository->decode_metadata( $existing );
+			if ( $this->stored_parse_looks_valid( $stored ) ) {
+				$stored_html = isset( $stored['body_html'] ) ? (string) $stored['body_html'] : '';
+				$stored_body = isset( $stored['body'] ) ? trim( (string) $stored['body'] ) : '';
+				$has_text    = '' !== trim( wp_strip_all_tags( $stored_html ) ) || '' !== $stored_body;
+				if ( $has_text ) {
+					return array(
+						'document_id' => (int) $existing->id,
+						'file_id'     => $file_id,
+						'was_new'     => 0,
+					);
+				}
+			}
+		}
+
+		$export_failed = ! empty( $item['export_failed'] );
+		$was_new       = ! $existing || Document_Status::READY !== $existing->status;
+		$document_id   = 0;
+
+		if ( $existing ) {
+			$update_file_id = $file_id;
+			$owner          = $this->repository->find_by_file_id( $file_id );
+			if ( $owner && (int) $owner->id !== (int) $existing->id ) {
+				$update_file_id = (string) $existing->file_id;
+			}
+			$this->repository->update(
+				(int) $existing->id,
+				array(
+					'file_id'       => $update_file_id,
+					'file_name'     => (string) ( $item['file_name'] ?? $existing->file_name ),
+					'content_hash'  => $hash,
+					'status'        => Document_Status::READY,
+					'folder_role'   => 'incoming',
+					'metadata_json' => wp_json_encode( $metadata ),
+					'error_message' => $export_failed ? (string) ( $metadata['scan_error'] ?? '' ) : null,
+					'wp_post_id'    => null,
+					'imported_at'   => null,
+					'updated_at'    => current_time( 'mysql', true ),
+				)
+			);
+			$document_id = (int) $existing->id;
+		} else {
+			$document_id = (int) $this->repository->upsert_from_scan(
+				array(
+					'source'        => $source->get_slug(),
+					'file_id'       => $file_id,
+					'file_name'     => (string) ( $item['file_name'] ?? '' ),
+					'content_hash'  => $hash,
+					'status'        => Document_Status::READY,
+					'folder_role'   => 'incoming',
+					'metadata_json' => wp_json_encode( $metadata ),
+					'error_message' => $export_failed ? (string) ( $metadata['scan_error'] ?? '' ) : null,
+					'detected_at'   => current_time( 'mysql', true ),
+					'updated_at'    => current_time( 'mysql', true ),
+				)
+			);
+		}
+
+		if ( $document_id <= 0 ) {
+			$row = $this->repository->find_by_file_id( $file_id );
+			$document_id = $row ? (int) $row->id : 0;
+		}
+
+		return array(
+			'document_id' => $document_id,
+			'file_id'     => $file_id,
+			'was_new'     => $was_new ? 1 : 0,
+		);
 	}
 
 	/**

@@ -18,6 +18,7 @@ use ForWP\Drive\Import\Package_Image_Importer;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Source_Registry;
 use ForWP\Drive\Sources\GitHub_Source;
+use ForWP\Drive\Sync\Incoming_Scanner;
 use ForWP\Drive\Parse\Template_Config;
 use WP_Error;
 
@@ -208,12 +209,25 @@ final class Import_Runner {
 		 */
 		do_action( 'forwp_drive_document_imported', $post_id, $document_id );
 
+		$requeued = ( new Incoming_Scanner( $this->repository ) )->requeue_package_after_import(
+			(string) $row->source,
+			$metadata
+		);
+
 		$response = array(
 			'post_id'  => $post_id,
 			'edit_url' => get_edit_post_link( $post_id, 'raw' ),
 			'mode'     => $mode,
 			'updated'  => $updated,
 		);
+
+		if ( is_array( $requeued ) && ! empty( $requeued['document_id'] ) ) {
+			$response['requeued'] = array(
+				'document_id' => (int) $requeued['document_id'],
+				'file_id'     => (string) ( $requeued['file_id'] ?? '' ),
+				'new_ready'   => (int) ( $requeued['new_ready'] ?? 0 ),
+			);
+		}
 
 		$combined_warning = trim( ( $image_warning ? $image_warning . ' ' : '' ) . $body_warning );
 		if ( $combined_warning ) {

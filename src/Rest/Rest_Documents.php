@@ -9,6 +9,7 @@ namespace ForWP\Drive\Rest;
 
 use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Auth\Google_OAuth;
+use ForWP\Drive\Blocks\Gutenberg_Content;
 use ForWP\Drive\Blocks\Wrap_Capability_Registry;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
@@ -19,6 +20,7 @@ use ForWP\Drive\Import\Import_Target_Resolver;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Parse\Template_Config;
 use ForWP\Drive\Source_Registry;
+use ForWP\Drive\Sync\Incoming_Scanner;
 use WP_Post_Type;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -83,6 +85,30 @@ final class Rest_Documents {
 						),
 						'name'      => array(
 							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/requeue-package',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( self::class, 'requeue_package' ),
+					'permission_callback' => array( self::class, 'can_import' ),
+					'args'                => array(
+						'source' => array(
+							'type'              => 'string',
+							'required'          => true,
+							'sanitize_callback' => 'sanitize_key',
+						),
+						'path'   => array(
+							'type'              => 'string',
+							'required'          => true,
 							'sanitize_callback' => 'sanitize_text_field',
 						),
 					),
@@ -369,6 +395,48 @@ final class Rest_Documents {
 	}
 
 	/**
+	 * POST — rescan a package folder into the import queue (sibling .md after partial import).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 */
+	public static function requeue_package( WP_REST_Request $request ): WP_REST_Response {
+		$slug = sanitize_key( (string) $request->get_param( 'source' ) );
+		$path = trim( str_replace( '\\', '/', (string) $request->get_param( 'path' ) ), '/' );
+		if ( '' === $slug || '' === $path ) {
+			return new WP_REST_Response(
+				array( 'message' => __( 'Source and package path are required.', '4wp-drive' ) ),
+				400
+			);
+		}
+
+		$result = ( new Incoming_Scanner() )->requeue_package_path( $slug, $path );
+		if ( is_wp_error( $result ) ) {
+			return new WP_REST_Response(
+				array( 'message' => $result->get_error_message() ),
+				400
+			);
+		}
+
+		if ( null === $result || empty( $result['document_id'] ) ) {
+			return new WP_REST_Response(
+				array(
+					'message' => __( 'No importable files left in that package folder.', '4wp-drive' ),
+				),
+				404
+			);
+		}
+
+		return new WP_REST_Response(
+			array(
+				'document_id' => (int) $result['document_id'],
+				'file_id'     => (string) ( $result['file_id'] ?? '' ),
+				'new_ready'   => (int) ( $result['new_ready'] ?? 0 ),
+			),
+			200
+		);
+	}
+
+	/**
 	 * Stream an image from Drive or GitHub for the inbox workspace.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -528,7 +596,7 @@ final class Rest_Documents {
 			(string) $request->get_param( 'slug' ),
 			(string) $request->get_param( 'title' ),
 			(string) $request->get_param( 'search' ),
-			30,
+			50,
 			(string) $request->get_param( 'lang' )
 		);
 
@@ -626,16 +694,33 @@ final class Rest_Documents {
 		$new_meta = isset( $rescanned['metadata'] ) && is_array( $rescanned['metadata'] ) ? $rescanned['metadata'] : $meta;
 		$new_meta['selected_file_id'] = $file_id;
 
-		$repo->update(
+		// Package rows share one inbox document. Switching the article must update
+		// body/meta without stealing another row's unique file_id (MySQL duplicate key).
+		$new_file_id = (string) ( $rescanned['file_id'] ?? $file_id );
+		$owner       = $repo->find_by_file_id( $new_file_id );
+		if ( $owner && (int) $owner->id !== $id ) {
+			$new_file_id = (string) $row->file_id;
+		}
+
+		$updated = $repo->update(
 			$id,
 			array(
-				'file_id'       => (string) ( $rescanned['file_id'] ?? $file_id ),
+				'file_id'       => $new_file_id,
 				'file_name'     => (string) ( $rescanned['file_name'] ?? $row->file_name ),
 				'content_hash'  => (string) ( $rescanned['content_hash'] ?? $row->content_hash ),
 				'metadata_json' => wp_json_encode( $new_meta ),
 				'updated_at'    => current_time( 'mysql', true ),
 			)
 		);
+
+		if ( ! $updated ) {
+			global $wpdb;
+			$detail = is_string( $wpdb->last_error ) && '' !== $wpdb->last_error
+				? $wpdb->last_error
+				: __( 'Could not switch package file.', '4wp-drive' );
+
+			return new WP_REST_Response( array( 'message' => $detail ), 500 );
+		}
 
 		$fresh = $repo->find( $id );
 
@@ -659,7 +744,7 @@ final class Rest_Documents {
 		}
 
 		$meta              = $repo->decode_metadata( $row );
-		$meta['body_html'] = wp_kses_post( $html );
+		$meta['body_html'] = Gutenberg_Content::sanitize_stored_html( $html );
 
 		$repo->update(
 			$id,

@@ -392,6 +392,11 @@ add_filter( 'cron_schedules', function( $schedules ) {
 													<strong><?php echo esc_html( (string) ( $item['label'] ?? $cap_id ) ); ?></strong>
 												</span>
 											</label>
+											<?php if ( 'marker' === (string) ( $item['wrap'] ?? '' ) ) : ?>
+												<p class="description forwp-drive-family-rule__prompt">
+													<?php echo esc_html( (string) ( $item['prompt'] ?? '' ) ); ?>
+												</p>
+											<?php else : ?>
 											<div class="forwp-drive-family-rule__row">
 												<label class="forwp-drive-family-rule__h2">
 													<span><?php esc_html_e( 'Titles in the document (comma-separated)', '4wp-drive' ); ?></span>
@@ -402,6 +407,7 @@ add_filter( 'cron_schedules', function( $schedules ) {
 													<?php esc_html_e( 'Keep the title in the post', '4wp-drive' ); ?>
 												</label>
 											</div>
+											<?php endif; ?>
 										</li>
 									<?php endforeach; ?>
 								</ul>

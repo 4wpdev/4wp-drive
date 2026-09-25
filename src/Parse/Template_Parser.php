@@ -105,11 +105,13 @@ final class Template_Parser {
 	 * @return array<string, mixed>
 	 */
 	private function parse_markdown_html_document( string $html ): array {
-		$body_html = $this->extract_markdown_body_inner_html( $html );
-		$body      = $this->html_to_plain_text( '<html><body>' . $body_html . '</body></html>' );
-
+		$body_html    = $this->extract_markdown_body_inner_html( $html );
+		$body         = $this->html_to_plain_text( '<html><body>' . $body_html . '</body></html>' );
 		$header_plain = '';
-		$html_split   = Google_Doc_Content::split_export_at_separator( $html );
+
+		// Do NOT use Google_Doc_Content::split_export_at_separator() here — that path only
+		// keeps p/h*/table/list nodes and silently drops <pre> and block comments (diagrams).
+		$html_split = $this->split_markdown_html_at_hr( $body_html );
 		if ( null !== $html_split ) {
 			$header_plain = $this->html_to_plain_text(
 				'<html><body>' . $html_split['header_html'] . '</body></html>'
@@ -131,6 +133,27 @@ final class Template_Parser {
 		list( $meta, $body ) = $this->apply_first_line_title_fallback( $meta, $body );
 
 		return $this->assemble_parse_result( $meta, $body, trim( $body_html ), $header_plain );
+	}
+
+	/**
+	 * Split Markdown HTML body at the front-matter <hr>, preserving pre/code and comments.
+	 *
+	 * @return array{header_html: string, body_html: string}|null
+	 */
+	private function split_markdown_html_at_hr( string $inner_html ): ?array {
+		$inner_html = trim( $inner_html );
+		if ( '' === $inner_html ) {
+			return null;
+		}
+
+		if ( ! preg_match( '/^(.*?)<hr\b[^>]*\/?>(.*)$/is', $inner_html, $matches ) ) {
+			return null;
+		}
+
+		return array(
+			'header_html' => trim( (string) $matches[1] ),
+			'body_html'   => trim( (string) $matches[2] ),
+		);
 	}
 
 	/**

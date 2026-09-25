@@ -125,4 +125,80 @@ class Faq_Accordion_RecipeTest extends TestCase {
 		$this->assertStringContainsString( '<h2 class="forwp-drive-skip-wrap">FAQ</h2>', $result );
 		$this->assertStringContainsString( '<h3>Q?</h3>', $result );
 	}
+
+	public function test_keeps_existing_accordion_block_markup(): void {
+		$html = '<h2>FAQ</h2><!-- wp:forwp/faq --><!-- wp:accordion -->'
+			. '<div class="wp-block-accordion" role="group">'
+			. '<!-- wp:accordion-item --><div class="wp-block-accordion-item">'
+			. '<!-- wp:accordion-heading --><h3 class="wp-block-accordion-heading">'
+			. '<button type="button" class="wp-block-accordion-heading__toggle">'
+			. '<span class="wp-block-accordion-heading__toggle-title">Kept question</span></button></h3>'
+			. '<!-- /wp:accordion-heading -->'
+			. '<!-- wp:accordion-panel --><div class="wp-block-accordion-panel" role="region">'
+			. '<!-- wp:paragraph --><p>Kept answer</p><!-- /wp:paragraph -->'
+			. '</div><!-- /wp:accordion-panel --></div><!-- /wp:accordion-item -->'
+			. '</div><!-- /wp:accordion --><!-- /wp:forwp/faq -->';
+
+		$result = $this->recipe->transform( $html, $this->config );
+
+		$this->assertSame( $html, $result );
+	}
+
+	public function test_rebuilds_faq_from_stamped_wrapper_around_qa_html(): void {
+		$html = '<h2>FAQ</h2><!-- wp:forwp/faq -->'
+			. '<h3>Should we use GraphQL?</h3><p>Yes when pages need several types.</p>'
+			. '<!-- /wp:forwp/faq -->';
+
+		$result = $this->recipe->transform( $html, $this->config );
+
+		$this->assertStringContainsString( '<!-- wp:forwp/faq -->', $result );
+		$this->assertStringContainsString( '<!-- wp:accordion -->', $result );
+		$this->assertStringContainsString( 'Should we use GraphQL?', $result );
+		$this->assertStringContainsString( 'Yes when pages need several types.', $result );
+		$this->assertStringNotContainsString( '<h3>Should we use GraphQL?</h3>', $result );
+	}
+
+	public function test_rebuilds_faq_from_visual_accordion_dom(): void {
+		$html = '<h2>FAQ</h2><div class="wp-block-accordion" role="group">'
+			. '<div class="wp-block-accordion-item">'
+			. '<h3 class="wp-block-accordion-heading"><button type="button">'
+			. '<span class="wp-block-accordion-heading__toggle-title">Visual question</span></button></h3>'
+			. '<div class="wp-block-accordion-panel" role="region"><p>Visual answer</p></div>'
+			. '</div></div>';
+
+		$result = $this->recipe->transform( $html, $this->config );
+
+		$this->assertStringContainsString( '<!-- wp:accordion -->', $result );
+		$this->assertStringContainsString( 'Visual question', $result );
+		$this->assertStringContainsString( 'Visual answer', $result );
+	}
+
+	public function test_preserves_techarticle_wraps_when_rebuilding_faq(): void {
+		$html = '<!-- wp:forwp-seo/techarticle-goal -->'
+			. '<h2>Standards and Best Practices</h2><p>Use Application Passwords.</p>'
+			. '<!-- /wp:forwp-seo/techarticle-goal -->'
+			. '<!-- wp:forwp-seo/techarticle-issues -->'
+			. '<h2>Common Mistakes</h2><p>Do not store tokens in localStorage.</p>'
+			. '<!-- /wp:forwp-seo/techarticle-issues -->'
+			. '<!-- wp:forwp/faq -->'
+			. '<h2>FAQ</h2>'
+			. '<div class="wp-block-accordion" role="group">'
+			. '<div class="wp-block-accordion-item">'
+			. '<h3 class="wp-block-accordion-heading"><button type="button">'
+			. '<span class="wp-block-accordion-heading__toggle-title">Can I use cookies?</span></button></h3>'
+			. '<div class="wp-block-accordion-panel" role="region"><p>Only same origin.</p></div>'
+			. '</div></div>'
+			. '<!-- /wp:forwp/faq -->';
+
+		$config = $this->config;
+		$config['template'] = Block_Template_Registry::TEMPLATE_4WP_FAQ;
+		$result = $this->recipe->transform( $html, $config );
+
+		$this->assertStringContainsString( '<!-- wp:forwp-seo/techarticle-goal -->', $result );
+		$this->assertStringContainsString( '<!-- wp:forwp-seo/techarticle-issues -->', $result );
+		$this->assertStringContainsString( 'Use Application Passwords.', $result );
+		$this->assertStringContainsString( '<!-- wp:forwp/faq -->', $result );
+		$this->assertStringContainsString( '<!-- wp:accordion -->', $result );
+		$this->assertStringContainsString( 'Can I use cookies?', $result );
+	}
 }
