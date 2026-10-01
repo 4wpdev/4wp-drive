@@ -572,6 +572,24 @@
 	font-weight: 600;
 }
 
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-locked,
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-locked:hover {
+	cursor: default;
+	opacity: 0.6;
+	background: transparent;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__state {
+	margin-left: 6px;
+	padding: 0 6px;
+	border-radius: 10px;
+	background: #fff8c5;
+	color: #7d4e00;
+	font-size: 11px;
+	line-height: 18px;
+	white-space: nowrap;
+}
+
 #forwp-drive-inbox-list .forwp-drive-tree__row.is-readonly {
 	cursor: default;
 	opacity: 0.85;

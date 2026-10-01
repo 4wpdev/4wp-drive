@@ -16,6 +16,8 @@ use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Featured_Image_Chooser;
 use ForWP\Drive\Import\Package_Image_Importer;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
+use ForWP\Drive\Package\Package_Manifest;
+use ForWP\Drive\Package\Package_Store;
 use ForWP\Drive\Source_Registry;
 use ForWP\Drive\Sources\GitHub_Source;
 use ForWP\Drive\Sync\Incoming_Scanner;
@@ -28,6 +30,11 @@ defined( 'ABSPATH' ) || exit;
  * Orchestrates import + Drive file move.
  */
 final class Import_Runner {
+
+	/**
+	 * Post meta linking a post to its meta.json package (source, path, schema, file_id).
+	 */
+	public const PACKAGE_POST_META = '_forwp_drive_package';
 
 	/**
 	 * @var Document_Repository
@@ -51,6 +58,15 @@ final class Import_Runner {
 
 		if ( ! Document_Status::can_import( (string) $row->status ) ) {
 			return new WP_Error( 'forwp_drive_invalid_status', __( 'Document cannot be imported in its current state.', '4wp-drive' ) );
+		}
+
+		$scan_meta = $this->repository->decode_metadata( $row );
+		if ( Package_Manifest::is_blocked_file( $scan_meta, (string) ( $scan_meta['github_path'] ?? $row->file_name ) ) ) {
+			return new WP_Error(
+				'forwp_drive_package_variant',
+				__( 'Only the original file of a meta.json package can be imported.', '4wp-drive' ),
+				array( 'status' => 400 )
+			);
 		}
 
 		$lang = Import_Language_Resolver::resolve(
@@ -160,7 +176,42 @@ final class Import_Runner {
 				: array()
 		);
 
-		$source = Source_Registry::get( (string) $row->source );
+		// meta.json package: the folder stays in Incoming until cross-posting is finished.
+		$is_package = Package_Manifest::is_package( $metadata );
+		if ( $is_package ) {
+			$metadata = Package_Manifest::mark_in_progress( $metadata, (int) $post_id );
+			update_post_meta(
+				(int) $post_id,
+				self::PACKAGE_POST_META,
+				array(
+					'source'  => (string) $row->source,
+					'path'    => (string) ( $metadata['package_folder_id'] ?? '' ),
+					'schema'  => (int) ( $metadata[ Package_Manifest::META_KEY ]['schema'] ?? 0 ),
+					'file_id' => (string) $row->file_id,
+				)
+			);
+		}
+
+		$package_warning = '';
+		if ( $is_package ) {
+			$written = Package_Store::update(
+				(int) $post_id,
+				array(
+					'original' => array(
+						'status'      => 'imported',
+						'post_id'     => (int) $post_id,
+						'slug'        => (string) $metadata['slug'],
+						'imported_at' => gmdate( 'c' ),
+					),
+				)
+			);
+			if ( is_wp_error( $written ) ) {
+				$package_warning = $written->get_error_message();
+				update_post_meta( (int) $post_id, Package_Store::ERROR_POST_META, $package_warning );
+			}
+		}
+
+		$source = $is_package ? null : Source_Registry::get( (string) $row->source );
 		if ( $source ) {
 			$moved = $source->move_after_import( (string) $row->file_id, 'published', $metadata );
 			if ( is_wp_error( $moved ) ) {
@@ -188,16 +239,17 @@ final class Import_Runner {
 			}
 		}
 
-		$now = current_time( 'mysql', true );
-		$this->repository->update(
-			$document_id,
-			array(
-				'status'      => Document_Status::IMPORTED,
-				'wp_post_id'  => $post_id,
-				'imported_at' => $now,
-				'updated_at'  => $now,
-			)
+		$now    = current_time( 'mysql', true );
+		$fields = array(
+			'status'      => Document_Status::IMPORTED,
+			'wp_post_id'  => $post_id,
+			'imported_at' => $now,
+			'updated_at'  => $now,
 		);
+		if ( $is_package ) {
+			$fields['metadata_json'] = wp_json_encode( $metadata );
+		}
+		$this->repository->update( $document_id, $fields );
 
 		$this->record_history( $row, $document_id, (int) $post_id, $mode, $metadata, $now );
 
@@ -209,7 +261,7 @@ final class Import_Runner {
 		 */
 		do_action( 'forwp_drive_document_imported', $post_id, $document_id );
 
-		$requeued = ( new Incoming_Scanner( $this->repository ) )->requeue_package_after_import(
+		$requeued = $is_package ? null : ( new Incoming_Scanner( $this->repository ) )->requeue_package_after_import(
 			(string) $row->source,
 			$metadata
 		);
@@ -229,7 +281,7 @@ final class Import_Runner {
 			);
 		}
 
-		$combined_warning = trim( ( $image_warning ? $image_warning . ' ' : '' ) . $body_warning );
+		$combined_warning = trim( ( $image_warning ? $image_warning . ' ' : '' ) . $body_warning . ( $package_warning ? ' ' . $package_warning : '' ) );
 		if ( $combined_warning ) {
 			$response['warning'] = $combined_warning;
 		}

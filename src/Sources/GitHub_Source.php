@@ -10,9 +10,12 @@ namespace ForWP\Drive\Sources;
 use ForWP\Drive\Admin\GitHub_Settings;
 use ForWP\Drive\Api\GitHub_Client;
 use ForWP\Drive\Contracts\Storage_Source_Interface;
+use ForWP\Drive\Database\Document_Repository;
+use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Import\Featured_Image_Chooser;
 use ForWP\Drive\Import\Importable_Document;
 use ForWP\Drive\Import\Markdown_Content;
+use ForWP\Drive\Package\Package_Manifest;
 use ForWP\Drive\Parse\Template_Parser;
 use WP_Error;
 
@@ -106,6 +109,10 @@ final class GitHub_Source implements Storage_Source_Interface {
 			return;
 		}
 
+		// meta.json package: only the original is importable, and it is listed first.
+		$manifest = $this->read_manifest( $client, $entries );
+		$original = null !== $manifest ? $manifest->original_file() : '';
+
 		foreach ( $entries as $entry ) {
 			if ( ! is_array( $entry ) ) {
 				continue;
@@ -126,6 +133,7 @@ final class GitHub_Source implements Storage_Source_Interface {
 					'name'    => $name,
 					'path'    => $full,
 					'role'    => '',
+					'state'   => isset( $this->in_progress_package_paths()[ $full ] ) ? Package_Manifest::STATE_IN_PROGRESS : '',
 					'id'      => $full,
 					'lazy'    => true,
 					'loaded'  => false,
@@ -147,11 +155,26 @@ final class GitHub_Source implements Storage_Source_Interface {
 				$kind = 'document';
 			}
 
-			$node['files'][] = array(
+			$file = array(
 				'id'   => $this->file_id_for_path( $full ),
 				'name' => $name,
 				'kind' => $kind,
 			);
+
+			if ( '' === $original ) {
+				$node['files'][] = $file;
+				continue;
+			}
+
+			if ( $name === $original ) {
+				array_unshift( $node['files'], $file );
+				continue;
+			}
+
+			if ( 'image' !== $kind ) {
+				$file['readonly'] = true;
+			}
+			$node['files'][] = $file;
 		}
 	}
 
@@ -172,6 +195,39 @@ final class GitHub_Source implements Storage_Source_Interface {
 		$this->fill_browse_level( $client, $node, $path, array(), $depth );
 
 		return $node;
+	}
+
+	/**
+	 * Package folders whose original is imported, cross-posting not finished.
+	 *
+	 * @var array<string, true>|null
+	 */
+	private $in_progress_paths = null;
+
+	/**
+	 * In-progress package folder paths (cached per request).
+	 *
+	 * @return array<string, true>
+	 */
+	private function in_progress_package_paths(): array {
+		if ( null !== $this->in_progress_paths ) {
+			return $this->in_progress_paths;
+		}
+
+		$this->in_progress_paths = array();
+		$repository              = new Document_Repository();
+		foreach ( $repository->list_by_statuses( array( Document_Status::IMPORTED ), 500 ) as $row ) {
+			if ( self::SLUG !== (string) $row->source ) {
+				continue;
+			}
+			$meta = $repository->decode_metadata( $row );
+			$path = trim( str_replace( '\\', '/', (string) ( $meta['package_folder_id'] ?? '' ) ), '/' );
+			if ( '' !== $path && Package_Manifest::is_in_progress( $meta ) ) {
+				$this->in_progress_paths[ $path ] = true;
+			}
+		}
+
+		return $this->in_progress_paths;
 	}
 
 	/**
@@ -281,6 +337,11 @@ final class GitHub_Source implements Storage_Source_Interface {
 		$package = $this->scan_package_dir( $client, $parser, $path, $name );
 		if ( null !== $package ) {
 			$results[] = $package;
+
+			// A meta.json package owns its subfolders (media, variants): no nested packages.
+			if ( Package_Manifest::is_package( (array) ( $package['metadata'] ?? array() ) ) ) {
+				return $results;
+			}
 		}
 
 		$listing = $client->list_path( $path );
@@ -479,7 +540,7 @@ final class GitHub_Source implements Storage_Source_Interface {
 	public function rescan_source_file( array $item, string $file_id ): ?array {
 		$meta = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : array();
 		$path = self::path_from_file_id( $file_id );
-		if ( '' === $path ) {
+		if ( '' === $path || Package_Manifest::is_blocked_file( $meta, $path ) ) {
 			return null;
 		}
 
@@ -502,13 +563,16 @@ final class GitHub_Source implements Storage_Source_Interface {
 			$listing = $client->list_path( $package_folder );
 			if ( ! is_wp_error( $listing ) && is_array( $listing ) ) {
 				$refreshed = $this->package_files_from_listing( $listing );
+				if ( Package_Manifest::is_package( $meta ) ) {
+					$refreshed = self::keep_only_document( $refreshed, (string) ( $meta[ Package_Manifest::META_KEY ]['original'] ?? '' ) );
+				}
 				if ( ! empty( $refreshed ) ) {
 					$package_files = $refreshed;
 				}
 			}
 		}
 
-		return $this->parse_markdown_file(
+		$rescanned = $this->parse_markdown_file(
 			$client,
 			$parser,
 			$path,
@@ -518,6 +582,12 @@ final class GitHub_Source implements Storage_Source_Interface {
 			$package_files,
 			$file_id
 		);
+
+		if ( is_array( $rescanned ) && Package_Manifest::is_package( $meta ) ) {
+			$rescanned['metadata'][ Package_Manifest::META_KEY ] = $meta[ Package_Manifest::META_KEY ];
+		}
+
+		return $rescanned;
 	}
 
 	/**
@@ -577,7 +647,35 @@ final class GitHub_Source implements Storage_Source_Interface {
 			}
 		}
 
+		$manifest = $this->read_manifest( $client, $listing );
+		if ( null !== $manifest ) {
+			$original      = $manifest->original_file();
+			$package_files = self::keep_only_document( $package_files, $original );
+			$article_rows  = array_values(
+				array_filter(
+					$article_rows,
+					static function ( array $row ) use ( $original ): bool {
+						return $row['name'] === $original;
+					}
+				)
+			);
+
+			// Missing original: still queue it, so the fetch error shows up in Incoming.
+			if ( empty( $article_rows ) ) {
+				$original_path  = trim( $dir_path, '/' ) . '/' . $original;
+				$article_rows[] = array(
+					'id'       => $this->file_id_for_path( $original_path ),
+					'name'     => $original,
+					'mimeType' => '',
+					'path'     => $original_path,
+				);
+			}
+		}
+
 		$picked = Importable_Document::pick_default( $article_rows );
+		if ( null !== $manifest && ! is_array( $picked ) ) {
+			$picked = $article_rows[0];
+		}
 		if ( ! is_array( $picked ) ) {
 			return null;
 		}
@@ -591,7 +689,7 @@ final class GitHub_Source implements Storage_Source_Interface {
 			);
 		}
 
-		return $this->parse_markdown_file(
+		$item = $this->parse_markdown_file(
 			$client,
 			$parser,
 			(string) ( $picked['path'] ?? '' ),
@@ -600,6 +698,70 @@ final class GitHub_Source implements Storage_Source_Interface {
 			$image,
 			$package_files,
 			(string) ( $picked['id'] ?? '' )
+		);
+
+		return null !== $manifest ? self::apply_manifest( $item, $manifest ) : $item;
+	}
+
+	/**
+	 * Read meta.json when the listing has one.
+	 *
+	 * @param GitHub_Client     $client  API client.
+	 * @param array<int, mixed> $listing Contents API rows.
+	 */
+	private function read_manifest( GitHub_Client $client, array $listing ): ?Package_Manifest {
+		foreach ( $listing as $entry ) {
+			if ( ! is_array( $entry ) || 'file' !== ( $entry['type'] ?? '' ) ) {
+				continue;
+			}
+			if ( ! Package_Manifest::is_manifest_name( (string) ( $entry['name'] ?? '' ) ) ) {
+				continue;
+			}
+
+			$raw = $client->get_file_contents( (string) ( $entry['path'] ?? '' ) );
+
+			return Package_Manifest::from_json( is_wp_error( $raw ) ? '' : (string) $raw );
+		}
+
+		return null;
+	}
+
+	/**
+	 * Attach the manifest summary to a scan item; an invalid manifest is reported as a scan error.
+	 *
+	 * @param array<string, mixed>|null $item     Scan item.
+	 * @param Package_Manifest          $manifest Package manifest.
+	 * @return array<string, mixed>|null
+	 */
+	private static function apply_manifest( ?array $item, Package_Manifest $manifest ): ?array {
+		if ( null === $item ) {
+			return null;
+		}
+
+		$item['metadata'][ Package_Manifest::META_KEY ] = $manifest->to_metadata();
+		if ( '' !== $manifest->error() && empty( $item['export_failed'] ) ) {
+			$item['export_failed']          = true;
+			$item['metadata']['scan_error'] = $manifest->error();
+		}
+
+		return $item;
+	}
+
+	/**
+	 * Drop every document except the package original (variants are not importable).
+	 *
+	 * @param array<int, array<string, string>> $package_files Package files.
+	 * @param string                            $document_name Original file name.
+	 * @return array<int, array<string, string>>
+	 */
+	private static function keep_only_document( array $package_files, string $document_name ): array {
+		return array_values(
+			array_filter(
+				$package_files,
+				static function ( array $file ) use ( $document_name ): bool {
+					return 'document' !== ( $file['kind'] ?? '' ) || ( $file['name'] ?? '' ) === $document_name;
+				}
+			)
 		);
 	}
 

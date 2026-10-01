@@ -1304,6 +1304,89 @@
 		return getWrapCapabilities().find( ( cap ) => cap && cap.id === id ) || null;
 	}
 
+	function wrapCapByBlock( block ) {
+		const wanted = String( block || '' );
+		return (
+			getWrapCapabilities().find( ( cap ) => cap && cap.block === wanted ) || null
+		);
+	}
+
+	function capAllowsMultiSpan( cap ) {
+		return !!( cap && String( cap.span || '' ) === 'multi' );
+	}
+
+	function headingSeedList( seeds ) {
+		return String( seeds || '' )
+			.split( ',' )
+			.map( ( part ) => normalizeHeadingText( part ) )
+			.filter( Boolean );
+	}
+
+	function headingMatchesSeedList( text, seeds ) {
+		const normalized = normalizeHeadingText( text );
+		if ( ! normalized ) {
+			return false;
+		}
+		return headingSeedList( seeds ).some(
+			( seed ) => normalized === seed || normalized.indexOf( seed ) === 0
+		);
+	}
+
+	function headingLooksLikeStep( text ) {
+		return /^(?:step|крок)\s*[\dIVXLC]+/i.test( normalizeHeadingText( text ) );
+	}
+
+	/**
+	 * True when this H2 belongs to a different wrap capability than the active one.
+	 */
+	function headingBelongsToOtherWrap( h2, cap ) {
+		if ( ! h2 || ! cap ) {
+			return false;
+		}
+		const text = h2.textContent || '';
+		const rule = matchDeclaredRule( text );
+		if ( rule ) {
+			const ruleCap = wrapCapById( rule.id );
+			if ( ruleCap && ruleCap.block && ruleCap.block !== cap.block ) {
+				return true;
+			}
+		}
+		return getWrapCapabilities().some( ( other ) => {
+			if ( ! other || other.block === cap.block ) {
+				return false;
+			}
+			return headingMatchesSeedList( text, other.heading_seeds );
+		} );
+	}
+
+	function headingIncludableInMulti( h2, cap ) {
+		if ( ! h2 || h2.tagName !== 'H2' || headingSkipsWrap( h2 ) ) {
+			return false;
+		}
+		if ( headingBelongsToOtherWrap( h2, cap ) ) {
+			return false;
+		}
+		const text = h2.textContent || '';
+		if ( headingMatchesSeedList( text, cap.heading_seeds ) ) {
+			return true;
+		}
+		if ( headingLooksLikeStep( text ) ) {
+			return true;
+		}
+		const host = h2.closest( '[data-drive-wrap]' );
+		if ( host && host.getAttribute( 'data-drive-wrap' ) === String( cap.block || '' ) ) {
+			return true;
+		}
+		const declared = h2.closest( '.forwp-drive-declared-wrap' );
+		if ( declared ) {
+			const declaredCap = wrapCapById( declared.getAttribute( 'data-declared-id' ) );
+			if ( declaredCap && declaredCap.block === cap.block ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	function capLabelForBlock( block ) {
 		const wanted = String( block || '' );
 		const rule = declaredPatternRules().find( ( row ) => row && row.block === wanted );
@@ -1537,6 +1620,168 @@
 		return !!( node.querySelector && node.querySelector( 'h1, h2' ) );
 	}
 
+	/**
+	 * Boundary for multi-span wraps (e.g. TechArticle Steps): keep going through
+	 * contiguous Step H2s; stop at other wrap types / H1.
+	 */
+	function nodeStartsMultiWrapBoundary( node, start, cap ) {
+		if ( ! node || node === start || node.nodeType !== 1 ) {
+			return false;
+		}
+		const tag = String( node.tagName || '' );
+		if ( tag === 'H1' ) {
+			return true;
+		}
+		if ( tag === 'H2' ) {
+			return ! headingIncludableInMulti( node, cap );
+		}
+		const wrapBlock =
+			node.getAttribute && node.getAttribute( 'data-drive-wrap' )
+				? String( node.getAttribute( 'data-drive-wrap' ) )
+				: '';
+		if ( wrapBlock ) {
+			return wrapBlock !== String( cap.block || '' );
+		}
+		if ( node.classList && node.classList.contains( 'forwp-drive-declared-wrap' ) ) {
+			const declaredCap = wrapCapById( node.getAttribute( 'data-declared-id' ) );
+			if ( declaredCap && declaredCap.block && declaredCap.block !== cap.block ) {
+				return true;
+			}
+			// Same capability declared preview — absorb into the multi wrap.
+			return false;
+		}
+		if ( node.classList && node.classList.contains( 'forwp-drive-wrap-hit' ) ) {
+			const innerH2 = node.querySelector && node.querySelector( 'h2' );
+			if ( innerH2 ) {
+				return ! headingIncludableInMulti( innerH2, cap );
+			}
+		}
+		const nestedH2 = node.querySelector && node.querySelector( 'h2' );
+		if ( nestedH2 && ! headingIncludableInMulti( nestedH2, cap ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	function collectNodesForward( start, shouldStop ) {
+		const nodes = [];
+		const before = start.previousSibling;
+		if ( before && before.nodeType === 8 ) {
+			const value = String( before.nodeValue || '' );
+			if ( /^\s*wp:(?:heading|paragraph|list|quote)/.test( value ) ) {
+				nodes.push( before );
+			}
+		}
+		let node = start;
+		while ( node ) {
+			if ( shouldStop( node, start ) ) {
+				break;
+			}
+			if (
+				node.nodeType === 1 ||
+				node.nodeType === 8 ||
+				( node.nodeType === 3 && String( node.textContent || '' ).trim() )
+			) {
+				nodes.push( node );
+			}
+			node = node.nextSibling;
+		}
+		return nodes;
+	}
+
+	function topSiblingUnder( node, parent ) {
+		let current = node;
+		while ( current && current.parentNode && current.parentNode !== parent ) {
+			current = current.parentNode;
+		}
+		return current && current.parentNode === parent ? current : null;
+	}
+
+	/**
+	 * Collect a multi-span range. When mutate=true, merges by unwrapping same-block siblings first.
+	 */
+	function collectMultiWrapRange( start, cap, mutate ) {
+		const roughHost =
+			start.closest(
+				'[data-drive-wrap], .forwp-drive-declared-wrap, .forwp-drive-wrap-hit'
+			) || start;
+		const parent = roughHost.parentNode;
+		if ( ! parent ) {
+			return [];
+		}
+
+		const kids = Array.prototype.slice.call( parent.childNodes );
+		let anchor = topSiblingUnder( start, parent ) || roughHost;
+		let anchorIdx = kids.indexOf( anchor );
+		if ( anchorIdx < 0 ) {
+			anchor = topSiblingUnder( roughHost, parent ) || roughHost;
+			anchorIdx = kids.indexOf( anchor );
+		}
+		if ( anchorIdx < 0 ) {
+			return collectNodesForward( start, nodeStartsNextWrapSection );
+		}
+
+		let from = anchorIdx;
+		while ( from > 0 ) {
+			if ( nodeStartsMultiWrapBoundary( kids[ from - 1 ], start, cap ) ) {
+				break;
+			}
+			from -= 1;
+		}
+		let to = anchorIdx;
+		while ( to < kids.length - 1 ) {
+			if ( nodeStartsMultiWrapBoundary( kids[ to + 1 ], start, cap ) ) {
+				break;
+			}
+			to += 1;
+		}
+
+		if ( ! mutate ) {
+			return kids.slice( from, to + 1 ).filter( ( node ) => {
+				return (
+					node.nodeType === 1 ||
+					node.nodeType === 8 ||
+					( node.nodeType === 3 && String( node.textContent || '' ).trim() )
+				);
+			} );
+		}
+
+		const sameBlock = String( cap.block || '' );
+		kids
+			.slice( from, to + 1 )
+			.filter(
+				( child ) =>
+					child instanceof HTMLElement &&
+					child.getAttribute( 'data-drive-wrap' ) === sameBlock
+			)
+			.reverse()
+			.forEach( ( wrap ) => {
+				unwrapDriveSection( wrap );
+			} );
+
+		const freshKids = Array.prototype.slice.call( parent.childNodes );
+		anchor = topSiblingUnder( start, parent );
+		if ( ! anchor ) {
+			return [];
+		}
+		anchorIdx = freshKids.indexOf( anchor );
+		if ( anchorIdx < 0 ) {
+			return [];
+		}
+
+		from = anchorIdx;
+		while ( from > 0 ) {
+			if ( nodeStartsMultiWrapBoundary( freshKids[ from - 1 ], start, cap ) ) {
+				break;
+			}
+			from -= 1;
+		}
+
+		return collectNodesForward( freshKids[ from ], ( node, origin ) =>
+			nodeStartsMultiWrapBoundary( node, origin, cap )
+		);
+	}
+
 	function dismissWrapSection( section ) {
 		if ( ! section || ! section.parentNode ) {
 			return;
@@ -1667,45 +1912,35 @@
 		if ( declared ) {
 			clearDeclaredHighlights( declared.parentElement );
 		}
-		const existing = start.closest( '[data-drive-wrap]' );
-		if ( existing ) {
-			unwrapDriveSection( existing );
+		if ( ! capAllowsMultiSpan( cap ) ) {
+			const existing = start.closest( '[data-drive-wrap]' );
+			if ( existing ) {
+				unwrapDriveSection( existing );
+			}
 		}
 
-		const parent = start.parentNode;
-		if ( ! parent ) {
+		const nodes = capAllowsMultiSpan( cap )
+			? collectMultiWrapRange( start, cap, true )
+			: collectNodesForward( start, nodeStartsNextWrapSection );
+
+		if ( ! nodes.length ) {
 			return;
 		}
 
-		const nodes = [];
-		const before = start.previousSibling;
-		if ( before && before.nodeType === 8 ) {
-			const value = String( before.nodeValue || '' );
-			if ( /^\s*wp:(?:heading|paragraph|list|quote)/.test( value ) ) {
-				nodes.push( before );
-			}
-		}
-		let node = start;
-		while ( node ) {
-			if ( nodeStartsNextWrapSection( node, start ) ) {
-				break;
-			}
-			if (
-				node.nodeType === 1 ||
-				node.nodeType === 8 ||
-				( node.nodeType === 3 && String( node.textContent || '' ).trim() )
-			) {
-				nodes.push( node );
-			}
-			node = node.nextSibling;
+		const insertBefore = nodes[ 0 ];
+		const hostParent = insertBefore.parentNode;
+		if ( ! hostParent ) {
+			return;
 		}
 
 		const section = document.createElement( 'section' );
 		section.className = wrapBlockClass( cap.block );
 		section.setAttribute( 'data-drive-wrap', cap.block );
-		parent.insertBefore( section, start );
+		hostParent.insertBefore( section, insertBefore );
 		nodes.forEach( ( item ) => {
-			section.appendChild( item );
+			if ( item.parentNode ) {
+				section.appendChild( item );
+			}
 		} );
 		stripWpComments( section );
 		const body = document.getElementById( 'forwp-drive-preview-post-content' );
@@ -1730,7 +1965,12 @@
 				}
 			} );
 		body.querySelectorAll( 'section' ).forEach( ( section ) => {
-			if ( section.querySelectorAll( 'h2' ).length > 1 ) {
+			const block = inferWrapBlock( section );
+			const cap = block ? wrapCapByBlock( block ) : null;
+			if (
+				section.querySelectorAll( 'h2' ).length > 1 &&
+				! capAllowsMultiSpan( cap )
+			) {
 				stripWrapChrome( section );
 				section.removeAttribute( 'data-drive-wrap' );
 				section.classList.remove( 'is-declared-match' );
@@ -1743,7 +1983,6 @@
 				section.classList.remove( 'is-declared-match' );
 				return;
 			}
-			const block = inferWrapBlock( section );
 			if ( ! block ) {
 				return;
 			}
@@ -1995,30 +2234,11 @@
 		} );
 	}
 
-	function collectWrapRange( h2 ) {
-		const nodes = [];
-		const before = h2.previousSibling;
-		if ( before && before.nodeType === 8 ) {
-			const value = String( before.nodeValue || '' );
-			if ( /^\s*wp:(?:heading|paragraph|list|quote)/.test( value ) ) {
-				nodes.push( before );
-			}
+	function collectWrapRange( h2, cap ) {
+		if ( capAllowsMultiSpan( cap ) ) {
+			return collectMultiWrapRange( h2, cap, false );
 		}
-		let node = h2;
-		while ( node ) {
-			if ( nodeStartsNextWrapSection( node, h2 ) ) {
-				break;
-			}
-			if (
-				node.nodeType === 1 ||
-				node.nodeType === 8 ||
-				( node.nodeType === 3 && String( node.textContent || '' ).trim() )
-			) {
-				nodes.push( node );
-			}
-			node = node.nextSibling;
-		}
-		return nodes;
+		return collectNodesForward( h2, nodeStartsNextWrapSection );
 	}
 
 	function paintWrapHits( body ) {
@@ -2026,31 +2246,58 @@
 		if ( ! body || ! body.classList.contains( 'is-wrapping' ) ) {
 			return;
 		}
+		const cap = wrapCapById( wrapSelectedId );
 		const headings = Array.prototype.slice.call( body.querySelectorAll( 'h2' ) );
+		const painted = new Set();
+
 		headings.forEach( ( h2 ) => {
+			if ( painted.has( h2 ) ) {
+				return;
+			}
 			if ( h2.classList.contains( 'forwp-drive-preview__blocks-note' ) ) {
 				return;
 			}
 			const host = h2.closest(
 				'[data-drive-wrap], .forwp-drive-declared-wrap'
 			);
-			if ( host && host !== body ) {
+			if ( host && host !== body && ! capAllowsMultiSpan( cap ) ) {
 				host.classList.add( 'forwp-drive-wrap-hit' );
+				return;
+			}
+			if (
+				host &&
+				host !== body &&
+				capAllowsMultiSpan( cap ) &&
+				host.getAttribute( 'data-drive-wrap' ) === String( cap.block || '' )
+			) {
+				host.classList.add( 'forwp-drive-wrap-hit' );
+				host.querySelectorAll( 'h2' ).forEach( ( nested ) => painted.add( nested ) );
 				return;
 			}
 			const parent = h2.parentNode;
 			if ( ! parent ) {
 				return;
 			}
-			const nodes = collectWrapRange( h2 );
+			const nodes = collectWrapRange( h2, cap );
 			if ( ! nodes.length ) {
 				return;
 			}
+			nodes.forEach( ( node ) => {
+				if ( node instanceof HTMLElement && node.tagName === 'H2' ) {
+					painted.add( node );
+				}
+				if ( node instanceof HTMLElement ) {
+					node.querySelectorAll &&
+						node.querySelectorAll( 'h2' ).forEach( ( nested ) => painted.add( nested ) );
+				}
+			} );
 			const hit = document.createElement( 'div' );
 			hit.className = 'forwp-drive-wrap-hit';
-			parent.insertBefore( hit, h2 );
+			parent.insertBefore( hit, nodes[ 0 ] );
 			nodes.forEach( ( item ) => {
-				hit.appendChild( item );
+				if ( item.parentNode ) {
+					hit.appendChild( item );
+				}
 			} );
 		} );
 	}
@@ -3632,6 +3879,7 @@
 				name: node.name || '',
 				path: node.path || '',
 				role: node.role || '',
+				state: node.state || '',
 				id: node.id || '',
 				lazy: !! node.lazy,
 				loaded: !! node.loaded,
@@ -3647,6 +3895,7 @@
 					name: file.name || '',
 					kind: file.kind || 'file',
 					fileId: file.id || '',
+					readonly: !! file.readonly,
 					doc: null,
 				} );
 			} );
@@ -3689,8 +3938,8 @@
 			if ( ! fileId ) {
 				return false;
 			}
-			const hit = ( node.files || [] ).find( ( file ) =>
-				sameStorageId( file.fileId, fileId )
+			const hit = ( node.files || [] ).find(
+				( file ) => ! file.readonly && sameStorageId( file.fileId, fileId )
 			);
 			if ( hit ) {
 				hit.doc = doc;
@@ -3721,7 +3970,11 @@
 								sameStorageId( f.fileId, id ) ||
 								( pf.name && f.name === pf.name )
 						);
-						if ( existing && ( pf.kind === 'document' || ! pf.kind ) ) {
+						if (
+							existing &&
+							! existing.readonly &&
+							( pf.kind === 'document' || ! pf.kind )
+						) {
 							existing.doc = doc;
 							if ( id ) {
 								existing.fileId = id;
@@ -3732,6 +3985,7 @@
 					( folder.files || [] ).forEach( ( f ) => {
 						if (
 							! f.doc &&
+							! f.readonly &&
 							( f.kind === 'document' ||
 								/\.(md|mdx|markdown)$/i.test( f.name || '' ) )
 						) {
@@ -3922,6 +4176,10 @@
 			const roleClass = folder.role
 				? ` is-role is-role--${ escapeHtml( folder.role ) }`
 				: '';
+			const inProgress = folder.state === 'in_progress';
+			const stateBadge = inProgress
+				? '<span class="forwp-drive-tree__state">In progress</span>'
+				: '';
 			const emptyClass =
 				! folderHasKids( folder ) &&
 				! folderNeedsFetch( folder ) &&
@@ -3934,7 +4192,7 @@
 				<div
 					class="forwp-drive-tree__row is-folder${ expanded ? ' is-expanded' : '' }${
 				selected ? ' is-selected' : ''
-			}${ warning }${ roleClass }${ emptyClass }"
+			}${ warning }${ roleClass }${ inProgress ? ' is-in-progress' : '' }${ emptyClass }"
 					style="--forwp-drive-tree-depth: ${ depth }"
 					data-action="tree-folder"
 					data-path="${ escapeHtml( folder.path ) }"
@@ -3946,7 +4204,7 @@
 				>
 					${ treeToggle( expanded ) }
 					${ treeFolderIcon() }
-					<span class="forwp-drive-tree__label">${ escapeHtml( folder.name ) }</span>
+					<span class="forwp-drive-tree__label">${ escapeHtml( folder.name ) }</span>${ stateBadge }
 				</div>`;
 			if ( expanded ) {
 				html += `<div class="forwp-drive-tree__children" role="group">`;
@@ -3983,13 +4241,17 @@
 						previewFileId &&
 						sameStorageId( storageFileId, previewFileId )
 				  );
-			const selectable = isImage ? !! storageFileId : !! fileDocId;
+			// meta.json package variants: listed only, no actions.
+			const readonly = !! file.readonly && ! isImage;
+			const selectable = isImage ? !! storageFileId : !! fileDocId && ! readonly;
 			const scanWarning =
 				file.doc && file.doc.scan_error ? ' is-warning' : '';
 			const openUrl = isImage
 				? storageFileOpenUrl( storageFileId, true )
 				: '';
-			const actionAttrs = isImage
+			const actionAttrs = readonly
+				? ''
+				: isImage
 				? `data-action="preview-media" data-file-id="${ escapeHtml(
 						storageFileId
 				  ) }" data-name="${ escapeHtml( file.name || '' ) }" draggable="true"`
@@ -4003,7 +4265,9 @@
 			html += `<div
 				class="forwp-drive-tree__row is-file is-file--${ escapeHtml( kind ) }${
 				fileSelected ? ' is-selected' : ''
-			}${ scanWarning }${ selectable || isImage ? '' : ' is-readonly' }"
+			}${ scanWarning }${
+				readonly ? ' is-locked' : selectable || isImage ? '' : ' is-readonly'
+			}"
 				style="--forwp-drive-tree-depth: ${ depth }"
 				${ actionAttrs }
 				tabindex="0"

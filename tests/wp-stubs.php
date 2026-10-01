@@ -445,6 +445,20 @@ if ( ! function_exists( 'serialize_blocks' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wp_is_numeric_array' ) ) {
+	function wp_is_numeric_array( $data ) {
+		if ( ! is_array( $data ) ) {
+			return false;
+		}
+		foreach ( array_keys( $data ) as $key ) {
+			if ( ! is_int( $key ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
 if ( ! function_exists( 'wp_json_encode' ) ) {
 	/**
 	 * @param mixed $data Data.

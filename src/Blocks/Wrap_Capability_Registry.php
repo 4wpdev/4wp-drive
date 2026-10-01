@@ -366,6 +366,11 @@ final class Wrap_Capability_Registry {
 			$label = $id;
 		}
 
+		$span = sanitize_key( (string) ( $row['span'] ?? 'single' ) );
+		if ( ! in_array( $span, array( 'single', 'multi' ), true ) ) {
+			$span = 'single';
+		}
+
 		return array(
 			'id'            => $id,
 			'origin'        => $origin,
@@ -374,6 +379,7 @@ final class Wrap_Capability_Registry {
 			'label'         => $label,
 			'maps'          => $maps,
 			'wrap'          => $wrap,
+			'span'          => $span,
 			'match'         => $match,
 			'heading_seeds' => sanitize_text_field( (string) ( $row['heading_seeds'] ?? '' ) ),
 			'prompt'        => sanitize_text_field( (string) ( $row['prompt'] ?? '' ) ),

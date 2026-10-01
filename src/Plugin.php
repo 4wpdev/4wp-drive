@@ -17,6 +17,7 @@ use ForWP\Drive\Rest\Rest_Oauth;
 use ForWP\Drive\Rest\Rest_Patterns;
 use ForWP\Drive\Rest\Rest_Settings;
 use ForWP\Drive\Notifications\Admin_Notifier;
+use ForWP\Drive\Package\Package_Store;
 use ForWP\Drive\Sync\Sync_Scheduler;
 
 defined( 'ABSPATH' ) || exit;
@@ -62,6 +63,7 @@ final class Plugin {
 		Google_OAuth::instance()->boot();
 		Sync_Scheduler::boot();
 		Pattern_Post_Type::boot();
+		Package_Store::boot();
 		Rest_Settings::register();
 		Rest_Patterns::register();
 		Rest_Documents::register();

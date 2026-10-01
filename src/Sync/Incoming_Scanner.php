@@ -11,6 +11,7 @@ use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Notifications\Admin_Notifier;
+use ForWP\Drive\Package\Package_Manifest;
 use ForWP\Drive\Source_Registry;
 use WP_Error;
 
@@ -70,6 +71,10 @@ final class Incoming_Scanner {
 					if ( '' !== $package_id ) {
 						$existing = $this->find_by_package_folder( $package_id, $source->get_slug() );
 					}
+				}
+
+				if ( $this->is_in_progress_package( $existing ) ) {
+					continue;
 				}
 
 				$item = $this->maybe_rescan_selected( $source, $item, $existing );
@@ -272,6 +277,10 @@ final class Incoming_Scanner {
 			}
 		}
 
+		if ( $this->is_in_progress_package( $existing ) ) {
+			return null;
+		}
+
 		if ( $preserve_selection ) {
 			$item = $this->maybe_rescan_selected( $source, $item, $existing );
 		}
@@ -348,6 +357,17 @@ final class Incoming_Scanner {
 			'file_id'     => $file_id,
 			'was_new'     => $was_new ? 1 : 0,
 		);
+	}
+
+	/**
+	 * Imported meta.json package still being cross-posted: keep it out of the queue.
+	 *
+	 * @param object|null $existing Existing row.
+	 */
+	private function is_in_progress_package( $existing ): bool {
+		return $existing
+			&& Document_Status::IMPORTED === (string) $existing->status
+			&& Package_Manifest::is_in_progress( $this->repository->decode_metadata( $existing ) );
 	}
 
 	/**

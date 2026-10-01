@@ -74,6 +74,57 @@ final class GitHub_Client {
 	}
 
 	/**
+	 * Read a file with its blob sha (needed to update it).
+	 *
+	 * @param string $path Repo path.
+	 * @return array{content: string, sha: string}|WP_Error
+	 */
+	public function get_file( string $path ) {
+		$res = $this->request( 'GET', $this->contents_path( $path ) );
+		if ( is_wp_error( $res ) ) {
+			return $res;
+		}
+
+		if ( ! is_array( $res ) || ( $res['type'] ?? '' ) !== 'file' || '' === (string) ( $res['sha'] ?? '' ) ) {
+			return new WP_Error( 'forwp_drive_github_file', __( 'GitHub path is not a file.', '4wp-drive' ) );
+		}
+
+		$content = base64_decode( str_replace( "\n", '', (string) ( $res['content'] ?? '' ) ), true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
+		if ( false === $content ) {
+			return new WP_Error( 'forwp_drive_github_decode', __( 'Could not decode GitHub file.', '4wp-drive' ) );
+		}
+
+		return array(
+			'content' => $content,
+			'sha'     => (string) $res['sha'],
+		);
+	}
+
+	/**
+	 * Update an existing file. GitHub rejects the write (409) when $sha is stale.
+	 *
+	 * @param string $path    Repo path.
+	 * @param string $content New file contents.
+	 * @param string $sha     Blob sha the change is based on.
+	 * @param string $message Commit message.
+	 * @return true|WP_Error
+	 */
+	public function put_file( string $path, string $content, string $sha, string $message ) {
+		$put = $this->request(
+			'PUT',
+			$this->contents_path( $path, false ),
+			array(
+				'message' => $message,
+				'content' => base64_encode( $content ), // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+				'sha'     => $sha,
+				'branch'  => GitHub_Settings::get_public()['branch'],
+			)
+		);
+
+		return is_wp_error( $put ) ? $put : true;
+	}
+
+	/**
 	 * Move a file from one repo path to another (create + delete).
 	 *
 	 * @return true|WP_Error

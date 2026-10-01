@@ -18,8 +18,10 @@ use ForWP\Drive\Import\Google_Doc_Content;
 use ForWP\Drive\Import\Import_Runner;
 use ForWP\Drive\Import\Import_Target_Resolver;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
+use ForWP\Drive\Package\Package_Manifest;
 use ForWP\Drive\Parse\Template_Config;
 use ForWP\Drive\Source_Registry;
+use ForWP\Drive\Sources\GitHub_Source;
 use ForWP\Drive\Sync\Incoming_Scanner;
 use WP_Post_Type;
 use WP_REST_Request;
@@ -679,6 +681,13 @@ final class Rest_Documents {
 		}
 
 		$meta = $repo->decode_metadata( $row );
+		if ( Package_Manifest::is_blocked_file( $meta, GitHub_Source::path_from_file_id( $file_id ) ) ) {
+			return new WP_REST_Response(
+				array( 'message' => __( 'Only the original file of a meta.json package can be imported.', '4wp-drive' ) ),
+				400
+			);
+		}
+
 		$item = array(
 			'file_id'      => (string) $row->file_id,
 			'file_name'    => (string) $row->file_name,
