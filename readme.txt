@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -203,6 +203,14 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 
 == Changelog ==
 
+= 1.8.0 =
+* **Reject** — moves only the rejected document to `failed`, not the whole package folder.
+* **Incoming** — a leftover package file can be queued again and opened from the tree.
+
+= 1.7.4 =
+* **Sync** — an open Incoming post preview reloads after Sync, so the page matches the files just pulled in.
+* **Preview** — a single incoming file (not a package folder) opens without a failed source switch. Switching files still works inside a real package.
+
 = 1.7.0 =
 * **Images in the post** — from Incoming, insert a package image into the article: drag the file from the tree onto the preview, or click the image, pick Left / Center / Right, then click a paragraph. Writes `[image:file.png left]`. Markdown `![alt](file.png)` in the same folder still becomes the same marker.
 * **Patterns** — Overview, Core Block, Integrations Plugins, Custom Blocks. Overview front-matter sample is the live Settings template (not a stub), with a link to Settings → Documentation.
@@ -274,6 +282,9 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.8.0 =
+Reject moves only the rejected document. Leftover package files can be requeued from Incoming.
 
 = 1.7.0 =
 Place package images in the article from Incoming (drag or pin). Patterns lists Core plus family plugins (4WP FAQ, 4WP SEO Helper TechArticle) with activate/install. Analytics logs drafts and published; Restore is gone from that screen.

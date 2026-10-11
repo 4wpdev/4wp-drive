@@ -688,6 +688,12 @@ final class Rest_Documents {
 			);
 		}
 
+		$selected = (string) ( $meta['selected_file_id'] ?? $row->file_id );
+		// Already on this file (typical flat incoming .md / Google Doc): no package switch needed.
+		if ( $file_id === (string) $row->file_id || $file_id === $selected ) {
+			return new WP_REST_Response( self::serialize_row( $repo, $row, true ), 200 );
+		}
+
 		$item = array(
 			'file_id'      => (string) $row->file_id,
 			'file_name'    => (string) $row->file_name,

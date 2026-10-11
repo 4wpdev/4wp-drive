@@ -4,7 +4,7 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 
 **Plugin page:** [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/) · [WordPress.org](https://wordpress.org/plugins/4wp-drive/) · [4wp.dev](https://4wp.dev/) · GPL-2.0-or-later
 
-**Current stable:** 1.7.0
+**Current stable:** 1.8.0
 
 ## What it does
 
@@ -15,6 +15,16 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 5. **Analytics** records each import (drafts and published).
 
 Front-matter lines before a separator (`---` or `=====`) map to post fields (title, slug, categories, SEO, etc.). The rest becomes Gutenberg post content.
+
+## What shipped in 1.8.0
+
+- **Reject** — moves only the rejected document to `failed`, not the whole package folder.
+- **Incoming** — a leftover package file can be queued again and opened from the tree.
+
+## What shipped in 1.7.4
+
+- **Sync** — if a post preview is already open in Incoming, Sync reloads that page instead of leaving the old content on screen.
+- **Preview** — a single incoming file opens without a failed source switch. File switching still applies inside a package folder.
 
 ## What shipped in 1.7.0
 

@@ -242,14 +242,24 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 				continue;
 			}
 
+			$name = (string) ( $file['name'] ?? '' );
+			$mime = (string) ( $file['mimeType'] ?? '' );
 			$item = $this->scan_document_file(
 				$client,
 				$parser,
 				$file_id,
-				(string) ( $file['name'] ?? '' ),
+				$name,
 				'',
 				null,
-				(string) ( $file['mimeType'] ?? '' )
+				$mime,
+				array(
+					array(
+						'id'   => $file_id,
+						'name' => $name,
+						'kind' => 'document',
+						'mime' => $mime,
+					),
+				)
 			);
 
 			if ( null !== $item ) {
@@ -527,14 +537,33 @@ final class Google_Drive_Source implements Storage_Source_Interface {
 	 * @return array<string, mixed>|null
 	 */
 	public function rescan_source_file( array $item, string $file_id ): ?array {
-		$meta = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : array();
+		$meta  = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : array();
 		$files = isset( $meta['package_files'] ) && is_array( $meta['package_files'] ) ? $meta['package_files'] : array();
 		$found = null;
 		foreach ( $files as $file ) {
-			if ( is_array( $file ) && (string) ( $file['id'] ?? '' ) === $file_id && 'document' === ( $file['kind'] ?? '' ) ) {
+			if ( ! is_array( $file ) ) {
+				continue;
+			}
+			if ( (string) ( $file['id'] ?? '' ) !== $file_id ) {
+				continue;
+			}
+			$kind = (string) ( $file['kind'] ?? 'document' );
+			// "file" is the serialize_row default when kind was missing; treat as document.
+			if ( in_array( $kind, array( 'document', 'file', '' ), true ) ) {
 				$found = $file;
 				break;
 			}
+		}
+
+		// Flat incoming document: no package_files — allow re-scan of the row itself.
+		if ( ! is_array( $found ) && $file_id === (string) ( $item['file_id'] ?? '' ) ) {
+			$found = array(
+				'id'   => $file_id,
+				'name' => (string) ( $item['file_name'] ?? '' ),
+				'kind' => 'document',
+				'mime' => (string) ( $meta['mime_type'] ?? '' ),
+			);
+			$files = array( $found );
 		}
 
 		if ( ! is_array( $found ) ) {

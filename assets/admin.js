@@ -4545,7 +4545,25 @@
 			} else {
 				setStatus( status, message, false );
 			}
-			return loadInbox();
+			const openId = previewId;
+			const openFileId = previewFileId || '';
+			const openMode = getImportMode();
+			return loadInbox().then( () => {
+				if ( ! openId || previewMediaKey ) {
+					return;
+				}
+				const docs = ( inboxCache && inboxCache.documents ) || [];
+				const stillThere = docs.some(
+					( doc ) => String( doc.id ) === String( openId )
+				);
+				if ( ! stillThere ) {
+					return;
+				}
+				openPreview( openId, {
+					fileId: openFileId,
+					mode: openMode,
+				} );
+			} );
 		} );
 	}
 
@@ -4744,41 +4762,64 @@
 			loadImportTargets( data );
 		};
 
+		const showPreviewError = ( detail ) => {
+			meta.innerHTML =
+				'<p class="forwp-drive-preview__meta">' +
+				escapeHtml( detail ) +
+				'</p>';
+			const status = document.getElementById( 'forwp-drive-inbox-status' );
+			setStatus( status, detail, true );
+		};
+
 		const loadDocument = () =>
 			api( 'documents/' + id ).then( ( { ok, data } ) => {
 				if ( ! ok ) {
-					const detail =
-						data && data.message
-							? String( data.message )
-							: 'Could not load preview.';
-					meta.innerHTML =
-						'<p class="forwp-drive-preview__meta">' +
-						escapeHtml( detail ) +
-						'</p>';
+					showPreviewError(
+						( data && data.message ) || 'Could not load preview.'
+					);
 					return;
 				}
 				finishPreview( data );
 			} );
 
+		// Only POST /source when switching to another document inside a package.
+		// Flat incoming files have empty package_files; calling /source always 400s.
 		if ( wantedFileId ) {
-			api( 'documents/' + id + '/source', {
-				method: 'POST',
-				body: JSON.stringify( { file_id: wantedFileId } ),
-			} ).then( ( { ok, data } ) => {
-				if ( ok && data ) {
+			api( 'documents/' + id ).then( ( { ok, data } ) => {
+				if ( ! ok || ! data ) {
+					showPreviewError(
+						( data && data.message ) || 'Could not load preview.'
+					);
+					return;
+				}
+				const currentId = String(
+					data.selected_file_id || data.file_id || ''
+				).trim();
+				const packageFiles = Array.isArray( data.package_files )
+					? data.package_files
+					: [];
+				const alreadySelected = sameStorageId( currentId, wantedFileId );
+				const isPackageSibling = packageFiles.some(
+					( pf ) =>
+						pf &&
+						sameStorageId( pf.id, wantedFileId ) &&
+						( pf.kind === 'document' || ! pf.kind )
+				);
+				if ( alreadySelected || ! isPackageSibling ) {
 					finishPreview( data );
 					return;
 				}
-				const detail =
-					data && data.message
-						? String( data.message )
-						: 'Could not switch to that file in the package.';
-				meta.innerHTML =
-					'<p class="forwp-drive-preview__meta">' +
-					escapeHtml( detail ) +
-					'</p>';
-				const status = document.getElementById( 'forwp-drive-inbox-status' );
-				setStatus( status, detail, true );
+				api( 'documents/' + id + '/source', {
+					method: 'POST',
+					body: JSON.stringify( { file_id: wantedFileId } ),
+				} ).then( ( { ok: switchOk, data: switched } ) => {
+					if ( switchOk && switched ) {
+						finishPreview( switched );
+						return;
+					}
+					// Fall back to the queue document instead of a dead-end error.
+					finishPreview( data );
+				} );
 			} );
 			return;
 		}
