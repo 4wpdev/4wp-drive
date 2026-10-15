@@ -143,29 +143,42 @@ final class Core_Image_Recipe implements Block_Recipe_Interface {
 		}
 
 		$alt = isset( $attachment['alt'] ) ? (string) $attachment['alt'] : '';
+		if ( '' !== $parsed['caption'] ) {
+			$alt = $parsed['caption'];
+		}
 
-		return $builder->build_image_block( $id, $url, $alt, $parsed['align'] );
+		return $builder->build_image_block( $id, $url, $alt, $parsed['align'], $parsed['caption'] );
 	}
 
 	/**
-	 * Split `[image:file.jpg left]` into filename + align.
+	 * Split `[image:file.jpg left]` / `[image:file.png — Caption]` into parts.
 	 *
-	 * @return array{file: string, align: string}
+	 * Caption may follow an em dash, en dash, or " - " after the filename.
+	 *
+	 * @return array{file: string, align: string, caption: string}
 	 */
 	public static function parse_marker( string $token ): array {
 		$token = html_entity_decode( $token, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		$token = trim( $token );
 		$token = trim( $token, " \t\n\r\0\x0B\"'" );
 
+		$caption = '';
+		if ( preg_match( '/^(.*?)\s*[—–]\s+(.+)$/u', $token, $m )
+			|| preg_match( '/^(.*?)\s+-\s+(.+)$/u', $token, $m ) ) {
+			$token   = trim( (string) $m[1] );
+			$caption = trim( (string) $m[2] );
+		}
+
 		$align = '';
 		if ( preg_match( '/^(.*?)\s+(left|right|center)$/iu', $token, $m ) ) {
-			$token = trim( $m[1] );
-			$align = strtolower( $m[2] );
+			$token = trim( (string) $m[1] );
+			$align = strtolower( (string) $m[2] );
 		}
 
 		return array(
-			'file'  => strtolower( $token ),
-			'align' => $align,
+			'file'    => strtolower( $token ),
+			'align'   => $align,
+			'caption' => $caption,
 		);
 	}
 

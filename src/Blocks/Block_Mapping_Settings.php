@@ -88,6 +88,22 @@ final class Block_Mapping_Settings {
 	}
 
 	/**
+	 * Default Core Video recipe config (no heading match required).
+	 *
+	 * @return array<string, mixed>
+	 */
+	public static function default_core_video_config(): array {
+		$template = Block_Template_Registry::get( Block_Template_Registry::TEMPLATE_CORE_VIDEO );
+
+		return array(
+			'type'             => 'core-video',
+			'template'         => Block_Template_Registry::TEMPLATE_CORE_VIDEO,
+			'requires_plugins' => array(),
+			'doc_hint'         => $template ? (string) ( $template['doc_hint'] ?? '' ) : '',
+		);
+	}
+
+	/**
 	 * @param array<string, mixed> $rule Saved mapping rule.
 	 * @return array<string, mixed>|null
 	 */
@@ -104,9 +120,9 @@ final class Block_Mapping_Settings {
 
 		$recipe_type = sanitize_key( (string) ( $template['recipe_type'] ?? 'faq-accordion' ) );
 
-		if ( 'core-image' === $recipe_type ) {
+		if ( 'core-image' === $recipe_type || 'core-video' === $recipe_type ) {
 			return array(
-				'type'             => 'core-image',
+				'type'             => $recipe_type,
 				'template'         => $template_id,
 				'requires_plugins' => isset( $template['requires_plugins'] ) && is_array( $template['requires_plugins'] )
 					? $template['requires_plugins']
@@ -182,16 +198,17 @@ final class Block_Mapping_Settings {
 				$id = 'rule_' . wp_generate_password( 8, false, false );
 			}
 
-			$is_image = 'core-image' === sanitize_key( (string) ( $definition['recipe_type'] ?? '' ) );
+			$recipe_type = sanitize_key( (string) ( $definition['recipe_type'] ?? '' ) );
+			$is_media    = in_array( $recipe_type, array( 'core-image', 'core-video' ), true );
 
 			$rules[] = array(
 				'id'                   => $id,
 				'enabled'              => ! empty( $rule['enabled'] ),
 				'template'             => $template,
-				'section_headings'     => $is_image
+				'section_headings'     => $is_media
 					? ''
 					: self::sanitize_heading_list( (string) ( $rule['section_headings'] ?? 'FAQ' ) ),
-				'keep_section_heading' => $is_image ? false : ! empty( $rule['keep_section_heading'] ),
+				'keep_section_heading' => $is_media ? false : ! empty( $rule['keep_section_heading'] ),
 			);
 		}
 

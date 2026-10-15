@@ -1143,6 +1143,13 @@
 			return null;
 		}
 		let token = String( match[ 1 ] || '' ).trim();
+		let caption = '';
+		const withCaption = token.match( /^(.*?)\s*[—–]\s+(.+)$/u ) ||
+			token.match( /^(.*?)\s+-\s+(.+)$/u );
+		if ( withCaption ) {
+			token = String( withCaption[ 1 ] || '' ).trim();
+			caption = String( withCaption[ 2 ] || '' ).trim();
+		}
 		let align = 'center';
 		const aligned = token.match( /^(.*?)\s+(left|right|center)$/i );
 		if ( aligned ) {
@@ -1152,14 +1159,26 @@
 		if ( ! token ) {
 			return null;
 		}
-		return { file: token, align };
+		return { file: token, align, caption };
 	}
 
-	function formatImageMarker( file, align ) {
+	function formatImageMarker( file, align, caption ) {
 		const safeAlign = [ 'left', 'center', 'right' ].includes( align )
 			? align
 			: 'center';
-		return '[image:' + String( file || '' ).trim() + ' ' + safeAlign + ']';
+		let marker =
+			'[image:' + String( file || '' ).trim() + ' ' + safeAlign + ']';
+		const cap = String( caption || '' ).trim();
+		if ( cap ) {
+			marker =
+				'[image:' +
+				String( file || '' ).trim() +
+				( safeAlign !== 'center' ? ' ' + safeAlign : '' ) +
+				' — ' +
+				cap +
+				']';
+		}
+		return marker;
 	}
 
 	function setImageMarkerAlign( marker, align ) {
@@ -1193,12 +1212,17 @@
 				parseImageMarker(
 					formatImageMarker(
 						el.getAttribute( 'data-image-file' ) || '',
-						el.getAttribute( 'data-image-align' ) || 'center'
+						el.getAttribute( 'data-image-align' ) || 'center',
+						el.getAttribute( 'data-image-caption' ) || ''
 					)
 				) || parseImageMarker( el.textContent );
 			const p = clone.ownerDocument.createElement( 'p' );
 			p.textContent = parsed
-				? formatImageMarker( parsed.file, parsed.align )
+				? formatImageMarker(
+						parsed.file,
+						parsed.align,
+						parsed.caption || ''
+				  )
 				: '[image:]';
 			if ( el.parentNode ) {
 				el.parentNode.replaceChild( p, el );
@@ -2465,7 +2489,8 @@
 				? parseImageMarker(
 						formatImageMarker(
 							node.getAttribute( 'data-image-file' ) || '',
-							node.getAttribute( 'data-image-align' ) || 'center'
+							node.getAttribute( 'data-image-align' ) || 'center',
+							node.getAttribute( 'data-image-caption' ) || ''
 						)
 				  ) || parseImageMarker( node.textContent )
 				: parseImageMarker( node.textContent );
@@ -2475,6 +2500,11 @@
 			node.className = 'forwp-drive-image-marker is-align-' + parsed.align;
 			node.setAttribute( 'data-image-file', parsed.file );
 			node.setAttribute( 'data-image-align', parsed.align );
+			if ( parsed.caption ) {
+				node.setAttribute( 'data-image-caption', parsed.caption );
+			} else {
+				node.removeAttribute( 'data-image-caption' );
+			}
 			node.innerHTML = '';
 			const bar = document.createElement( 'div' );
 			bar.className = 'forwp-drive-image-marker__bar';
@@ -2510,6 +2540,12 @@
 			node.appendChild( bar );
 			node.appendChild( frame );
 			node.appendChild( name );
+			if ( parsed.caption ) {
+				const cap = document.createElement( 'span' );
+				cap.className = 'forwp-drive-image-marker__caption';
+				cap.textContent = parsed.caption;
+				node.appendChild( cap );
+			}
 		} );
 	}
 

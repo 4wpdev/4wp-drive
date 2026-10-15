@@ -8,6 +8,7 @@
 namespace ForWP\Drive\Blocks;
 
 use ForWP\Drive\Blocks\Recipes\Core_Image_Recipe;
+use ForWP\Drive\Blocks\Recipes\Core_Video_Recipe;
 use ForWP\Drive\Blocks\Recipes\Faq_Accordion_Recipe;
 use ForWP\Drive\Blocks\Recipes\Section_Wrap_Recipe;
 
@@ -31,6 +32,7 @@ final class Block_Recipe_Registry {
 			'forwp_drive_block_recipe_types',
 			array(
 				'core-image'    => Core_Image_Recipe::class,
+				'core-video'    => Core_Video_Recipe::class,
 				'faq-accordion' => Faq_Accordion_Recipe::class,
 				'section-wrap'  => Section_Wrap_Recipe::class,
 			)

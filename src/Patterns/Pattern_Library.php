@@ -133,7 +133,9 @@ final class Pattern_Library {
 	public static function active_recipe_configs(): array {
 		$configs             = array();
 		$has_core_image      = false;
+		$has_core_video      = false;
 		$core_image_disabled = false;
+		$core_video_disabled = false;
 
 		foreach ( self::get_rules() as $rule ) {
 			if ( ! is_array( $rule ) ) {
@@ -144,11 +146,18 @@ final class Pattern_Library {
 			if ( Block_Template_Registry::TEMPLATE_CORE_IMAGE === $template_id && empty( $rule['enabled'] ) ) {
 				$core_image_disabled = true;
 			}
+			if ( Block_Template_Registry::TEMPLATE_CORE_VIDEO === $template_id && empty( $rule['enabled'] ) ) {
+				$core_video_disabled = true;
+			}
 
 			$config = Block_Mapping_Settings::rule_to_recipe_config( $rule );
 			if ( null !== $config ) {
-				if ( 'core-image' === (string) ( $config['type'] ?? '' ) ) {
+				$type = (string) ( $config['type'] ?? '' );
+				if ( 'core-image' === $type ) {
 					$has_core_image = true;
+				}
+				if ( 'core-video' === $type ) {
+					$has_core_video = true;
 				}
 				$configs[] = $config;
 			}
@@ -162,6 +171,17 @@ final class Pattern_Library {
 			 */
 			if ( (bool) apply_filters( 'forwp_drive_default_core_image_recipe', true ) ) {
 				array_unshift( $configs, Block_Mapping_Settings::default_core_image_config() );
+			}
+		}
+
+		if ( ! $has_core_video && ! $core_video_disabled ) {
+			/**
+			 * Whether to apply the default Core Video marker recipe when no video pattern is enabled.
+			 *
+			 * @param bool $enabled Default true.
+			 */
+			if ( (bool) apply_filters( 'forwp_drive_default_core_video_recipe', true ) ) {
+				array_unshift( $configs, Block_Mapping_Settings::default_core_video_config() );
 			}
 		}
 

@@ -27,6 +27,19 @@ class Core_Image_RecipeTest extends TestCase {
 		$this->assertSame( array( 'cover.jpeg', 'hero.png' ), $tokens );
 	}
 
+	public function test_extract_tokens_strips_caption_after_em_dash(): void {
+		$html   = '<p>[Image: 01-convert.png — Convert an Accordion to FAQ]</p>';
+		$tokens = Core_Image_Recipe::extract_tokens( $html );
+		$this->assertSame( array( '01-convert.png' ), $tokens );
+	}
+
+	public function test_parse_marker_caption_and_align(): void {
+		$parsed = Core_Image_Recipe::parse_marker( '01-convert.png left — Convert an Accordion to FAQ' );
+		$this->assertSame( '01-convert.png', $parsed['file'] );
+		$this->assertSame( 'left', $parsed['align'] );
+		$this->assertSame( 'Convert an Accordion to FAQ', $parsed['caption'] );
+	}
+
 	public function test_transform_leaves_body_without_attachments(): void {
 		$recipe = new Core_Image_Recipe();
 		$html   = '<p>[image:cover.jpeg]</p>';
@@ -74,6 +87,31 @@ class Core_Image_RecipeTest extends TestCase {
 		$this->assertStringContainsString( 'alignleft', $out );
 		$this->assertStringContainsString( '"align":"left"', $out );
 		$this->assertStringNotContainsString( '[image:cover.jpeg left]', $out );
+	}
+
+	public function test_transform_uses_caption_as_figcaption(): void {
+		$recipe = new Core_Image_Recipe();
+		$out    = $recipe->transform(
+			'<p>[Image: 01-convert.png — Convert an Accordion to FAQ]</p>',
+			array(
+				'attachments' => array(
+					'01-convert.png' => array(
+						'id'  => 7,
+						'url' => 'https://example.com/01-convert.png',
+						'alt' => '01-convert',
+					),
+				),
+			)
+		);
+
+		$this->assertStringContainsString( '<!-- wp:image', $out );
+		$this->assertStringContainsString( 'wp-image-7', $out );
+		$this->assertStringContainsString(
+			'<figcaption class="wp-element-caption">Convert an Accordion to FAQ</figcaption>',
+			$out
+		);
+		$this->assertStringContainsString( 'alt="Convert an Accordion to FAQ"', $out );
+		$this->assertStringNotContainsString( '[Image:', $out );
 	}
 
 	public function test_transform_replaces_gutenberg_paragraph_without_empty_leftover(): void {

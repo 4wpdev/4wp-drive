@@ -17,6 +17,7 @@ final class Block_Template_Registry {
 	public const TEMPLATE_4WP_FAQ         = '4wp-faq';
 	public const TEMPLATE_CORE_ACCORDION  = 'core-accordion';
 	public const TEMPLATE_CORE_IMAGE      = 'core-image';
+	public const TEMPLATE_CORE_VIDEO      = 'core-video';
 	public const TEMPLATE_CUSTOM_CTA      = 'custom-cta';
 
 	/**
@@ -38,7 +39,16 @@ final class Block_Template_Registry {
 					'requires_plugins' => array(),
 					'available'        => true,
 					'default_enabled'  => true,
-					'doc_hint'         => __( 'Same article folder. Google Doc: [image:exact-filename.jpeg] (optional left/center/right). Markdown: ![alt](file.png) or the same marker. AI prompts like [IMAGE 2 — …] are ignored. Featured image is Incoming, not this marker.', '4wp-drive' ),
+					'doc_hint'         => __( 'Same article folder. [image:file.png] or [image:file.png — Caption] (caption → figcaption). Optional left/center/right. Markdown: ![alt](file.png). Featured image is Incoming, not this marker.', '4wp-drive' ),
+				),
+				self::TEMPLATE_CORE_VIDEO     => array(
+					'label'            => __( 'Core Video', '4wp-drive' ),
+					'description'      => __( 'Replaces [video:filename.mp4] markers with core/video blocks from the article package folder (default on).', '4wp-drive' ),
+					'recipe_type'      => 'core-video',
+					'requires_plugins' => array(),
+					'available'        => true,
+					'default_enabled'  => true,
+					'doc_hint'         => __( 'Local: [video:file.mp4] → core/video from the package folder. YouTube/Vimeo: paste the watch URL alone, or [video:https://youtube.com/…]. Becomes core/embed like in the block editor.', '4wp-drive' ),
 				),
 				self::TEMPLATE_4WP_FAQ        => array(
 					'label'            => __( '4WP FAQ', '4wp-drive' ),

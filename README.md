@@ -4,7 +4,7 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 
 **Plugin page:** [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/) · [WordPress.org](https://wordpress.org/plugins/4wp-drive/) · [4wp.dev](https://4wp.dev/) · GPL-2.0-or-later
 
-**Current stable:** 1.8.0
+**Current stable:** 1.8.1
 
 ## What it does
 
@@ -15,6 +15,12 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 5. **Analytics** records each import (drafts and published).
 
 Front-matter lines before a separator (`---` or `=====`) map to post fields (title, slug, categories, SEO, etc.). The rest becomes Gutenberg post content.
+
+## What shipped in 1.8.1
+
+- `[image:file.png — Caption]` → core/image with figcaption (filename still matches the package file).
+- `[video:file.mp4]` (optional caption) → core/video from the package folder.
+- Bare YouTube/Vimeo URL (or `[video:https://…]`) → core/embed (Gutenberg YouTube variation shape).
 
 ## What shipped in 1.8.0
 

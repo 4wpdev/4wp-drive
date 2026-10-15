@@ -166,14 +166,27 @@ final class Import_Runner {
 		$downloader    = $this->make_file_downloader( (string) $row->source );
 		$image_warning = $this->maybe_attach_featured_image( $metadata, (int) $post_id, $downloader );
 		$image_result  = $this->maybe_apply_package_images( $metadata, (int) $post_id, $downloader );
-		$body_warning  = (string) ( $image_result['warning'] ?? '' );
+		$video_result  = $this->maybe_apply_package_videos( $metadata, (int) $post_id, $downloader );
+		$body_warning  = trim(
+			(string) ( $image_result['warning'] ?? '' ) . ' ' . (string) ( $video_result['warning'] ?? '' )
+		);
+		$inline_media_ids = array_values(
+			array_unique(
+				array_merge(
+					isset( $image_result['used_file_ids'] ) && is_array( $image_result['used_file_ids'] )
+						? $image_result['used_file_ids']
+						: array(),
+					isset( $video_result['used_file_ids'] ) && is_array( $video_result['used_file_ids'] )
+						? $video_result['used_file_ids']
+						: array()
+				)
+			)
+		);
 		$metadata['slug'] = (string) get_post_field( 'post_name', $post_id );
 		$metadata['used_source_file_ids'] = $this->collect_used_source_file_ids(
 			(string) $row->file_id,
 			$metadata,
-			isset( $image_result['used_file_ids'] ) && is_array( $image_result['used_file_ids'] )
-				? $image_result['used_file_ids']
-				: array()
+			$inline_media_ids
 		);
 
 		// meta.json package: the folder stays in Incoming until cross-posting is finished.
@@ -297,6 +310,16 @@ final class Import_Runner {
 	 */
 	private function maybe_apply_package_images( array $metadata, int $post_id, callable $download ): array {
 		return ( new Package_Image_Importer( $download ) )->apply_to_post( $post_id, $metadata );
+	}
+
+	/**
+	 * @param array<string, mixed> $metadata Parsed document metadata.
+	 * @param int                  $post_id  Created post id.
+	 * @param callable             $download File downloader.
+	 * @return array{warning: string, used_file_ids: array<int, string>}
+	 */
+	private function maybe_apply_package_videos( array $metadata, int $post_id, callable $download ): array {
+		return ( new Package_Video_Importer( $download ) )->apply_to_post( $post_id, $metadata );
 	}
 
 	/**

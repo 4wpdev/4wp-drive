@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.8.0
+Stable tag: 1.8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -203,6 +203,10 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 
 == Changelog ==
 
+= 1.8.1 =
+* **Images:** `[image:file.png — Caption]` maps the filename for sideload and uses the text after the dash as the core/image figcaption (and alt).
+* **Video:** `[video:file.mp4]` (optional `— Caption`) → core/video from the package folder. A bare YouTube/Vimeo URL (or `[video:https://…]`) → core/embed with the same markup as pasting the link in the block editor.
+
 = 1.8.0 =
 * **Reject** — moves only the rejected document to `failed`, not the whole package folder.
 * **Incoming** — a leftover package file can be queued again and opened from the tree.
@@ -282,6 +286,9 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 * Internal MVP.
 
 == Upgrade Notice ==
+
+= 1.8.1 =
+Image markers with a dash caption become figcaptions; [video:file.mp4] imports as core/video.
 
 = 1.8.0 =
 Reject moves only the rejected document. Leftover package files can be requeued from Incoming.

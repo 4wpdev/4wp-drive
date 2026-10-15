@@ -158,8 +158,9 @@ final class Block_Markup_Builder {
 	 * Build a core/image block for an uploaded attachment.
 	 *
 	 * @param string $align         left|center|right or empty.
+	 * @param string $caption       Optional figcaption text.
 	 */
-	public function build_image_block( int $attachment_id, string $url, string $alt = '', string $align = '' ): string {
+	public function build_image_block( int $attachment_id, string $url, string $alt = '', string $align = '', string $caption = '' ): string {
 		if ( $attachment_id <= 0 || '' === $url ) {
 			return '';
 		}
@@ -188,15 +189,114 @@ final class Block_Markup_Builder {
 			$class .= ' align' . $align;
 		}
 
+		$figcaption = '';
+		if ( '' !== trim( $caption ) ) {
+			$figcaption = '<figcaption class="wp-element-caption">' . esc_html( $caption ) . '</figcaption>';
+		}
+
 		return sprintf(
 			'<!-- wp:image %1$s -->
-<figure class="%2$s"><img src="%3$s" alt="%4$s" class="wp-image-%5$d"/></figure>
+<figure class="%2$s"><img src="%3$s" alt="%4$s" class="wp-image-%5$d"/>%6$s</figure>
 <!-- /wp:image -->',
 			$encoded,
 			esc_attr( $class ),
 			esc_url( $url ),
 			esc_attr( $alt ),
-			$attachment_id
+			$attachment_id,
+			$figcaption
+		);
+	}
+
+	/**
+	 * Build a core/video block for an uploaded attachment.
+	 *
+	 * @param string $caption Optional figcaption text.
+	 */
+	public function build_video_block( int $attachment_id, string $url, string $caption = '' ): string {
+		if ( $attachment_id <= 0 || '' === $url ) {
+			return '';
+		}
+
+		$attrs = array(
+			'id' => $attachment_id,
+		);
+
+		$encoded = wp_json_encode( $attrs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		if ( ! is_string( $encoded ) ) {
+			$encoded = '{}';
+		}
+
+		$figcaption = '';
+		if ( '' !== trim( $caption ) ) {
+			$figcaption = '<figcaption class="wp-element-caption">' . esc_html( $caption ) . '</figcaption>';
+		}
+
+		return sprintf(
+			'<!-- wp:video %1$s -->
+<figure class="wp-block-video"><video controls src="%2$s"></video>%3$s</figure>
+<!-- /wp:video -->',
+			$encoded,
+			esc_url( $url ),
+			$figcaption
+		);
+	}
+
+	/**
+	 * Build core/embed markup matching Gutenberg save() for video providers.
+	 *
+	 * Same shape as core YouTube variation: providerNameSlug + responsive,
+	 * figure.is-type-video.is-provider-{slug}.wp-block-embed-{slug},
+	 * URL as plain text inside .wp-block-embed__wrapper.
+	 *
+	 * @param string $url      Watch/share URL.
+	 * @param string $provider youtube|vimeo.
+	 * @param string $caption  Optional figcaption.
+	 */
+	public function build_embed_block( string $url, string $provider = 'youtube', string $caption = '' ): string {
+		$url = esc_url_raw( $url );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$provider = sanitize_key( $provider );
+		if ( ! in_array( $provider, array( 'youtube', 'vimeo' ), true ) ) {
+			$provider = 'youtube';
+		}
+
+		// Mirrors core embed variation + typical post-preview aspect classes.
+		$attrs = array(
+			'url'              => $url,
+			'type'             => 'video',
+			'providerNameSlug' => $provider,
+			'responsive'       => true,
+			'className'        => 'wp-embed-aspect-16-9 wp-has-aspect-ratio',
+		);
+
+		$encoded = wp_json_encode( $attrs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		if ( ! is_string( $encoded ) ) {
+			$encoded = '{}';
+		}
+
+		$figcaption = '';
+		if ( '' !== trim( $caption ) ) {
+			$figcaption = '<figcaption class="wp-element-caption">' . esc_html( $caption ) . '</figcaption>';
+		}
+
+		$figure_class = sprintf(
+			'wp-block-embed is-type-video is-provider-%1$s wp-block-embed-%1$s wp-embed-aspect-16-9 wp-has-aspect-ratio',
+			$provider
+		);
+
+		return sprintf(
+			'<!-- wp:embed %1$s -->
+<figure class="%2$s"><div class="wp-block-embed__wrapper">
+%3$s
+</div>%4$s</figure>
+<!-- /wp:embed -->',
+			$encoded,
+			esc_attr( $figure_class ),
+			esc_url( $url ),
+			$figcaption
 		);
 	}
 }

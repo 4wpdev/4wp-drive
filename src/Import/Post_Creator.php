@@ -194,7 +194,8 @@ final class Post_Creator {
 
 		$blocks = Gutenberg_Content::from_mixed( $content );
 		if ( '' !== $blocks ) {
-			return \ForWP\Drive\Blocks\Recipes\Core_Image_Recipe::normalize_loose_markers( $blocks );
+			$blocks = \ForWP\Drive\Blocks\Recipes\Core_Image_Recipe::normalize_loose_markers( $blocks );
+			return \ForWP\Drive\Blocks\Recipes\Core_Video_Recipe::normalize_loose_markers( $blocks );
 		}
 
 		if ( $this->contains_block_markup( $content ) ) {

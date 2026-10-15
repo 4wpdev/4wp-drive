@@ -37,7 +37,16 @@ final class Pattern_Preset_Registry {
 					'section_headings'     => '',
 					'keep_section_heading' => false,
 					'default_enabled'      => true,
-					'doc_hint'             => __( 'Same article folder. Google Doc: [image:exact-filename.jpeg] (optional left/center/right). Markdown: ![alt](file.png) or the same marker. Featured image is Incoming, not this marker.', '4wp-drive' ),
+					'doc_hint'             => __( 'Same article folder. [image:file.png] or [image:file.png — Caption] (caption → figcaption). Optional left/center/right. Markdown: ![alt](file.png). Featured image is Incoming, not this marker.', '4wp-drive' ),
+				),
+				'core-video'     => array(
+					'label'                => __( 'Core Video', '4wp-drive' ),
+					'description'          => __( 'Package folder videos via [video:filename] markers.', '4wp-drive' ),
+					'template'             => Block_Template_Registry::TEMPLATE_CORE_VIDEO,
+					'section_headings'     => '',
+					'keep_section_heading' => false,
+					'default_enabled'      => true,
+					'doc_hint'             => __( 'Same article folder. [video:file.mp4] or [video:file.mp4 — Caption]. Featured image is Incoming, not this marker.', '4wp-drive' ),
 				),
 				'4wp-faq'        => array(
 					'label'                => __( '4WP FAQ', '4wp-drive' ),

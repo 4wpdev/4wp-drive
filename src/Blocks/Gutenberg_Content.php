@@ -334,7 +334,7 @@ final class Gutenberg_Content {
 				return array();
 			}
 
-			if ( self::element_is_image_marker_only( $element ) ) {
+			if ( self::element_is_media_marker_only( $element ) ) {
 				return array( self::passthrough_html( '<p>' . self::inner_html( $element ) . '</p>' ) );
 			}
 
@@ -722,10 +722,10 @@ final class Gutenberg_Content {
 		return (string) $pre->textContent;
 	}
 
-	private static function element_is_image_marker_only( \DOMElement $element ): bool {
+	private static function element_is_media_marker_only( \DOMElement $element ): bool {
 		$text = trim( (string) $element->textContent );
 
-		return (bool) preg_match( '/^\[image:\s*[^\]]+\]$/iu', $text );
+		return (bool) preg_match( '/^\[(?:image|video):\s*[^\]]+\]$/iu', $text );
 	}
 
 	private static function element_is_code_only( \DOMElement $element ): bool {
