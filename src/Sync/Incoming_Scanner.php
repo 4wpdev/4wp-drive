@@ -278,7 +278,7 @@ final class Incoming_Scanner {
 		}
 
 		if ( $this->is_in_progress_package( $existing ) ) {
-			return null;
+			return $this->refresh_imported_package( $existing, $item, $file_id );
 		}
 
 		if ( $preserve_selection ) {
@@ -356,6 +356,49 @@ final class Incoming_Scanner {
 			'document_id' => $document_id,
 			'file_id'     => $file_id,
 			'was_new'     => $was_new ? 1 : 0,
+		);
+	}
+
+	/**
+	 * Refresh an imported package with the current files so it can be re-imported.
+	 * Status, post link and the in-progress state stay as they are.
+	 *
+	 * @param object               $existing Imported row.
+	 * @param array<string, mixed> $item     Scan item.
+	 * @param string               $file_id  Scanned file id.
+	 * @return array{document_id: int, file_id: string, was_new: int}
+	 */
+	private function refresh_imported_package( $existing, array $item, string $file_id ): array {
+		$stored   = $this->repository->decode_metadata( $existing );
+		$metadata = isset( $item['metadata'] ) && is_array( $item['metadata'] ) ? $item['metadata'] : array();
+		$post_id  = (int) ( $stored[ Package_Manifest::META_KEY ]['post_id'] ?? $existing->wp_post_id ?? 0 );
+		$metadata = Package_Manifest::mark_in_progress( $metadata, $post_id );
+		if ( ! Package_Manifest::is_in_progress( $metadata ) ) {
+			// Rescan lost the manifest: keep what we had so the folder stays "In progress".
+			$metadata = $stored;
+		}
+
+		$update_file_id = $file_id;
+		$owner          = $this->repository->find_by_file_id( $file_id );
+		if ( $owner && (int) $owner->id !== (int) $existing->id ) {
+			$update_file_id = (string) $existing->file_id;
+		}
+
+		$this->repository->update(
+			(int) $existing->id,
+			array(
+				'file_id'       => $update_file_id,
+				'file_name'     => (string) ( $item['file_name'] ?? $existing->file_name ),
+				'content_hash'  => (string) ( $item['content_hash'] ?? $existing->content_hash ),
+				'metadata_json' => wp_json_encode( $metadata ),
+				'updated_at'    => current_time( 'mysql', true ),
+			)
+		);
+
+		return array(
+			'document_id' => (int) $existing->id,
+			'file_id'     => $update_file_id,
+			'was_new'     => 0,
 		);
 	}
 

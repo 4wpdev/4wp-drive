@@ -4,7 +4,7 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 
 **Plugin page:** [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/) · [WordPress.org](https://wordpress.org/plugins/4wp-drive/) · [4wp.dev](https://4wp.dev/) · GPL-2.0-or-later
 
-**Current stable:** 1.8.1
+**Current stable:** 1.8.2
 
 ## What it does
 
@@ -15,6 +15,10 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 5. **Analytics** records each import (drafts and published).
 
 Front-matter lines before a separator (`---` or `=====`) map to post fields (title, slug, categories, SEO, etc.). The rest becomes Gutenberg post content.
+
+## What shipped in 1.8.2
+
+- **GitHub packages** — `.mp4` (and `.webm`, `.mov`, `.m4v`, `.ogv`) in the package folder are imported: `[video:file.mp4]` → Media Library + core/video. Before, only documents and images were picked up from GitHub.
 
 ## What shipped in 1.8.1
 

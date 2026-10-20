@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.8.1
+Stable tag: 1.8.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -202,6 +202,9 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 9. Published post — front-end article after import from Drive.
 
 == Changelog ==
+
+= 1.8.2 =
+* **GitHub packages:** video files in the package folder (`.mp4`, `.webm`, `.mov`, `.m4v`, `.ogv`) are now picked up, so `[video:file.mp4]` imports the file into the Media Library and becomes core/video. Before, GitHub packages listed only documents and images.
 
 = 1.8.1 =
 * **Images:** `[image:file.png — Caption]` maps the filename for sideload and uses the text after the dash as the core/image figcaption (and alt).

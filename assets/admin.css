@@ -369,6 +369,23 @@
 	max-width: 100%;
 }
 
+/* Queue stays in view; the tree scrolls inside it instead of trapping the wheel. */
+.forwp-drive-inbox-queue {
+	display: flex;
+	flex-direction: column;
+	position: sticky;
+	top: 48px;
+	max-height: calc(100vh - 64px);
+	overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+	.forwp-drive-inbox-queue {
+		position: static;
+		max-height: 70vh;
+	}
+}
+
 .forwp-drive-wrap-pin-slot {
 	flex: 0 0 auto;
 	padding: 10px 12px 8px;
@@ -1464,4 +1481,209 @@ body.forwp-drive-is-busy {
 #forwp-drive-preview-post-content.is-pinning .forwp-drive-image-marker:hover {
 	cursor: default;
 	outline: none;
+}
+
+/* Inbox status lives inside the statusbar row: one line, no layout shift. */
+.forwp-drive-wrap #forwp-drive-inbox-statusbar .forwp-drive-status.forwp-drive-status--visible {
+	flex: 1 1 0;
+	min-width: 0;
+	margin: 0;
+	padding: 6px 10px;
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	box-shadow: none;
+}
+
+/* Read-only package files open a preview in the workspace. */
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-locked[data-action="preview-file"] {
+	cursor: pointer;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-locked[data-action="preview-file"]:hover {
+	background: #f0f0f1;
+	opacity: 0.85;
+}
+
+.forwp-drive-file-preview {
+	margin: 0;
+	padding: 12px 14px;
+	max-height: 70vh;
+	overflow: auto;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.forwp-drive-media-preview video {
+	display: block;
+	max-width: 100%;
+	max-height: 70vh;
+}
+
+/* Wrap section: tabs per plugin, wraps as compact buttons in one row. */
+.forwp-drive-wrap-pin-slot .forwp-drive-wrap-pin .forwp-drive-image-pin__label {
+	margin: 0 0 2px;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__list {
+	max-height: none;
+	overflow: visible;
+	gap: 8px;
+}
+
+.forwp-drive-wrap-pin__tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.forwp-drive-wrap-pin__tab {
+	margin: 0 0 -1px;
+	padding: 6px 12px;
+	border: 1px solid transparent;
+	border-bottom: 0;
+	border-radius: 4px 4px 0 0;
+	background: transparent;
+	color: #50575e;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.forwp-drive-wrap-pin__tab:hover {
+	color: #2271b1;
+}
+
+.forwp-drive-wrap-pin__tab.is-active {
+	border-color: #dcdcde;
+	background: #fff;
+	color: #1d2327;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-wrap-pin__group {
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-wrap-pin__group[hidden] {
+	display: none;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__row {
+	flex: 0 0 auto;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__file {
+	width: auto;
+	min-height: 30px;
+	padding: 2px 10px;
+	gap: 6px;
+}
+
+.forwp-drive-wrap-pin-slot .forwp-drive-image-pin__name {
+	white-space: nowrap;
+}
+
+/* Featured image select does not need the full workspace width. */
+.forwp-drive-import-featured-wrap .forwp-drive-import-featured {
+	max-width: 480px;
+}
+
+/* "Already imported" sits in the statusbar's free space. */
+.forwp-drive-statusbar__imported {
+	flex: 1 1 0;
+	min-width: 0;
+	padding: 6px 10px;
+	border-left: 4px solid #dba617;
+	border-radius: 4px;
+	background: #fcf9e8;
+	color: #614200;
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.forwp-drive-statusbar__imported[hidden] {
+	display: none;
+}
+
+/* Featured image (narrow) and Wrap section side by side. */
+.forwp-drive-import-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 16px;
+}
+
+.forwp-drive-import-row > .forwp-drive-import-featured-wrap {
+	flex: 0 1 320px;
+	min-width: 220px;
+	margin: 0;
+}
+
+.forwp-drive-import-row > .forwp-drive-import-featured-wrap #forwp-drive-import-featured {
+	width: 100%;
+	max-width: 100%;
+}
+
+.forwp-drive-import-row > .forwp-drive-wrap-pin-slot {
+	flex: 1 1 360px;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.forwp-drive-import-row > [hidden] {
+	display: none;
+}
+
+/* The importable file (original.md) is the main thing in a package; images stay secondary. */
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-importable,
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-importable.is-readonly {
+	opacity: 1;
+	box-shadow: inset 3px 0 0 #2271b1;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-importable .forwp-drive-tree__label {
+	color: #135e96;
+	font-weight: 600;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-importable .forwp-drive-tree__icon-wrap path {
+	fill: #2271b1;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-importable .forwp-drive-tree__label::after {
+	content: "Import";
+	margin-left: 8px;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: #e7f0f8;
+	color: #135e96;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	vertical-align: 1px;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-file--image .forwp-drive-tree__label {
+	color: #50575e;
+	font-weight: 400;
+}
+
+#forwp-drive-inbox-list .forwp-drive-tree__row.is-file.is-file--image .forwp-drive-tree__icon-wrap path {
+	fill: #8c8f94;
 }

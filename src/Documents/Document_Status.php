@@ -37,6 +37,7 @@ final class Document_Status {
 	 * @param string $status Current status.
 	 */
 	public static function can_import( string $status ): bool {
-		return self::READY === $status;
+		// Imported rows may be re-imported (the UI warns and defaults to updating the post).
+		return self::READY === $status || self::IMPORTED === $status;
 	}
 }

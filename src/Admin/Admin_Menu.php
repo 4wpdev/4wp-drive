@@ -186,6 +186,7 @@ final class Admin_Menu {
 				'restUrl'  => rest_url( 'forwp-drive/v1/' ),
 				'restPath' => trailingslashit( $rest_path ),
 				'nonce'        => wp_create_nonce( 'wp_rest' ),
+				'iconUrl'      => FORWP_DRIVE_URL . 'assets/images/icon.png',
 				'multilingual' => Language_Provider_Registry::get_rest_payload(),
 				'sources'      => Source_Registry::get_admin_status_rows(),
 				'activeSource' => 'google_drive',

@@ -183,6 +183,7 @@
 	/** Storage file id of the single selected tree row (package sibling), if any. */
 	let previewFileId = null;
 	let previewMediaKey = null;
+	let wrapActiveGroup = '';
 	let pinSelectedName = '';
 	let wrapSelectedId = '';
 	let multilingualConfig = forwpDriveAdmin.multilingual || null;
@@ -2446,12 +2447,46 @@
 				if ( ! rows ) {
 					return '';
 				}
-				return `<div class="forwp-drive-wrap-pin__group">
-				<p class="forwp-drive-wrap-pin__group-label">${ escapeHtml( group.label ) }</p>
-				${ rows }
-			</div>`;
+				return `<div class="forwp-drive-wrap-pin__group" data-wrap-group="${ escapeHtml(
+					group.plugin
+				) }">${ rows }</div>`;
 			} )
 			.join( '' );
+
+		// One tab per plugin; only the active group's wraps are shown, in one row.
+		if ( ! groups.some( ( group ) => group.plugin === wrapActiveGroup ) ) {
+			wrapActiveGroup = groups.length ? groups[ 0 ].plugin : '';
+		}
+		const tabs =
+			groups.length > 1
+				? `<div class="forwp-drive-wrap-pin__tabs" role="tablist">${ groups
+						.map(
+							( group ) =>
+								`<button type="button" class="forwp-drive-wrap-pin__tab" role="tab" data-wrap-tab="${ escapeHtml(
+									group.plugin
+								) }">${ escapeHtml( group.label ) }</button>`
+						)
+						.join( '' ) }</div>`
+				: '';
+		list.innerHTML = tabs + list.innerHTML;
+		const showWrapGroup = ( plugin ) => {
+			wrapActiveGroup = plugin;
+			list.querySelectorAll( '[data-wrap-group]' ).forEach( ( el ) => {
+				el.hidden = el.getAttribute( 'data-wrap-group' ) !== plugin;
+			} );
+			list.querySelectorAll( '[data-wrap-tab]' ).forEach( ( el ) => {
+				const on = el.getAttribute( 'data-wrap-tab' ) === plugin;
+				el.classList.toggle( 'is-active', on );
+				el.setAttribute( 'aria-selected', on ? 'true' : 'false' );
+			} );
+		};
+		list.querySelectorAll( '[data-wrap-tab]' ).forEach( ( tab ) => {
+			tab.addEventListener( 'click', ( event ) => {
+				event.preventDefault();
+				showWrapGroup( tab.getAttribute( 'data-wrap-tab' ) );
+			} );
+		} );
+		showWrapGroup( wrapActiveGroup );
 
 		list.querySelectorAll( '[data-wrap-id]' ).forEach( ( btn ) => {
 			btn.addEventListener( 'click', ( event ) => {
@@ -2904,7 +2939,20 @@
 			return;
 		}
 
-		const targets = data && data.targets ? data.targets : [];
+		const targets = data && data.targets ? data.targets.slice() : [];
+		// Keep the post this document was imported into selectable, even if search misses it.
+		const importedPost = previewDoc && previewDoc.imported_post;
+		if (
+			importedPost &&
+			! targets.some( ( target ) => String( target.id ) === String( importedPost.id ) )
+		) {
+			targets.unshift( {
+				id: importedPost.id,
+				title: importedPost.title,
+				post_type: importedPost.post_type,
+				status: importedPost.status,
+			} );
+		}
 		importTargetList = targets;
 		if ( ! targets.length ) {
 			select.innerHTML =
@@ -2941,7 +2989,9 @@
 			} )
 			.join( '' );
 
-		if ( previous && targets.some( ( target ) => String( target.id ) === String( previous ) ) ) {
+		if ( importedPost && ! getImportTargetSearch() ) {
+			select.value = String( importedPost.id );
+		} else if ( previous && targets.some( ( target ) => String( target.id ) === String( previous ) ) ) {
 			select.value = previous;
 		} else if ( data.suggested_id ) {
 			select.value = String( data.suggested_id );
@@ -3114,7 +3164,12 @@
 			( hasMessage ? ' forwp-drive-status--visible' : '' ) +
 			stateClass;
 
-		if ( hasMessage && typeof el.scrollIntoView === 'function' ) {
+		// Inbox status sits in the top statusbar: show full text on hover, never scroll the page to it.
+		const inStatusbar = el.id === 'forwp-drive-inbox-status';
+		if ( inStatusbar ) {
+			el.title = message || '';
+		}
+		if ( hasMessage && ! inStatusbar && typeof el.scrollIntoView === 'function' ) {
 			el.scrollIntoView( { behavior: 'smooth', block: 'nearest' } );
 		}
 	}
@@ -4244,7 +4299,7 @@
 				</div>`;
 			if ( expanded ) {
 				html += `<div class="forwp-drive-tree__children" role="group">`;
-				if ( treeLoadingPaths.has( folder.path ) ) {
+				if ( treeLoadingPaths.has( folder.path ) || folderNeedsFetch( folder ) ) {
 					html += `<div class="forwp-drive-tree__empty" style="--forwp-drive-tree-depth: ${
 						depth + 1
 					}">Loading…</div>`;
@@ -4286,7 +4341,11 @@
 				? storageFileOpenUrl( storageFileId, true )
 				: '';
 			const actionAttrs = readonly
-				? ''
+				? storageFileId
+					? `data-action="preview-file" data-file-id="${ escapeHtml(
+							storageFileId
+					  ) }" data-name="${ escapeHtml( file.name || '' ) }"`
+					: ''
 				: isImage
 				? `data-action="preview-media" data-file-id="${ escapeHtml(
 						storageFileId
@@ -4303,7 +4362,7 @@
 				fileSelected ? ' is-selected' : ''
 			}${ scanWarning }${
 				readonly ? ' is-locked' : selectable || isImage ? '' : ' is-readonly'
-			}"
+			}${ ! readonly && ! isImage ? ' is-importable' : '' }"
 				style="--forwp-drive-tree-depth: ${ depth }"
 				${ actionAttrs }
 				tabindex="0"
@@ -4541,7 +4600,25 @@
 			applyActiveSourceChrome();
 			setStatus( status, '' );
 			setActiveInboxSource( activeSourceSlug );
+			return reloadExpandedTreeFolders();
 		} );
+	}
+
+	/**
+	 * A fresh browse tree drops lazily loaded children: refetch expanded folders, parents first.
+	 */
+	function reloadExpandedTreeFolders() {
+		const paths = Array.from( treeExpandedPaths ).sort(
+			( a, b ) => a.split( '/' ).length - b.split( '/' ).length
+		);
+		return paths.reduce(
+			( chain, path ) =>
+				chain.then( () => {
+					const folder = findBrowseFolderNode( path );
+					return folderNeedsFetch( folder ) ? loadTreeFolder( folder ) : null;
+				} ),
+			Promise.resolve()
+		);
 	}
 
 	function runInboxSync() {
@@ -4633,6 +4710,7 @@
 		previewId = null;
 		previewDoc = null;
 		previewFileId = id;
+		renderImportedPostNotice( null );
 		previewMediaKey = id;
 		setSelectedQueueCard( null, id );
 		setWorkspaceMediaMode( true );
@@ -4679,6 +4757,96 @@
 					openHtml;
 			} );
 		}
+	}
+
+	/**
+	 * Read-only preview of a non-importable package file (variants, meta.json, subtitles, video).
+	 *
+	 * @param {string} fileId Storage file id.
+	 * @param {string} name   File name.
+	 */
+	function openFilePreview( fileId, name ) {
+		const id = String( fileId || '' ).trim();
+		const fileName = String( name || 'file' );
+		if ( ! id ) {
+			return;
+		}
+		previewId = null;
+		previewDoc = null;
+		previewFileId = id;
+		renderImportedPostNotice( null );
+		previewMediaKey = id;
+		setSelectedQueueCard( null, id );
+		setWorkspaceMediaMode( true );
+		const panel = document.getElementById( 'forwp-drive-preview' );
+		const placeholder = document.getElementById(
+			'forwp-drive-workspace-placeholder'
+		);
+		const meta = document.getElementById( 'forwp-drive-preview-meta' );
+		const body = document.getElementById( 'forwp-drive-preview-post-content' );
+		if ( ! panel || ! body || ! meta ) {
+			return;
+		}
+		if ( placeholder ) {
+			placeholder.hidden = true;
+		}
+		panel.hidden = false;
+		meta.innerHTML =
+			`<p class="forwp-drive-preview__title">${ escapeHtml( fileName ) }</p>` +
+			'<p class="forwp-drive-preview__meta">Read-only preview — not an importable document.</p>';
+		const src = mediaPreviewUrl( id, fileName );
+		const openUrl = storageFileOpenUrl( id, false );
+		const strings = forwpDriveAdmin.strings || {};
+		const openLabel = escapeHtml(
+			strings.openFileOutside || strings.openInDrive || 'Open outside'
+		);
+		const openHtml = openUrl
+			? `<p class="forwp-drive-media-preview__open"><a href="${ escapeHtml(
+					openUrl
+			  ) }" target="_blank" rel="noopener noreferrer">${ openLabel }</a></p>`
+			: '';
+		const showError = () => {
+			if ( previewMediaKey !== id ) {
+				return;
+			}
+			body.innerHTML =
+				'<p class="forwp-drive-preview__meta">Could not load this file. Use Open outside to view it.</p>' +
+				openHtml;
+		};
+
+		if ( /\.(mp4|webm|mov)$/i.test( fileName ) ) {
+			body.innerHTML =
+				`<figure class="forwp-drive-media-preview">` +
+				`<video src="${ escapeHtml( src ) }" controls preload="metadata"></video>` +
+				openHtml +
+				`</figure>`;
+			const video = body.querySelector( 'video' );
+			if ( video ) {
+				video.addEventListener( 'error', showError );
+			}
+			return;
+		}
+
+		body.innerHTML = '<p class="forwp-drive-preview__meta">Loading…</p>';
+		fetch( src, { credentials: 'same-origin' } )
+			.then( ( response ) => ( response.ok ? response.text() : Promise.reject() ) )
+			.then( ( text ) => {
+				if ( previewMediaKey !== id ) {
+					return;
+				}
+				let shown = text;
+				if ( /\.json$/i.test( fileName ) ) {
+					try {
+						shown = JSON.stringify( JSON.parse( text ), null, 2 );
+					} catch ( e ) {
+						shown = text;
+					}
+				}
+				body.innerHTML =
+					`<pre class="forwp-drive-file-preview">${ escapeHtml( shown ) }</pre>` +
+					openHtml;
+			} )
+			.catch( showError );
 	}
 
 	/**
@@ -4736,11 +4904,45 @@
 		} );
 	}
 
+	/**
+	 * "Already imported" line in the top statusbar; hidden for anything else.
+	 *
+	 * @param {Object|null} post imported_post from the document payload.
+	 */
+	function renderImportedPostNotice( post ) {
+		const el = document.getElementById( 'forwp-drive-inbox-imported' );
+		if ( ! el ) {
+			return;
+		}
+		if ( ! post || ! post.id ) {
+			el.hidden = true;
+			el.innerHTML = '';
+			el.title = '';
+			return;
+		}
+		const title = escapeHtml( post.title || '#' + post.id );
+		const link = post.edit_url
+			? `<a href="${ escapeHtml( post.edit_url ) }" target="_blank" rel="noopener">${ title }</a>`
+			: title;
+		const view = post.view_url
+			? ` · <a href="${ escapeHtml( post.view_url ) }" target="_blank" rel="noopener">View</a>`
+			: '';
+		const when = post.imported_at ? ' · ' + escapeHtml( post.imported_at ) : '';
+		const status =
+			post.status && post.status !== 'publish' ? ' · ' + escapeHtml( post.status ) : '';
+		el.innerHTML = `<strong>Already imported</strong> → ${ link } (#${ escapeHtml(
+			String( post.id )
+		) })${ status }${ when }${ view } · re-import updates this post`;
+		el.title = 'Importing again updates this post. Switch to “Create new draft” to make a separate post.';
+		el.hidden = false;
+	}
+
 	function openPreview( id, options = {} ) {
 		previewId = id;
 		previewDoc = null;
 		previewMediaKey = null;
 		setWorkspaceMediaMode( false );
+		renderImportedPostNotice( null );
 		const wantedFileId = String( options.fileId || '' ).trim();
 		setSelectedQueueCard( id, wantedFileId );
 		const panel = document.getElementById( 'forwp-drive-preview' );
@@ -4773,11 +4975,16 @@
 			if ( data.multilingual ) {
 				multilingualConfig = data.multilingual;
 			}
+			renderImportedPostNotice( data.imported_post );
 			meta.innerHTML = `<p class="forwp-drive-preview__title">${ escapeHtml( data.title ) }</p>
 				<p class="forwp-drive-preview__meta">Slug: ${ escapeHtml( data.slug || '—' ) } · Date: ${ escapeHtml( data.date || '—' ) } · Author: ${ escapeHtml( data.author || '—' ) } · Category: ${ escapeHtml( data.category || '—' ) }${ data.has_image ? ' · Featured image: ' + escapeHtml( data.image_name || 'yes' ) : '' }</p>`;
 			setupKeepFontsUi( data );
 			renderPreviewPostContent( data );
-			const mode = options.mode === 'update' ? 'update' : 'create';
+			// Already imported: re-import updates that post unless the user switches to Create.
+			const mode =
+				options.mode === 'update' || ( ! options.mode && data.imported_post )
+					? 'update'
+					: 'create';
 			const modeInput = document.querySelector(
 				`input[name="forwp-drive-import-mode"][value="${ mode }"]`
 			);
@@ -4786,6 +4993,15 @@
 			}
 			setImportModeUi();
 			fillInboxImportPostTypes();
+			const importedType = data.imported_post && data.imported_post.post_type;
+			const typeSelect = document.getElementById( 'forwp-drive-inbox-import-post-type' );
+			if (
+				importedType &&
+				typeSelect &&
+				typeSelect.querySelector( `option[value="${ CSS.escape( importedType ) }"]` )
+			) {
+				typeSelect.value = importedType;
+			}
 			setupImportLanguageUi( data.multilingual );
 			setupSourceFileUi( data );
 			setupFeaturedImageUi( data );
@@ -4972,6 +5188,59 @@
 		}
 	}
 
+	/**
+	 * Waiting screen for the editor tab while the import runs.
+	 *
+	 * @param {Window} tab     Tab opened for the editor.
+	 * @param {Object} payload Import payload.
+	 */
+	function writeImportSplash( tab, payload ) {
+		const strings = forwpDriveAdmin.strings || {};
+		const isUpdate = payload && payload.mode === 'update';
+		const title = ( previewDoc && previewDoc.title ) || '';
+		const label = isUpdate ? 'Updating post…' : strings.importRunning || 'Importing…';
+		const icon = forwpDriveAdmin.iconUrl
+			? `<img class="icon" src="${ escapeHtml( forwpDriveAdmin.iconUrl ) }" alt="" />`
+			: '';
+		tab.document.open();
+		tab.document.write( `<!doctype html><html><head><meta charset="utf-8" />
+<title>${ escapeHtml( label ) }</title>
+<style>
+	:root { color-scheme: light dark; }
+	* { box-sizing: border-box; }
+	body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+		font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+		background: radial-gradient(1200px 600px at 50% -10%, #e7f0f8, #f6f7f7 60%); color: #1d2327; }
+	.card { width: min(440px, calc(100vw - 32px)); padding: 40px 32px 32px; text-align: center;
+		background: #fff; border: 1px solid #dcdcde; border-radius: 16px; box-shadow: 0 12px 40px rgba(0,0,0,.08); }
+	.icon { width: 72px; height: 72px; border-radius: 16px; display: block; margin: 0 auto 20px;
+		animation: float 2.4s ease-in-out infinite; }
+	h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+	.doc { margin: 0 0 24px; color: #50575e; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.bar { position: relative; height: 4px; border-radius: 4px; background: #e7f0f8; overflow: hidden; }
+	.bar::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: 4px; background: #2271b1;
+		animation: slide 1.4s ease-in-out infinite; }
+	.hint { margin: 16px 0 0; color: #8c8f94; font-size: 12px; }
+	@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+	@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+	@media (prefers-color-scheme: dark) {
+		body { background: radial-gradient(1200px 600px at 50% -10%, #1d2b3a, #101517 60%); color: #f0f0f1; }
+		.card { background: #1d2327; border-color: #2c3338; }
+		.doc { color: #a7aaad; } .bar { background: #2c3338; }
+	}
+	@media (prefers-reduced-motion: reduce) { .icon, .bar::after { animation: none; } }
+</style></head><body>
+	<main class="card">
+		${ icon }
+		<h1>${ escapeHtml( label ) }</h1>
+		<p class="doc">${ escapeHtml( title ) }</p>
+		<div class="bar" role="progressbar" aria-label="${ escapeHtml( label ) }"></div>
+		<p class="hint">4WP Drive · the editor opens here when it is ready</p>
+	</main>
+</body></html>` );
+		tab.document.close();
+	}
+
 	function importDoc( id, payloadOverride ) {
 		const payload = payloadOverride || getImportPayload();
 		if ( payload === null ) {
@@ -4992,22 +5261,43 @@
 				return;
 			}
 			const status = document.getElementById( 'forwp-drive-inbox-status' );
+			// Open the editor tab now (still inside the click) so popup blockers allow it; Drive stays open here.
+			const editorTab = window.open( '', '_blank' );
+			if ( editorTab ) {
+				writeImportSplash( editorTab, payload );
+			}
 			setBusyOverlay( strings.importRunning || 'Importing…' );
 			setStatus( status, strings.importRunning, false, true );
 			api( 'documents/' + id + '/import', {
 				method: 'POST',
 				body: JSON.stringify( payload ),
 			} ).then( ( { ok, data } ) => {
+				setBusyOverlay( '' );
 				if ( ! ok ) {
-					setBusyOverlay( '' );
+					if ( editorTab ) {
+						editorTab.close();
+					}
 					setStatus( status, data.message || 'Import failed.', true );
 					return;
 				}
 				if ( data.edit_url ) {
-					window.location.href = data.edit_url;
-					return;
+					if ( editorTab ) {
+						editorTab.location.href = data.edit_url;
+					} else {
+						window.open( data.edit_url, '_blank' );
+					}
+				} else if ( editorTab ) {
+					editorTab.close();
 				}
-				loadInbox();
+				setStatus(
+					status,
+					( data.updated ? 'Post updated' : 'Draft created' ) +
+						( data.post_id ? ' (#' + data.post_id + ')' : '' ) +
+						' — opened in a new tab.' +
+						( data.warning ? ' ' + data.warning : '' ),
+					data.warning ? 'warning' : false
+				);
+				loadInbox().then( () => openPreview( id ) );
 			} );
 		} );
 	}
@@ -6121,7 +6411,14 @@
 			showExportErrors();
 			return;
 		}
-		if ( action === 'preview-media' && actionEl ) {
+		if ( action === 'preview-file' && actionEl ) {
+			openFilePreview(
+				actionEl.getAttribute( 'data-file-id' ),
+				actionEl.getAttribute( 'data-name' )
+			);
+			return;
+		}
+				if ( action === 'preview-media' && actionEl ) {
 			beginPinFromTree( actionEl.getAttribute( 'data-name' ) );
 			return;
 		}

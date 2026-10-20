@@ -797,6 +797,16 @@ final class GitHub_Source implements Storage_Source_Interface {
 				continue;
 			}
 
+			// [video:file.mp4] markers resolve against these entries (Package_Video_Importer).
+			if ( preg_match( '/\.(?:mp4|webm|ogg|ogv|m4v|mov)$/i', $name ) ) {
+				$package_files[] = array(
+					'id'   => $id,
+					'name' => $name,
+					'kind' => 'video',
+				);
+				continue;
+			}
+
 			if ( Importable_Document::is_article( $kind ) ) {
 				$package_files[] = array(
 					'id'   => $id,

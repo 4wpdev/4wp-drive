@@ -42,6 +42,14 @@ defined( 'ABSPATH' ) || exit;
 					<?php esc_html_e( 'Export errors: 0', '4wp-drive' ); ?>
 				</span>
 			</div>
+			<div id="forwp-drive-inbox-imported" class="forwp-drive-statusbar__imported" hidden></div>
+			<div
+				id="forwp-drive-inbox-status"
+				class="forwp-drive-status"
+				role="status"
+				aria-live="polite"
+				hidden
+			></div>
 			<div class="forwp-drive-statusbar__actions">
 				<a
 					id="forwp-drive-inbox-open-incoming"
@@ -60,20 +68,11 @@ defined( 'ABSPATH' ) || exit;
 
 	<div id="forwp-drive-inbox-connection-alert" class="forwp-drive-connection-alert forwp-drive-admin-chrome" hidden></div>
 
-	<div
-		id="forwp-drive-inbox-status"
-		class="forwp-drive-status forwp-drive-admin-chrome"
-		role="status"
-		aria-live="polite"
-		hidden
-	></div>
-
 	<div class="forwp-drive-inbox-layout forwp-drive-admin-chrome">
 		<section
 			class="forwp-drive-inbox-queue"
 			aria-labelledby="forwp-drive-inbox-queue-heading"
 		>
-			<div id="forwp-drive-wrap-pin-slot" class="forwp-drive-wrap-pin-slot" hidden></div>
 			<div class="forwp-drive-inbox-pane__header">
 				<h2 id="forwp-drive-inbox-queue-heading" class="forwp-drive-inbox-pane__title">
 					<?php esc_html_e( 'Queue', '4wp-drive' ); ?>
@@ -105,14 +104,17 @@ defined( 'ABSPATH' ) || exit;
 			<div id="forwp-drive-preview" class="forwp-drive-preview" hidden>
 				<div id="forwp-drive-import-top" class="forwp-drive-import-top forwp-drive-admin-chrome">
 					<div id="forwp-drive-detected-tags" class="forwp-drive-detected-tags" hidden></div>
-					<div id="forwp-drive-import-featured-wrap" class="forwp-drive-import-featured-wrap" hidden>
-						<label class="forwp-drive-import-featured-wrap__label" for="forwp-drive-import-featured">
-							<?php esc_html_e( 'Featured image', '4wp-drive' ); ?>
-						</label>
-						<select id="forwp-drive-import-featured" class="forwp-drive-import-featured"></select>
-						<p class="description forwp-drive-import-featured-wrap__hint">
-							<?php esc_html_e( 'Post thumbnail. Cover, hero, or the first image is suggested.', '4wp-drive' ); ?>
-						</p>
+					<div class="forwp-drive-import-row">
+						<div id="forwp-drive-import-featured-wrap" class="forwp-drive-import-featured-wrap" hidden>
+							<label class="forwp-drive-import-featured-wrap__label" for="forwp-drive-import-featured">
+								<?php esc_html_e( 'Featured image', '4wp-drive' ); ?>
+							</label>
+							<select id="forwp-drive-import-featured" class="forwp-drive-import-featured"></select>
+							<p class="description forwp-drive-import-featured-wrap__hint">
+								<?php esc_html_e( 'Post thumbnail. Cover, hero, or the first image is suggested.', '4wp-drive' ); ?>
+							</p>
+						</div>
+						<div id="forwp-drive-wrap-pin-slot" class="forwp-drive-wrap-pin-slot" hidden></div>
 					</div>
 					<div
 						id="forwp-drive-import-media-row"

@@ -853,6 +853,7 @@ final class Rest_Documents {
 			'scan_error'            => (string) ( $meta['scan_error'] ?? $row->error_message ?? '' ),
 			'detected_at'           => (string) $row->detected_at,
 			'wp_post_id'            => $row->wp_post_id ? (int) $row->wp_post_id : null,
+			'imported_post'         => self::imported_post_payload( $row ),
 		);
 
 		if ( $full ) {
@@ -865,5 +866,32 @@ final class Rest_Documents {
 		}
 
 		return $data;
+	}
+
+	/**
+	 * Post this document was already imported into (re-import warning in the workspace).
+	 *
+	 * @param object $row Document row.
+	 * @return array{id: int, title: string, status: string, post_type: string, edit_url: string, view_url: string, imported_at: string}|null
+	 */
+	private static function imported_post_payload( $row ): ?array {
+		if ( Document_Status::IMPORTED !== (string) $row->status || empty( $row->wp_post_id ) ) {
+			return null;
+		}
+
+		$post = get_post( (int) $row->wp_post_id );
+		if ( ! $post ) {
+			return null;
+		}
+
+		return array(
+			'id'          => (int) $post->ID,
+			'title'       => get_the_title( $post ),
+			'status'      => (string) $post->post_status,
+			'post_type'   => (string) $post->post_type,
+			'edit_url'    => (string) get_edit_post_link( $post->ID, 'raw' ),
+			'view_url'    => (string) get_permalink( $post ),
+			'imported_at' => $row->imported_at ? (string) get_date_from_gmt( (string) $row->imported_at, 'M j, Y H:i' ) : '',
+		);
 	}
 }

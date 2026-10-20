@@ -60,6 +60,9 @@ final class Import_Runner {
 			return new WP_Error( 'forwp_drive_invalid_status', __( 'Document cannot be imported in its current state.', '4wp-drive' ) );
 		}
 
+		// Re-import of an imported package: bail-outs return the row to IMPORTED, not READY.
+		$previous_status = (string) $row->status;
+
 		$scan_meta = $this->repository->decode_metadata( $row );
 		if ( Package_Manifest::is_blocked_file( $scan_meta, (string) ( $scan_meta['github_path'] ?? $row->file_name ) ) ) {
 			return new WP_Error(
@@ -106,7 +109,7 @@ final class Import_Runner {
 				$this->repository->update(
 					$document_id,
 					array(
-						'status'     => Document_Status::READY,
+						'status'     => $previous_status,
 						'updated_at' => current_time( 'mysql', true ),
 					)
 				);
@@ -118,7 +121,7 @@ final class Import_Runner {
 				$this->repository->update(
 					$document_id,
 					array(
-						'status'     => Document_Status::READY,
+						'status'     => $previous_status,
 						'updated_at' => current_time( 'mysql', true ),
 					)
 				);
@@ -138,7 +141,7 @@ final class Import_Runner {
 				$this->repository->update(
 					$document_id,
 					array(
-						'status'     => Document_Status::READY,
+						'status'     => $previous_status,
 						'updated_at' => current_time( 'mysql', true ),
 					)
 				);
@@ -154,6 +157,20 @@ final class Import_Runner {
 		}
 
 		if ( is_wp_error( $post_id ) ) {
+			if ( Document_Status::IMPORTED === $previous_status ) {
+				// Published package: keep it imported and in place, just record the error.
+				$this->repository->update(
+					$document_id,
+					array(
+						'status'        => Document_Status::IMPORTED,
+						'error_message' => $post_id->get_error_message(),
+						'updated_at'    => current_time( 'mysql', true ),
+					)
+				);
+
+				return $post_id;
+			}
+
 			$this->fail( $document_id, (string) $row->file_id, $post_id->get_error_message(), $metadata, (string) $row->source );
 
 			return $post_id;

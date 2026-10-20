@@ -23,6 +23,25 @@ final class Media_Preview {
 
 	private const MAX_BYTES = 20971520;
 
+	/** Text files are always served as plain text (never HTML) with nosniff. */
+	private const TEXT_EXTENSIONS = array(
+		'md'       => 'text/plain',
+		'markdown' => 'text/plain',
+		'txt'      => 'text/plain',
+		'json'     => 'text/plain',
+		'srt'      => 'text/plain',
+		'vtt'      => 'text/plain',
+		'csv'      => 'text/plain',
+		'yml'      => 'text/plain',
+		'yaml'     => 'text/plain',
+	);
+
+	private const VIDEO_EXTENSIONS = array(
+		'mp4'  => 'video/mp4',
+		'webm' => 'video/webm',
+		'mov'  => 'video/quicktime',
+	);
+
 	/**
 	 * @return array{bytes: string, mime: string, name: string}|WP_Error
 	 */
@@ -39,7 +58,7 @@ final class Media_Preview {
 		}
 
 		if ( strlen( $bytes ) > self::MAX_BYTES ) {
-			return new WP_Error( 'forwp_drive_media_size', __( 'Image is too large to preview.', '4wp-drive' ) );
+			return new WP_Error( 'forwp_drive_media_size', __( 'File is too large to preview.', '4wp-drive' ) );
 		}
 
 		$mime = self::detect_mime( $name, $bytes );
@@ -72,7 +91,16 @@ final class Media_Preview {
 			return $mime;
 		}
 
-		return new WP_Error( 'forwp_drive_media_type', __( 'This file is not a previewable image.', '4wp-drive' ) );
+		// Package files besides images (variants, meta.json, subtitles, video): read-only preview.
+		$ext = strtolower( (string) pathinfo( $name, PATHINFO_EXTENSION ) );
+		if ( isset( self::TEXT_EXTENSIONS[ $ext ] ) ) {
+			return self::TEXT_EXTENSIONS[ $ext ] . '; charset=utf-8';
+		}
+		if ( isset( self::VIDEO_EXTENSIONS[ $ext ] ) ) {
+			return self::VIDEO_EXTENSIONS[ $ext ];
+		}
+
+		return new WP_Error( 'forwp_drive_media_type', __( 'This file cannot be previewed.', '4wp-drive' ) );
 	}
 
 	/**
