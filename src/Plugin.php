@@ -7,6 +7,7 @@
 
 namespace ForWP\Drive;
 
+use ForWP\Drive\Abilities\Drive_Abilities;
 use ForWP\Drive\Admin\Admin_Menu;
 use ForWP\Drive\Admin\Setup_Dashboard_Widget;
 use ForWP\Drive\Auth\Google_OAuth;
@@ -68,6 +69,7 @@ final class Plugin {
 		Rest_Patterns::register();
 		Rest_Documents::register();
 		Rest_Oauth::register();
+		Drive_Abilities::boot();
 
 		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( '\WP_CLI' ) ) {
 			\WP_CLI::add_command( 'forwp-drive sync', array( 'ForWP\\Drive\\Cli\\Sync_Command', 'sync' ) );

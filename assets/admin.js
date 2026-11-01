@@ -690,7 +690,6 @@
 		}
 		if ( errorEl ) {
 			errorEl.textContent = invalid ? message || '' : '';
-			errorEl.hidden = ! invalid;
 		}
 	}
 
@@ -4595,7 +4594,9 @@
 				incomingId: data.incoming_id || '',
 				sourceStatus: data.source_status || {},
 			};
-			updateAdminMenuIncomingCount( docs.length );
+			updateAdminMenuIncomingCount(
+				typeof data.incoming_count === 'number' ? data.incoming_count : docs.length
+			);
 			renderInboxSourceTabs();
 			applyActiveSourceChrome();
 			setStatus( status, '' );

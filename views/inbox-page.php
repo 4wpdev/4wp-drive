@@ -126,7 +126,7 @@ defined( 'ABSPATH' ) || exit;
 								<span class="forwp-drive-field-required" aria-hidden="true">*</span>
 							</label>
 							<select id="forwp-drive-import-language" class="forwp-drive-import-language" aria-describedby="forwp-drive-import-language-error forwp-drive-import-language-hint"></select>
-							<p id="forwp-drive-import-language-error" class="forwp-drive-field-error" hidden></p>
+							<p id="forwp-drive-import-language-error" class="forwp-drive-field-error"></p>
 							<p id="forwp-drive-import-language-hint" class="description forwp-drive-import-language-wrap__hint">
 								<?php esc_html_e( 'Required when the site has more than one language. Update mode lists only posts in this language.', '4wp-drive' ); ?>
 							</p>
@@ -213,7 +213,7 @@ defined( 'ABSPATH' ) || exit;
 							><?php esc_html_e( 'Edit in admin', '4wp-drive' ); ?></a>
 							<span id="forwp-drive-import-target-meta" class="forwp-drive-import-target-meta"></span>
 						</div>
-						<p id="forwp-drive-import-target-error" class="forwp-drive-field-error" hidden></p>
+						<p id="forwp-drive-import-target-error" class="forwp-drive-field-error"></p>
 						<p id="forwp-drive-import-target-hint" class="description forwp-drive-import-target-wrap__hint">
 							<?php esc_html_e( 'Search the full site, then pick a match. Open View selected post before importing — similar titles are easy to mix up. Empty search shows recent posts. Only posts in the selected language are listed.', '4wp-drive' ); ?>
 						</p>

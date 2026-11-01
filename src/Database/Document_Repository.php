@@ -63,9 +63,10 @@ final class Document_Repository {
 	 *
 	 * @param string[] $statuses Status values.
 	 * @param int      $limit    Max rows.
+	 * @param string[] $sources  Source slugs. Empty means every source.
 	 * @return object[]
 	 */
-	public function list_by_statuses( array $statuses, int $limit = 50 ): array {
+	public function list_by_statuses( array $statuses, int $limit = 50, array $sources = array() ): array {
 		global $wpdb;
 
 		if ( empty( $statuses ) ) {
@@ -74,11 +75,20 @@ final class Document_Repository {
 
 		$table        = Schema::table_name();
 		$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+		$args         = $statuses;
+		$source_sql   = '';
+
+		if ( ! empty( $sources ) ) {
+			$source_sql = ' AND source IN (' . implode( ',', array_fill( 0, count( $sources ), '%s' ) ) . ')';
+			$args       = array_merge( $args, $sources );
+		}
+
+		$args[] = $limit;
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Custom table and dynamic IN placeholders.
 		$sql = $wpdb->prepare(
-			"SELECT * FROM {$table} WHERE status IN ({$placeholders}) ORDER BY detected_at DESC LIMIT %d",
-			array_merge( $statuses, array( $limit ) )
+			"SELECT * FROM {$table} WHERE status IN ({$placeholders}){$source_sql} ORDER BY detected_at DESC LIMIT %d",
+			$args
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 
@@ -92,8 +102,9 @@ final class Document_Repository {
 	 * Count rows in given statuses.
 	 *
 	 * @param string[] $statuses Status values.
+	 * @param string[] $sources  Source slugs. Empty means every source.
 	 */
-	public function count_by_statuses( array $statuses ): int {
+	public function count_by_statuses( array $statuses, array $sources = array() ): int {
 		global $wpdb;
 
 		if ( empty( $statuses ) ) {
@@ -102,11 +113,18 @@ final class Document_Repository {
 
 		$table        = Schema::table_name();
 		$placeholders = implode( ',', array_fill( 0, count( $statuses ), '%s' ) );
+		$args         = $statuses;
+		$source_sql   = '';
+
+		if ( ! empty( $sources ) ) {
+			$source_sql = ' AND source IN (' . implode( ',', array_fill( 0, count( $sources ), '%s' ) ) . ')';
+			$args       = array_merge( $args, $sources );
+		}
 
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Custom table and dynamic IN placeholders.
 		$sql = $wpdb->prepare(
-			"SELECT COUNT(*) FROM {$table} WHERE status IN ({$placeholders})",
-			$statuses
+			"SELECT COUNT(*) FROM {$table} WHERE status IN ({$placeholders}){$source_sql}",
+			$args
 		);
 		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 

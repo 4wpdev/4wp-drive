@@ -4,7 +4,7 @@ Tags: google drive, import, editorial, drafts, content pipeline
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.8.2
+Stable tag: 1.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -202,6 +202,18 @@ Yes in this release. Set **Incoming path** in GitHub settings (default `incoming
 9. Published post — front-end article after import from Drive.
 
 == Changelog ==
+
+= 1.9.0 =
+* **Abilities API** (WordPress 6.9+): category `forwp-drive` with abilities for AI agents / MCP (e.g. Claude via 4WP MCP Connector). Same code paths and permissions as the Incoming screen.
+* `forwp-drive/list-sources` — connected sources, status, documents waiting, last sync (never tokens or keys).
+* `forwp-drive/sync` — scan sources and refresh Incoming (same as the Sync button, once a minute).
+* `forwp-drive/list-incoming` — the Incoming queue with front-matter title, slug and date; filter by source, status, search.
+* `forwp-drive/get-document` — preview before import: front-matter, body as text (20 000 characters by default), headings, package files, matching post to update.
+* `forwp-drive/find-targets` — existing posts a document can update.
+* `forwp-drive/import` — import into a new draft (never published).
+* `forwp-drive/import-update` — replace the content of an existing post; the current version is saved as a revision first and its id returned. Marked destructive, so it can be allowed separately.
+* `forwp-drive/calendar` — materials by date: incoming by the Date front-matter field, imported by post date and status.
+* No Reject through abilities. See `docs/ABILITIES.md`.
 
 = 1.8.2 =
 * **GitHub packages:** video files in the package folder (`.mp4`, `.webm`, `.mov`, `.m4v`, `.ogv`) are now picked up, so `[video:file.mp4]` imports the file into the Media Library and becomes core/video. Before, GitHub packages listed only documents and images.

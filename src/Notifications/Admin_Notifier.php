@@ -8,6 +8,7 @@
 namespace ForWP\Drive\Notifications;
 
 use ForWP\Drive\Admin\Settings;
+use ForWP\Drive\Source_Registry;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -46,7 +47,10 @@ final class Admin_Notifier {
 			return;
 		}
 
-		$count = Settings::instance()->get_ready_count();
+		$count = Source_Registry::connected_incoming_count();
+		if ( Settings::instance()->get_ready_count() !== $count ) {
+			Settings::instance()->set_ready_count( $count );
+		}
 		if ( $count < 1 ) {
 			return;
 		}

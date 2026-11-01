@@ -562,7 +562,7 @@ final class GitHub_Source implements Storage_Source_Interface {
 		if ( '' !== $package_folder ) {
 			$listing = $client->list_path( $package_folder );
 			if ( ! is_wp_error( $listing ) && is_array( $listing ) ) {
-				$refreshed = $this->package_files_from_listing( $listing );
+				$refreshed = $this->package_files_from_listing( $this->with_media_subfolders( $client, $listing ) );
 				if ( Package_Manifest::is_package( $meta ) ) {
 					$refreshed = self::keep_only_document( $refreshed, (string) ( $meta[ Package_Manifest::META_KEY ]['original'] ?? '' ) );
 				}
@@ -613,6 +613,7 @@ final class GitHub_Source implements Storage_Source_Interface {
 		if ( is_wp_error( $listing ) || empty( $listing ) ) {
 			return null;
 		}
+		$listing = $this->with_media_subfolders( $client, $listing );
 
 		$article_rows  = array();
 		$image_rows    = array();
@@ -763,6 +764,53 @@ final class GitHub_Source implements Storage_Source_Interface {
 				}
 			)
 		);
+	}
+
+	/**
+	 * Add images and videos from package subfolders (media/, images/ ...) to a package listing.
+	 *
+	 * Only media files are added: documents and meta.json stay top-level only.
+	 * [image:name] and [video:name] markers match by file name, so a nested file
+	 * resolves the same way as a file next to the original.
+	 *
+	 * @param GitHub_Client     $client  API client.
+	 * @param array<int, mixed> $listing Contents API rows of the package folder.
+	 * @param int               $depth   Subfolder levels to read.
+	 * @return array<int, mixed>
+	 */
+	private function with_media_subfolders( GitHub_Client $client, array $listing, int $depth = 2 ): array {
+		if ( $depth <= 0 ) {
+			return $listing;
+		}
+
+		$out = $listing;
+		foreach ( $listing as $entry ) {
+			if ( ! is_array( $entry ) || 'dir' !== ( $entry['type'] ?? '' ) ) {
+				continue;
+			}
+			$name = (string) ( $entry['name'] ?? '' );
+			if ( '' === $name || '.' === $name[0] ) {
+				continue;
+			}
+
+			$sub = $client->list_path( (string) ( $entry['path'] ?? '' ) );
+			if ( is_wp_error( $sub ) || empty( $sub ) || ! is_array( $sub ) ) {
+				continue;
+			}
+
+			foreach ( $this->with_media_subfolders( $client, $sub, $depth - 1 ) as $row ) {
+				if ( ! is_array( $row ) || 'file' !== ( $row['type'] ?? '' ) ) {
+					continue;
+				}
+				$file = (string) ( $row['name'] ?? '' );
+				if ( Importable_Document::KIND_IMAGE === Importable_Document::kind( '', $file )
+					|| preg_match( '/\.(?:mp4|webm|ogg|ogv|m4v|mov)$/i', $file ) ) {
+					$out[] = $row;
+				}
+			}
+		}
+
+		return $out;
 	}
 
 	/**

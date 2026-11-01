@@ -161,7 +161,7 @@ final class Incoming_Scanner {
 			return new WP_Error( 'forwp_drive_not_ready', __( 'No storage source is ready.', '4wp-drive' ) );
 		}
 
-		$ready_count = $this->repository->count_by_statuses( Document_Status::inbox_statuses() );
+		$ready_count = Source_Registry::connected_incoming_count();
 		Settings::instance()->set_ready_count( $ready_count );
 
 		if ( $new_ready > 0 ) {
@@ -241,7 +241,7 @@ final class Incoming_Scanner {
 			return null;
 		}
 
-		$ready_count = $this->repository->count_by_statuses( Document_Status::inbox_statuses() );
+		$ready_count = Source_Registry::connected_incoming_count();
 		Settings::instance()->set_ready_count( $ready_count );
 		if ( $new_ready > 0 ) {
 			Admin_Notifier::mark_pending( $ready_count );

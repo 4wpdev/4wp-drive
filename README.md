@@ -4,7 +4,7 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 
 **Plugin page:** [4wp.dev/plugin/4wp-drive/](https://4wp.dev/plugin/4wp-drive/) · [WordPress.org](https://wordpress.org/plugins/4wp-drive/) · [4wp.dev](https://4wp.dev/) · GPL-2.0-or-later
 
-**Current stable:** 1.8.2
+**Current stable:** 1.9.0
 
 ## What it does
 
@@ -15,6 +15,10 @@ Import **Google Docs**, **Markdown**, and **Word** from **Google Drive**, or **M
 5. **Analytics** records each import (drafts and published).
 
 Front-matter lines before a separator (`---` or `=====`) map to post fields (title, slug, categories, SEO, etc.). The rest becomes Gutenberg post content.
+
+## What shipped in 1.9.0
+
+- **Abilities API** (WordPress 6.9+) — AI agents (Claude via [4WP MCP Connector](https://4wp.dev/) + MCP Adapter) see connected sources, the Incoming queue and a materials calendar, preview a document and import it into a new draft or an existing post. Same permissions as Incoming; no Reject. See **[docs/ABILITIES.md](docs/ABILITIES.md)**.
 
 ## What shipped in 1.8.2
 

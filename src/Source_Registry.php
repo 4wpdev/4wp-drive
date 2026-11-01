@@ -11,6 +11,8 @@ use ForWP\Drive\Admin\GitHub_Settings;
 use ForWP\Drive\Admin\Settings;
 use ForWP\Drive\Auth\Google_OAuth;
 use ForWP\Drive\Contracts\Storage_Source_Interface;
+use ForWP\Drive\Database\Document_Repository;
+use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Sources\Google_Drive_Source;
 use ForWP\Drive\Sources\GitHub_Source;
 
@@ -57,6 +59,37 @@ final class Source_Registry {
 		$all = self::all();
 
 		return $all[ $slug ] ?? null;
+	}
+
+	/**
+	 * Slugs of sources that can list and sync right now.
+	 *
+	 * @return string[]
+	 */
+	public static function ready_slugs(): array {
+		$slugs = array();
+
+		foreach ( self::all() as $slug => $source ) {
+			if ( $source->is_ready() ) {
+				$slugs[] = (string) $slug;
+			}
+		}
+
+		return $slugs;
+	}
+
+	/**
+	 * Inbox documents that belong to a source that is connected now.
+	 *
+	 * Disconnected sources keep their rows, but they are not incoming until connected again.
+	 */
+	public static function connected_incoming_count(): int {
+		$sources = self::ready_slugs();
+		if ( array() === $sources ) {
+			return 0;
+		}
+
+		return ( new Document_Repository() )->count_by_statuses( Document_Status::inbox_statuses(), $sources );
 	}
 
 	/**

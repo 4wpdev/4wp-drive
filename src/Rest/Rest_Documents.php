@@ -312,9 +312,16 @@ final class Rest_Documents {
 			$statuses = array( sanitize_key( $status ) );
 		}
 
-		$repo = new Document_Repository();
-		$rows = $repo->list_by_statuses( $statuses, 50 );
+		$repo          = new Document_Repository();
+		$ready_sources = Source_Registry::ready_slugs();
 		$filter_source = sanitize_key( (string) $request->get_param( 'source' ) );
+		if ( '' !== $filter_source ) {
+			$ready_sources = in_array( $filter_source, $ready_sources, true ) ? array( $filter_source ) : array();
+		}
+
+		$rows = array() === $ready_sources
+			? array()
+			: $repo->list_by_statuses( $statuses, 500, $ready_sources );
 
 		$items = array();
 		foreach ( $rows as $row ) {
@@ -354,6 +361,7 @@ final class Rest_Documents {
 		return new WP_REST_Response(
 			array(
 				'documents'        => $items,
+				'incoming_count'   => Source_Registry::connected_incoming_count(),
 				'browse_trees'     => $browse_trees,
 				'last_sync'        => $last_sync,
 				'incoming_id'      => isset( $folders['incoming'] ) ? (string) $folders['incoming'] : '',

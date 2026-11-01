@@ -8,9 +8,7 @@
 namespace ForWP\Drive\Admin;
 
 use ForWP\Drive\Blocks\Wrap_Capability_Registry;
-use ForWP\Drive\Database\Document_Repository;
 use ForWP\Drive\Database\Import_History_Repository;
-use ForWP\Drive\Documents\Document_Status;
 use ForWP\Drive\Multilingual\Language_Provider_Registry;
 use ForWP\Drive\Parse\Template_Config;
 use ForWP\Drive\Patterns\Pattern_Library;
@@ -317,10 +315,10 @@ final class Admin_Menu {
 	}
 
 	/**
-	 * Ready-to-import documents (all sources).
+	 * Ready-to-import documents from sources that are connected now.
 	 */
 	private function incoming_count(): int {
-		return ( new Document_Repository() )->count_by_statuses( Document_Status::inbox_statuses() );
+		return Source_Registry::connected_incoming_count();
 	}
 
 	/**
